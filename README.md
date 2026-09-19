@@ -50,6 +50,9 @@ pnpm dev        # → http://localhost:5173
 
 环境要求 Node ≥ 20.19、pnpm ≥ 10（见 `.nvmrc` 与 `package.json` 的 `engines`）。
 
+> [!TIP]
+> Pages 项目的 Deploy command 保持留空即可，构建完成后 Cloudflare 会自动上传 `dist`。不要填 `npx wrangler deploy`——那是部署 Worker 脚本的命令，对纯静态项目会报 `Missing entry-point`。
+
 ## Key 与数据的边界
 
 > [!IMPORTANT]
