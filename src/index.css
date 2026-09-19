@@ -109,11 +109,9 @@ body {
   font-size: 13px;
   padding: 0 8px 0 6px;
 }
-.pm-brand i {
+.pm-brand-logo {
   width: 17px;
   height: 17px;
-  border-radius: 5px;
-  background: conic-gradient(from 210deg, #ff9a62, #e8618c, #7d6bff, #3fd0c9, #ff9a62);
 }
 .pm-vr {
   width: 1px;

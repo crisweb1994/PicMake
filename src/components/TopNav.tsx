@@ -6,7 +6,7 @@ export function TopNav(props: { onHistory: () => void; onSettings: () => void })
   return (
     <nav className="pm-island pm-nav" aria-label="主导航">
       <div className="pm-brand">
-        <i aria-hidden="true" />
+        <img src="/favicon.svg" alt="" aria-hidden="true" className="pm-brand-logo" />
         picmake
       </div>
       <div className="pm-vr" aria-hidden="true" />

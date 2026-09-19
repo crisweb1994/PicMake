@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="public/favicon.svg" width="88" alt="PicMake" />
+
 # PicMake
 
 GPT Image 2.5 生图工作台 —— 纯前端，图片和花费只存在你自己的浏览器里
