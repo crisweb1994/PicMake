@@ -1,0 +1,63 @@
+{
+  "name": "picmake",
+  "private": true,
+  "version": "0.1.0",
+  "description": "纯前端、数据全留本地的 GPT Image 2.5 图片生成工作台（浏览器直连 OpenAI 或兼容中转站）",
+  "license": "MIT",
+  "keywords": [
+    "openai",
+    "gpt-image",
+    "image-generation",
+    "react",
+    "vite",
+    "tailwindcss",
+    "heroui",
+    "dexie",
+    "indexeddb"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crisweb1994/PicMake.git"
+  },
+  "engines": {
+    "node": ">=20.19",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@heroui/react": "~3.2.6",
+    "@internationalized/date": "~3.12.4",
+    "@react-aria/ssr": "~3.10.1",
+    "@react-aria/utils": "~3.34.1",
+    "dexie": "~4.4.6",
+    "dexie-react-hooks": "~4.4.0",
+    "eventsource-parser": "~4.1.1",
+    "lucide-react": "~1.47.0",
+    "react": "^19.2.8",
+    "react-aria": "~3.52.1",
+    "react-aria-components": "~1.21.1",
+    "react-dom": "^19.2.8",
+    "zustand": "~5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "~4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "prettier": "~3.9.8",
+    "tailwindcss": "~4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "~5.0.1"
+  }
+}
