@@ -2,4 +2,4 @@
 # 或在 Dashboard 连接仓库后自动识别；Git 集成时构建命令需在面板填 `pnpm build`）
 name = "picmake"
 compatibility_date = "2026-09-19"
-pages_build_output_dir = "dist"
+pages_build_output_dir = "./dist"
