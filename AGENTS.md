@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本仓库（picmake）对 AI agent 的协作约定。改代码前先读完本文；与本文冲突的行为以本文为准。
+本仓库（PicMake）对 AI agent 的协作约定。改代码前先读完本文；与本文冲突的行为以本文为准。
 
 ## 0. 权威源（动工前必读）
 
@@ -30,8 +30,8 @@ npx prettier --write .
   - `Button` **没有 color prop**，用 `variant`（primary/secondary/tertiary/ghost/outline/danger/danger-soft）+ `size`（sm/md/lg）+ `fullWidth/isIconOnly/isDisabled`
   - `Chip` 用 `color`（accent/default/success/warning/danger）+ `variant`（primary/secondary/soft）
   - 无需 Provider；react-aria 系 peers 已显式安装，升级时勿移除
-- **状态**：Zustand（`src/store/`），设置持久化 localStorage（key `picmake-settings`）
-- **存储**：Dexie（`src/db/schema.ts`），IndexedDB 库名 `picmake`，表 `images`（Blob）/ `history`（元信息）
+- **状态**：Zustand（`src/store/`），设置持久化 localStorage（key `PicMake-settings`）
+- **存储**：Dexie（`src/db/schema.ts`），IndexedDB 库名 `PicMake`，表 `images`（Blob）/ `history`（元信息）
 - **网络**：一律走 `src/api/client.ts`（原生 fetch 封装：`/v1` 归一化、错误归一化、流式 + 自动降级）。**不用** openai SDK / axios
 - **流式解析**：eventsource-parser **v4**，API 是 `createParser({ onEvent })` 配置对象（不是回调参数）；`EventSource` 不支持 POST 不可用
 - **包管理**：pnpm；`.npmrc` `save-prefix=~`（锁 minor）
@@ -52,14 +52,14 @@ npx prettier --write .
 5. **优先组合**：小组件组合出复杂界面，不给大组件持续加配置；等稳定共性出现再抽象，视觉相似≠业务语义相同。
 6. **交互完整、可访问**：覆盖加载、空数据、错误、禁用、长文本；语义化 HTML、键盘可达、focus-visible 可见；尊重 `prefers-reduced-motion`。
 7. **样式可控**：视觉规范见 PRD §5.3（`--pm-*` 令牌、发丝线、单强调色 `#FF9A62`——accent 只用于选中环/主按钮/焦点/CTA）；样式不外溢、不依赖全局选择器。
-8. **测试用户可感知的行为**：vitest 只测纯函数（成本预估、尺寸校验、URL 归一化等）；验证「输入 X 是否得到 Y」「非法输入是否拦截」，内部重构不应导致测试批量失效。
+8. **测试用户可感知的行为**：vitest 只测纯函数（尺寸校验、URL 归一化等）；验证「输入 X 是否得到 Y」「非法输入是否拦截」，内部重构不应导致测试批量失效。
 
 ## 5. 数据与隐私边界（不可破坏）
 
-- 持久化**只有两处**：IndexedDB（`picmake` 库）+ localStorage（`picmake-settings`）。新增任何其他持久化需先改 PRD
+- 持久化**只有两处**：IndexedDB（`PicMake` 库）+ localStorage（`PicMake-settings`）。新增任何其他持久化需先改 PRD
 - API Key 只在请求头 `Authorization` 中发往用户配置的地址；**禁止任何第三方上报、埋点、遥测**
 - 所有请求经 `src/api/client.ts`；组件与页面不得自行拼 URL 发请求
-- 成本口径用 `src/lib/cost.ts` 常量，错误文案用 `src/lib/types.ts` 的 `ERROR_HINTS`，勿自创口径
+- 错误文案用 `src/lib/types.ts` 的 `ERROR_HINTS`，勿自创口径
 
 ## 6. 禁止引入
 

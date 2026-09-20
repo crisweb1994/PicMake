@@ -1,85 +1,120 @@
 /** 核心类型定义（对照 docs/gpt-image-2.5-api.md） */
 
-export type ModelId = 'flare' | 'sunburst'
-export type Quality = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-export type Background = 'auto' | 'transparent' | 'opaque'
-export type OutputFormat = 'png' | 'jpeg' | 'webp'
+export type ModelId = "flare" | "sunburst";
+export type Quality = "low" | "medium" | "high" | "xhigh" | "max";
+export type Background = "auto" | "transparent" | "opaque";
+export type InputFidelity = "low" | "high";
+export type OutputFormat = "png" | "jpeg" | "webp";
 
-export const MODEL_NAMES: Record<ModelId, string> = {
-  flare: 'gpt-image-2.5-flare',
-  sunburst: 'gpt-image-2.5-sunburst',
+export interface ApiConfig {
+  baseUrl: string;
+  apiKey: string;
 }
 
+export const MODEL_NAMES: Record<ModelId, string> = {
+  flare: "gpt-image-2.5-flare",
+  sunburst: "gpt-image-2.5-sunburst",
+};
+
 /** 尺寸：'auto' 或具体宽高（宽高均须被 16 整除） */
-export type SizeSpec = { w: number; h: number } | 'auto'
+export type SizeSpec = { w: number; h: number } | "auto";
 
 export interface GenParams {
-  model: ModelId
-  prompt: string
-  size: SizeSpec
-  quality: Quality
+  model: ModelId;
+  prompt: string;
+  size: SizeSpec;
+  quality: Quality;
   /** 1–10，产品上限 4 */
-  n: number
-  background: Background
-  outputFormat: OutputFormat
+  n: number;
+  background: Background;
+  outputFormat: OutputFormat;
+}
+
+export interface EditSource {
+  generationId: string;
+  imageId: string;
+  inputFidelity: InputFidelity;
+}
+
+export interface EditDraft {
+  source: Omit<EditSource, "inputFidelity">;
+  inputFidelity: InputFidelity;
+}
+
+export interface EditSubmission extends EditDraft {
+  params: GenParams;
+  sourceBlob: Blob;
+  sourceFormat: string;
 }
 
 export interface Usage {
-  totalTokens: number
-  inputTokens: number
-  outputTokens: number
-  textTokens: number
-  imageTokens: number
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  textTokens: number;
+  imageTokens: number;
+  inputDetailsAvailable: boolean;
 }
 
 export interface ImageGenResult {
-  b64: string
-  usage: Usage | null
+  b64: string;
   /** 回显参数（可缺省） */
-  size?: string
-  quality?: string
-  background?: string
-  outputFormat?: string
+  size?: string;
+  quality?: string;
+  background?: string;
+  outputFormat?: string;
+}
+
+export interface ImageRequestResult {
+  images: ImageGenResult[];
+  usage: Usage | null;
 }
 
 export type ApiErrorKind =
-  | 'auth' // 401：Key 无效
-  | 'org-unverified' // 403：组织未完成资格验证
-  | 'rate-limit' // 429
-  | 'content-policy' // 内容政策拦截
-  | 'server' // 5xx
-  | 'network'
-  | 'unknown'
+  | "source-unavailable"
+  | "save-failed"
+  | "auth" // 401：Key 无效
+  | "org-unverified" // 403：组织未完成资格验证
+  | "rate-limit" // 429
+  | "content-policy" // 内容政策拦截
+  | "server" // 5xx
+  | "network"
+  | "unknown";
 
 export class ApiError extends Error {
-  kind: ApiErrorKind
-  status?: number
+  kind: ApiErrorKind;
+  status?: number;
 
   constructor(kind: ApiErrorKind, message: string, status?: number) {
-    super(message)
-    this.name = 'ApiError'
-    this.kind = kind
-    this.status = status
+    super(message);
+    this.name = "ApiError";
+    this.kind = kind;
+    this.status = status;
   }
 }
 
 export const ERROR_HINTS: Record<ApiErrorKind, string> = {
-  auth: 'API Key 无效或已失效，请在设置中检查。',
-  'org-unverified': '组织尚未完成图片模型的资格验证（organization verification）。',
-  'rate-limit': '请求过于频繁，稍等片刻再试。',
-  'content-policy': '画面描述可能包含受限制的内容，调整描述后重试。',
-  server: '服务端暂时不可用，请稍后重试。',
-  network: '网络错误：无法连接到 API 地址，请检查网络或中转站配置。',
-  unknown: '生成失败，请重试。',
-}
+  "source-unavailable": "来源图片不可用，无法继续编辑",
+  "save-failed": "图片已生成，但本地保存失败。可以重试保存，或放弃这次结果。",
+  auth: "API Key 无效或已失效，请在设置中检查。",
+  "org-unverified":
+    "组织尚未完成图片模型的资格验证（organization verification）。",
+  "rate-limit": "请求过于频繁，稍等片刻再试。",
+  "content-policy": "画面描述可能包含受限制的内容，调整描述后重试。",
+  server: "服务端暂时不可用，请稍后重试。",
+  network: "网络错误：无法连接到 API 地址，请检查网络或中转站配置。",
+  unknown: "生成失败，请重试。",
+};
 
 /** 错误横幅标题（FR-8） */
 export const ERROR_TITLES: Record<ApiErrorKind, string> = {
-  auth: 'API Key 无效',
-  'org-unverified': '组织未完成验证',
-  'rate-limit': '请求过于频繁',
-  'content-policy': '生成被内容政策拦截',
-  server: '服务端暂时不可用',
-  network: '无法连接到 API 地址',
-  unknown: '生成失败',
-}
+  "source-unavailable": "来源图片不可用",
+  "save-failed": "本地保存失败",
+  auth: "API Key 无效",
+  "org-unverified": "组织未完成验证",
+  "rate-limit": "请求过于频繁",
+  "content-policy": "生成被内容政策拦截",
+  server: "服务端暂时不可用",
+  network: "无法连接到 API 地址",
+  unknown: "生成失败",
+};

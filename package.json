@@ -1,5 +1,5 @@
 {
-  "name": "picmake",
+  "name": "PicMake",
   "private": true,
   "version": "0.1.0",
   "description": "纯前端、数据全留本地的 GPT Image 2.5 图片生成工作台（浏览器直连 OpenAI 或兼容中转站）",
