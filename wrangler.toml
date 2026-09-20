@@ -1,6 +1,6 @@
 # Cloudflare Pages 配置（直接上传 `npx wrangler pages deploy dist`，
 # 或在 Dashboard 连接仓库后自动识别；Git 集成时构建命令需在面板填 `pnpm build`）
-name = "PicMake"
+name = "picmake"
 compatibility_date = "2026-09-19"
 
 [assets]
