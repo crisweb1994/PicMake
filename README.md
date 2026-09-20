@@ -4,9 +4,9 @@
 
 # PicMake
 
-GPT Image 2.5 生图工作台 —— 纯前端，图片和花费只存在你自己的浏览器里
+GPT Image 2.5 生图工作台 —— 纯前端，图片和生成记录只存在你自己的浏览器里
 
-[![在线体验](https://img.shields.io/badge/在线体验-picmake.crisweb.com-FF9A62?style=flat-square)](https://picmake.crisweb.com)
+[![在线体验](https://img.shields.io/badge/在线体验-PicMake.crisweb.com-FF9A62?style=flat-square)](https://PicMake.crisweb.com)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4A4A55?style=flat-square)](./LICENSE)
 
 </div>
@@ -20,12 +20,11 @@ GPT Image 2.5 是 OpenAI 目前最强的生图 API，但官方只给了 API，�
 - **流式渐进预览** —— 生图过程按 SSE 流式渲染，从模糊色块逐步清晰到成图，和 ChatGPT 里生图的观感一致
 - **中转站友好** —— 地址自动补全 `/v1`；流式被拒自动降级为普通请求；异步任务型接口（返回 `task_id` 需轮询）也能出图；失败绝不重发请求，同批图不会计费两次
 - **全参数** —— Flare / Sunburst 双模型、8 种比例加自定义像素（16 整除实时校验）、五档质量、1–4 张、透明或纯色背景、PNG / JPEG / WebP
-- **花费透明** —— 参数一动预估价即时刷新；最高档或 4K 大尺寸会先弹确认框再花钱
-- **历史在本地** —— 作品与花费记录存 IndexedDB，可回看、复用参数再生成、灯箱大图轮播；清除站点数据即彻底删除
+- **历史在本地** —— 作品与生成记录存 IndexedDB，可回看、复用参数再生成、灯箱大图轮播；清除站点数据即彻底删除
 
-| 首次运行，填一次 Key | 参数与实时估价 |
+| 首次运行，填一次 Key | 生成参数 |
 | --- | --- |
-| ![首次运行](screenshots/setup.png) | ![参数与成本](screenshots/generate-panel.png) |
+| ![首次运行](screenshots/setup.png) | ![生成参数](screenshots/generate-panel.png) |
 
 ## 快速开始
 

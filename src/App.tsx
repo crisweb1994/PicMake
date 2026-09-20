@@ -1,5 +1,5 @@
-/** 应用接线层：消费 usePicmake，把状态投影成各业务组件 props，并挂全局快捷键 */
-import { useEffect, useRef, useState } from "react";
+/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props。 */
+import { useEffect, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
 import { DetailPanel, GeneratePanel } from "./components/Inspector";
@@ -10,10 +10,15 @@ import {
   HistoryDrawer,
   Lightbox,
   SettingsModal,
-  ToastHost,
 } from "./components/Overlays";
+import { useHistory } from "./hooks/useHistory";
+import { useForm } from "./hooks/useForm";
+import { useEdit } from "./hooks/useEdit";
 import { usePicmake } from "./hooks/usePicmake";
+import { useViewUi } from "./hooks/useViewUi";
 import { fmtBytes } from "./lib/format";
+import { useSettingsModal } from "./hooks/useSettings";
+import { toast } from "@heroui/react";
 
 function downloadUrl(url: string, name: string) {
   const a = document.createElement("a");
@@ -23,95 +28,78 @@ function downloadUrl(url: string, name: string) {
 }
 
 export default function App() {
-  const pm = usePicmake();
-  const pmRef = useRef(pm);
-  useEffect(() => {
-    pmRef.current = pm;
+  const { settingsOpen, saveSettings, openSettings, closeSettings } =
+    useSettingsModal();
+  const view = useViewUi();
+  const form = useForm();
+  const edit = useEdit();
+  const history = useHistory(edit.editDraft?.source.imageId);
+  const pm = usePicmake({
+    history,
+    form,
+    edit,
+    onViewReset: view.clearViewingState,
+    onEditGenerationStart: view.clearResultViewingState,
   });
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [usageText, setUsageText] = useState("");
   useEffect(() => {
     void navigator.storage?.estimate?.().then((est) => {
       if (est?.usage != null) setUsageText(` · 已用 ${fmtBytes(est.usage)}`);
     });
-  }, [pm.rows.length]);
-
-  /* 全局快捷键（PRD FR-9） */
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      const pm = pmRef.current;
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        pm.generate();
-        return;
-      }
-      if (e.key === "Escape") {
-        if (pm.lightbox) return pm.setLightbox(null);
-        if (pm.confirmState) return pm.setConfirmState(null);
-        if (pm.settingsOpen) return pm.setSettingsOpen(false);
-        if (pm.drawerOpen) return pm.setDrawerOpen(false);
-        if (pm.error) return pm.goEditPrompt();
-        if (pm.display && pm.display.images.length > 1 && pm.focusIdx !== null)
-          return pm.setFocusIdx(null);
-        if (pm.display) return pm.newGeneration();
-        return;
-      }
-      // 轮播开着时 ←→ 切换（灯箱打开时不动）
-      if (
-        (e.key === "ArrowLeft" || e.key === "ArrowRight") &&
-        pm.display &&
-        pm.display.images.length > 1 &&
-        pm.focusIdx !== null &&
-        !pm.lightbox
-      ) {
-        const n = pm.display.images.length;
-        const d = e.key === "ArrowLeft" ? n - 1 : 1;
-        pm.setFocusIdx((pm.focusIdx + d) % n);
-        return;
-      }
-      if (
-        (e.key === "Delete" || e.key === "Backspace") &&
-        pm.display &&
-        pm.phase === "idle"
-      ) {
-        const tag = document.activeElement?.tagName;
-        if (tag === "TEXTAREA" || tag === "INPUT") return;
-        pm.deleteGen(pm.display.row);
-      }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, []);
+  }, [history.rows.length]);
 
   const downloadOne = (idx: number) => {
-    if (!pm.display) return;
-    const im = pm.display.images[idx];
+    if (!history.display) return;
+    const im = history.display.images[idx];
     const ext =
-      pm.display.row.params.outputFormat === "jpeg"
+      history.display.row.params.outputFormat === "jpeg"
         ? "jpg"
-        : pm.display.row.params.outputFormat;
-    downloadUrl(im.url, `picmake-${pm.display.row.id.slice(0, 8)}.${ext}`);
+        : history.display.row.params.outputFormat;
+    downloadUrl(im.url, `PicMake-${history.display.row.id.slice(0, 8)}.${ext}`);
   };
 
+  const selectedImageId = history.display
+    ? history.display.images.length === 1
+      ? history.display.images[0].id
+      : view.focusIdx !== null
+        ? (history.display.images[view.focusIdx]?.id ?? null)
+        : null
+    : null;
+  const editSelected = () => {
+    if (selectedImageId) pm.editImage(selectedImageId);
+  };
   const testConn = pm.runTestConnection;
-  const totalImages = pm.rows.reduce((s, r) => s + r.imageIds.length, 0);
+  const totalImages = history.rows.reduce((s, r) => s + r.imageIds.length, 0);
 
   return (
     <>
       <div className="pm-stage-col">
         <Stage
+          contextImage={
+            edit.editDraft
+              ? (history.display?.images.find(
+                  (image) => image.id === edit.editDraft?.source.imageId,
+                ) ?? null)
+              : null
+          }
           phase={pm.phase}
           partial={pm.partial}
-          display={pm.display}
-          onFocus={pm.setFocusIdx}
-          onLightbox={pm.setLightbox}
+          display={history.display}
+          onFocus={view.setFocusIdx}
+          onLightbox={(id) =>
+            view.setLightbox(
+              history.display?.images.find((image) => image.id === id) ?? null,
+            )
+          }
           onDownload={downloadOne}
           onDownloadAll={() =>
-            pm.display?.images.forEach((_, i) => downloadOne(i))
+            history.display?.images.forEach((_, i) => downloadOne(i))
           }
-          onReuse={() => pm.display && pm.reuseParams(pm.display.row)}
-          onAgain={() => pm.display && pm.againFrom(pm.display.row)}
-          onDelete={() => pm.display && pm.deleteGen(pm.display.row)}
+          onReuse={() => history.display && pm.reuseParams(history.display.row)}
+          onEdit={history.pendingSave ? undefined : editSelected}
+          onDelete={() => history.display && pm.deleteGen(history.display.row)}
           onCancel={pm.cancelGenerate}
           onStart={pm.newGeneration}
         />
@@ -119,102 +107,136 @@ export default function App() {
           error={pm.error}
           onEdit={pm.goEditPrompt}
           onRetry={pm.retry}
+          onDiscard={pm.discardPending}
         />
       </div>
 
-      <TopNav
-        onHistory={() => pm.setDrawerOpen(true)}
-        onSettings={() => pm.setSettingsOpen(true)}
-      />
+      <TopNav onHistory={() => setDrawerOpen(true)} onSettings={openSettings} />
 
       <aside className="pm-island pm-insp" aria-label="检查器">
-        {pm.display && pm.phase === "idle" ? (
+        {history.display && pm.phase === "idle" && !edit.editDraft ? (
           <DetailPanel
-            display={pm.display}
-            onDownload={() => downloadOne(pm.focusIdx ?? 0)}
+            display={history.display}
+            selectedImageId={selectedImageId}
+            canEdit={!history.pendingSave}
+            sourceUrl={history.sourceUrl}
+            sourceExists={history.sourceExists}
+            onViewSource={() => view.setSourceLightboxOpen(true)}
+            onDownload={() => downloadOne(view.focusIdx ?? 0)}
             onCopyPrompt={() => {
-              if (pm.display)
+              if (history.display)
                 void navigator.clipboard
-                  ?.writeText(pm.display.row.prompt)
-                  .then(() => pm.toast("画面描述已复制"));
+                  ?.writeText(history.display.row.prompt)
+                  .then(() => toast("画面描述已复制"));
             }}
-            onReuse={() => pm.display && pm.reuseParams(pm.display.row)}
-            onAgain={() => pm.display && pm.againFrom(pm.display.row)}
-            onDelete={() => pm.display && pm.deleteGen(pm.display.row)}
+            onReuse={() =>
+              history.display && pm.reuseParams(history.display.row)
+            }
+            onEdit={pm.editImage}
+            onDelete={() =>
+              history.display && pm.deleteGen(history.display.row)
+            }
             onNew={pm.newGeneration}
           />
         ) : (
           <GeneratePanel
-            form={pm.form}
-            estUsd={pm.estUsd}
-            customValid={pm.customValid}
+            sourceUrl={history.sourceUrl}
+            inputFidelity={edit.editDraft?.inputFidelity}
+            onInputFidelity={edit.setInputFidelity}
+            onCloseEdit={pm.closeEdit}
+            form={form.form}
+            customValid={form.customValid}
             generating={pm.phase === "generating"}
-            onPatch={pm.patchForm}
+            promptRef={form.promptRef}
+            onPatch={form.patchForm}
             onGenerate={pm.generate}
           />
         )}
       </aside>
 
       <HistoryDrawer
-        open={pm.drawerOpen}
-        rows={pm.rows}
-        currentId={pm.display?.row.id ?? null}
-        onSelect={(r) => {
-          void pm.selectHistory(r);
-          pm.setDrawerOpen(false);
+        open={drawerOpen}
+        rows={history.rows}
+        thumbnailUrls={history.thumbnailUrls}
+        currentId={history.display?.row.id ?? null}
+        onSelect={(id) => {
+          const row = history.rows.find((row) => row.id === id);
+          if (row) void pm.selectHistory(row);
+          setDrawerOpen(false);
         }}
-        onClose={() => pm.setDrawerOpen(false)}
+        onClose={() => setDrawerOpen(false)}
       />
 
       <SettingsModal
-        key={pm.settingsOpen ? "settings-open" : "settings-closed"}
-        open={pm.settingsOpen}
+        key={settingsOpen ? "settings-open" : "settings-closed"}
+        open={settingsOpen}
         baseUrl={pm.settings.baseUrl}
         apiKey={pm.settings.apiKey}
-        storageText={`本地已存 ${pm.rows.length} 次 · ${totalImages} 张${usageText}`}
+        storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
         onTest={testConn}
-        onSave={pm.saveSettings}
-        onClose={() => pm.setSettingsOpen(false)}
+        onSave={saveSettings}
+        onClose={closeSettings}
       />
-      {pm.display && pm.display.images.length > 1 && pm.focusIdx !== null && (
-        <Carousel
-          img={pm.display.images[pm.focusIdx]}
-          prompt={pm.display.row.prompt}
-          index={pm.focusIdx}
-          total={pm.display.images.length}
-          onPrev={() => {
-            const n = pm.display!.images.length;
-            pm.setFocusIdx((pm.focusIdx! - 1 + n) % n);
-          }}
-          onNext={() => {
-            const n = pm.display!.images.length;
-            pm.setFocusIdx((pm.focusIdx! + 1) % n);
-          }}
-          onClose={() => pm.setFocusIdx(null)}
-          onZoom={() => pm.setLightbox(pm.display!.images[pm.focusIdx!])}
-          onDownload={() => downloadOne(pm.focusIdx!)}
-          onReuse={() => pm.reuseParams(pm.display!.row)}
-          onAgain={() => pm.againFrom(pm.display!.row)}
-          onDelete={() => pm.deleteGen(pm.display!.row)}
-        />
-      )}
+      {history.display &&
+        !edit.editDraft &&
+        pm.phase === "idle" &&
+        history.display.images.length > 1 &&
+        view.focusIdx !== null && (
+          <Carousel
+            img={history.display.images[view.focusIdx]}
+            prompt={history.display.row.prompt}
+            index={view.focusIdx}
+            total={history.display.images.length}
+            onPrev={() => {
+              const n = history.display!.images.length;
+              view.setFocusIdx((view.focusIdx! - 1 + n) % n);
+            }}
+            onNext={() => {
+              const n = history.display!.images.length;
+              view.setFocusIdx((view.focusIdx! + 1) % n);
+            }}
+            onClose={() => view.setFocusIdx(null)}
+            onZoom={() =>
+              view.setLightbox(history.display!.images[view.focusIdx!])
+            }
+            onDownload={() => downloadOne(view.focusIdx!)}
+            onReuse={() => pm.reuseParams(history.display!.row)}
+            onEdit={history.pendingSave ? undefined : editSelected}
+            onDelete={() => pm.deleteGen(history.display!.row)}
+          />
+        )}
       <ConfirmDialog
         state={pm.confirmState}
         onCancel={() => pm.setConfirmState(null)}
       />
       <Lightbox
-        img={pm.lightbox}
-        prompt={pm.display?.row.prompt ?? ""}
+        img={view.lightbox}
+        prompt={history.display?.row.prompt ?? ""}
         onDownload={() =>
-          pm.lightbox && downloadUrl(pm.lightbox.url, "picmake.png")
+          view.lightbox && downloadUrl(view.lightbox.url, "PicMake.png")
         }
         onReuse={() => {
-          pm.setLightbox(null);
-          if (pm.display) pm.reuseParams(pm.display.row);
+          view.setLightbox(null);
+          if (history.display) pm.reuseParams(history.display.row);
         }}
-        onClose={() => pm.setLightbox(null)}
+        onClose={() => view.setLightbox(null)}
       />
-      <ToastHost toasts={pm.toasts} />
+      <Lightbox
+        img={
+          view.sourceLightboxOpen && history.sourceUrl
+            ? { id: "source", url: history.sourceUrl }
+            : null
+        }
+        prompt={history.sourceExists ? "来源作品" : "来源作品已删除"}
+        onDownload={() =>
+          history.sourceUrl &&
+          downloadUrl(
+            history.sourceUrl,
+            `PicMake-source.${history.sourceFormat === "jpeg" ? "jpg" : (history.sourceFormat ?? "png")}`,
+          )
+        }
+        onClose={() => view.setSourceLightboxOpen(false)}
+      />
     </>
   );
 }

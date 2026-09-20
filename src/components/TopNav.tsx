@@ -7,7 +7,7 @@ export function TopNav(props: { onHistory: () => void; onSettings: () => void })
     <nav className="pm-island pm-nav" aria-label="主导航">
       <div className="pm-brand">
         <img src="/favicon.svg" alt="" aria-hidden="true" className="pm-brand-logo" />
-        picmake
+        PicMake
       </div>
       <div className="pm-vr" aria-hidden="true" />
       <Button variant="ghost" isIconOnly size="sm" aria-label="历史" onPress={props.onHistory}>

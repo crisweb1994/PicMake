@@ -1,7 +1,7 @@
 /** 弹层组：引导 / 设置 / 确认 / 灯箱 / 错误岛 / Toast / 历史抽屉，纯展示
  *  Modal/Drawer 使用 HeroUI 复合组件（React Aria 提供焦点圈禁与滚动锁）；
  *  灯箱与 Toast 为沉浸/轻反馈场景，保持自绘（迁移决策见 AGENTS 讨论记录）。 */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Button,
   Drawer,
@@ -17,17 +17,14 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { ChevronLeft, ChevronRight, Settings2, X } from "lucide-react";
-import { formatUsd } from "../lib/cost";
 import { fmtTime } from "../lib/format";
-import type { HistoryRow, ImageRow } from "../db/schema";
-import { db } from "../db/schema";
+import type { HistoryRow } from "../db/schema";
 import { StageToolbar } from "./Stage";
 import type {
   ConfirmState,
   DisplayImage,
   ErrorState,
-  ToastMsg,
-} from "../hooks/usePicmake";
+} from "../lib/view-models";
 
 interface TestResult {
   ok: true;
@@ -193,7 +190,7 @@ export function Lightbox(props: {
   img: DisplayImage | null;
   prompt: string;
   onDownload: () => void;
-  onReuse: () => void;
+  onReuse?: () => void;
   onClose: () => void;
 }) {
   if (!props.img) return null;
@@ -221,15 +218,15 @@ export function Lightbox(props: {
           onClick={props.onClose}
         />
         <div className="pm-lb-bar">
-          <p>
-            {props.prompt} · {formatUsd(props.img.costUsd)}
-          </p>
+          <p>{props.prompt}</p>
           <Button variant="secondary" onPress={props.onDownload}>
             下载
           </Button>
-          <Button variant="primary" onPress={props.onReuse}>
-            复用参数
-          </Button>
+          {props.onReuse && (
+            <Button variant="primary" onPress={props.onReuse}>
+              复用参数
+            </Button>
+          )}
           <Button variant="secondary" onPress={props.onClose}>
             关闭
           </Button>
@@ -251,7 +248,7 @@ export function Carousel(props: {
   onZoom: () => void;
   onDownload: () => void;
   onReuse: () => void;
-  onAgain: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -280,7 +277,7 @@ export function Carousel(props: {
       <figure className="pm-car-fig">
         <img src={props.img.url} alt={props.prompt} />
         <figcaption>
-          {props.index + 1} / {props.total} · {formatUsd(props.img.costUsd)}
+          {props.index + 1} / {props.total}
         </figcaption>
       </figure>
       <button
@@ -295,7 +292,7 @@ export function Carousel(props: {
         onZoom={props.onZoom}
         onDownload={props.onDownload}
         onReuse={props.onReuse}
-        onAgain={props.onAgain}
+        onEdit={props.onEdit}
         onDelete={props.onDelete}
       />
     </div>
@@ -307,6 +304,7 @@ export function ErrorIsland(props: {
   error: ErrorState | null;
   onEdit: () => void;
   onRetry: () => void;
+  onDiscard: () => void;
 }) {
   if (!props.error) return null;
   return (
@@ -326,63 +324,38 @@ export function ErrorIsland(props: {
         <b>{props.error.title}</b>
         <p>{props.error.message}</p>
         <div className="acts">
-          <button type="button" onClick={props.onEdit}>
-            去修改描述
-          </button>
-          <button type="button" onClick={props.onRetry}>
-            重试
-          </button>
+          {props.error.kind === "save-failed" ? (
+            <>
+              <button type="button" onClick={props.onRetry}>
+                重试保存
+              </button>
+              <button type="button" onClick={props.onDiscard}>
+                放弃结果
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={props.onEdit}>
+                去修改描述
+              </button>
+              <button type="button" onClick={props.onRetry}>
+                重试生成
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Toast ── */
-export function ToastHost(props: { toasts: ToastMsg[] }) {
-  return (
-    <div className="pm-toasts" aria-live="polite">
-      {props.toasts.map((t) => (
-        <div key={t.id} className="pm-toast">
-          <span className="dot" />
-          {t.text}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ── 历史抽屉（PRD FR-6）：HeroUI Drawer，左侧滑出 ── */
-function Thumb(props: { imageId: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let dead = false;
-    let u: string | null = null;
-    void db.images.get(props.imageId).then((img: ImageRow | undefined) => {
-      if (img && !dead) {
-        u = URL.createObjectURL(img.blob);
-        setUrl(u);
-      }
-    });
-    return () => {
-      dead = true;
-      if (u) URL.revokeObjectURL(u);
-    };
-  }, [props.imageId]);
-  return (
-    <div
-      className="pm-dthumb"
-      style={url ? { backgroundImage: `url(${url})` } : undefined}
-      aria-hidden="true"
-    />
-  );
-}
-
 export function HistoryDrawer(props: {
   open: boolean;
   rows: HistoryRow[];
+  thumbnailUrls: Record<string, string>;
   currentId: string | null;
-  onSelect: (row: HistoryRow) => void;
+  onSelect: (id: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -414,14 +387,23 @@ export function HistoryDrawer(props: {
                   type="button"
                   className="pm-ditem"
                   aria-current={r.id === props.currentId}
-                  onClick={() => props.onSelect(r)}
+                  onClick={() => props.onSelect(r.id)}
                 >
-                  <Thumb imageId={r.imageIds[0]} />
+                  <div
+                    className="pm-dthumb"
+                    aria-hidden="true"
+                    style={
+                      props.thumbnailUrls[r.imageIds[0]]
+                        ? {
+                            backgroundImage: `url(${props.thumbnailUrls[r.imageIds[0]]})`,
+                          }
+                        : undefined
+                    }
+                  />
                   <span className="pm-dtxt">
                     <span className="p">{r.prompt}</span>
                     <span className="s">
-                      {fmtTime(r.createdAt)} · {r.imageIds.length} 张 ·{" "}
-                      {formatUsd(r.costUsd)}
+                      {fmtTime(r.createdAt)} · {r.imageIds.length} 张
                     </span>
                   </span>
                 </button>

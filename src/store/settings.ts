@@ -16,6 +16,6 @@ export const useSettings = create<SettingsState>()(
       apiKey: '',
       setApi: (baseUrl, apiKey) => set({ baseUrl, apiKey }),
     }),
-    { name: 'picmake-settings' },
+    { name: 'PicMake-settings' },
   ),
 )
