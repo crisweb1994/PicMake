@@ -5,12 +5,15 @@ import { b64ToBlob } from "../lib/blob";
 import {
   ApiError,
   ERROR_HINTS,
+  MAX_INPUT_BYTES,
+  MAX_INPUT_IMAGES,
   type ApiConfig,
   type EditDraft,
   type EditSubmission,
   type GenParams,
   type ImageRequestResult,
 } from "../lib/types";
+import type { GenPlan } from "../lib/view-models";
 
 export interface GenerationRun {
   result: ImageRequestResult;
@@ -30,15 +33,15 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-export function useGeneration(onFallback?: () => void) {
+export function useGeneration() {
   const [phase, setPhase] = useState<"idle" | "generating">("idle");
   const [partial, setPartial] = useState<{ url: string; index: number } | null>(
     null,
   );
+  const [plan, setPlan] = useState<GenPlan | null>(null);
   const activeRef = useRef<{ id: number; abort: AbortController } | null>(null);
   const nextIdRef = useRef(0);
   const previewUrlRef = useRef<string | null>(null);
-  const snapshotRef = useRef<RequestSnapshot | null>(null);
 
   const clearPreview = useCallback(() => {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -53,24 +56,41 @@ export function useGeneration(onFallback?: () => void) {
       const abort = new AbortController();
       activeRef.current = { id, abort };
       setPhase("generating");
+      setPlan({ n: snapshot.params.n, size: snapshot.params.size });
       clearPreview();
       const startedAt = Date.now();
 
       try {
         let edit = snapshot.edit;
         if (snapshot.draft && !edit) {
-          const source = await db.images.get(snapshot.draft.source.imageId);
-          abort.signal.throwIfAborted();
-          if (!source)
+          if (snapshot.draft.inputs.length > MAX_INPUT_IMAGES)
             throw new ApiError(
-              "source-unavailable",
-              ERROR_HINTS["source-unavailable"],
+              "too-many-images",
+              ERROR_HINTS["too-many-images"],
             );
+          const sources = await Promise.all(
+            snapshot.draft.inputs.map(async (input, index) => {
+              const image =
+                input.upload ?? (await db.images.get(input.imageId));
+              if (!image)
+                throw new ApiError(
+                  "source-unavailable",
+                  `图${index + 1}：${ERROR_HINTS["source-unavailable"]}`,
+                );
+              if (!image.blob.size || image.blob.size >= MAX_INPUT_BYTES)
+                throw new ApiError(
+                  "image-too-large",
+                  `图${index + 1}：${ERROR_HINTS["image-too-large"]}`,
+                );
+              const { upload: _upload, ...source } = input;
+              return { source, image };
+            }),
+          );
+          abort.signal.throwIfAborted();
           edit = {
-            ...snapshot.draft,
+            sources,
             params: snapshot.params,
-            sourceBlob: source.blob,
-            sourceFormat: source.format,
+            inputFidelity: snapshot.draft.inputFidelity,
           };
           snapshot.edit = edit;
         }
@@ -85,7 +105,6 @@ export function useGeneration(onFallback?: () => void) {
             previewUrlRef.current = url;
             setPartial({ url, index });
           },
-          onFallback,
         };
         const result = edit
           ? await generateImageEditStream(edit, snapshot.config, handlers)
@@ -102,23 +121,25 @@ export function useGeneration(onFallback?: () => void) {
         setPhase("idle");
       }
     },
-    [clearPreview, onFallback],
+    [clearPreview],
   );
 
   const start = useCallback(
     (params: GenParams, draft: EditDraft | null, config: ApiConfig) => {
-      const snapshot: RequestSnapshot = { params, draft, config };
-      snapshotRef.current = snapshot;
+      const snapshot: RequestSnapshot = {
+        params: {
+          ...params,
+          size: params.size === "auto" ? "auto" : { ...params.size },
+        },
+        draft: draft
+          ? { ...draft, inputs: draft.inputs.map((input) => ({ ...input })) }
+          : null,
+        config: { ...config },
+      };
       return execute(snapshot);
     },
     [execute],
   );
-
-  const retryRequest = useCallback(() => {
-    const snapshot = snapshotRef.current;
-    if (!snapshot) return Promise.resolve(null);
-    return execute(snapshot);
-  }, [execute]);
 
   const cancel = useCallback(() => {
     activeRef.current?.abort.abort();
@@ -126,7 +147,7 @@ export function useGeneration(onFallback?: () => void) {
 
   const reset = useCallback(() => {
     activeRef.current?.abort.abort();
-    snapshotRef.current = null;
+    setPlan(null);
     clearPreview();
   }, [clearPreview]);
 
@@ -141,8 +162,8 @@ export function useGeneration(onFallback?: () => void) {
   return {
     phase,
     partial,
+    plan,
     start,
-    retryRequest,
     cancel,
     reset,
   };

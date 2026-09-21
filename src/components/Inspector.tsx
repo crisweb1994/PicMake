@@ -11,7 +11,8 @@ import {
   isCustomActive,
   type GenForm,
 } from "../lib/params";
-import type { DisplayGen } from "../lib/view-models";
+import { InputImages } from "./InputImages";
+import type { DisplayGen, DisplayInput } from "../lib/view-models";
 import type { InputFidelity } from "../lib/types";
 import { Segmented, Stepper } from "./controls";
 
@@ -32,10 +33,16 @@ function Section(props: {
 }
 
 export function GeneratePanel(props: {
-  sourceUrl?: string;
-  inputFidelity?: InputFidelity;
+  images: DisplayInput[];
+  inputFidelity: InputFidelity;
+  reading: boolean;
+  uploadError: string;
+  onFiles: (files: File[]) => void;
+  onRemove: (id?: string) => void;
+  onPreview: (id: string) => void;
+  canReturn: boolean;
   onInputFidelity: (value: InputFidelity) => void;
-  onCloseEdit: () => void;
+  onReturn: () => void;
   form: GenForm;
   customValid: boolean;
   generating: boolean;
@@ -49,38 +56,10 @@ export function GeneratePanel(props: {
   const whRef = useRef<HTMLDivElement>(null);
   return (
     <div className="pm-insp-scroll">
-      {props.inputFidelity && (
-        <>
-          <div className="pm-edit-source">
-            {props.sourceUrl ? (
-              <img src={props.sourceUrl} alt="编辑来源" />
-            ) : (
-              <span className="pm-source-placeholder">暂无预览</span>
-            )}
-            <span>编辑此图</span>
-            <button
-              type="button"
-              aria-label="退出编辑"
-              onClick={props.onCloseEdit}
-            >
-              ×
-            </button>
-          </div>
-          <Section label="保留原图">
-            <Segmented
-              ariaLabel="保留原图"
-              value={props.inputFidelity}
-              disabled={props.generating}
-              onChange={props.onInputFidelity}
-              options={[
-                { value: "low", label: "低" },
-                { value: "high", label: "高" },
-              ]}
-            />
-          </Section>
-        </>
-      )}
-      <fieldset className="pm-form-fields" disabled={props.generating}>
+      <fieldset
+        className="pm-form-fields"
+        disabled={props.generating || props.reading}
+      >
         <Section label="模型">
           <Segmented
             full
@@ -94,14 +73,41 @@ export function GeneratePanel(props: {
           />
         </Section>
 
-        <Section label="生成">
+        <InputImages
+          images={props.images}
+          onPreview={props.onPreview}
+          onFiles={props.onFiles}
+          onRemove={props.onRemove}
+          onClear={() => props.onRemove()}
+          disabled={props.generating || props.reading}
+          reading={props.reading}
+          error={props.uploadError}
+        />
+        {!!props.images.length && (
+          <Section label="保留原图">
+            <Segmented
+              ariaLabel="保留原图"
+              value={props.inputFidelity}
+              onChange={props.onInputFidelity}
+              options={[
+                { value: "low", label: "低" },
+                { value: "high", label: "高" },
+              ]}
+            />
+          </Section>
+        )}
+        <Section label={props.images.length ? "修改描述" : "画面描述"}>
           <TextArea
             aria-label="画面描述"
             maxLength={32000}
             value={f.prompt}
             ref={props.promptRef}
             onChange={(e) => onPatch({ prompt: e.target.value })}
-            placeholder="描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
+            placeholder={
+              props.images.length
+                ? "例如：保留图1的商品，使用图2的背景"
+                : "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
+            }
             className="pm-textarea"
           />
         </Section>
@@ -266,15 +272,25 @@ export function GeneratePanel(props: {
         </Section>
       </fieldset>
       <div className="pm-insp-foot">
+        {props.canReturn && (
+          <Button
+            variant="ghost"
+            fullWidth
+            isDisabled={props.generating}
+            onPress={props.onReturn}
+          >
+            返回结果
+          </Button>
+        )}
         <Button
           variant="primary"
           fullWidth
-          isDisabled={props.generating}
+          isDisabled={props.generating || props.reading}
           onPress={props.onGenerate}
         >
           {props.generating
             ? "正在生成…"
-            : props.inputFidelity
+            : props.images.length
               ? "生成编辑结果"
               : "生成图片"}
         </Button>
@@ -287,9 +303,8 @@ export function DetailPanel(props: {
   display: DisplayGen;
   selectedImageId: string | null;
   canEdit: boolean;
-  sourceUrl?: string;
-  sourceExists: boolean;
-  onViewSource: () => void;
+  sources: DisplayInput[];
+  onViewSource: (id: string) => void;
   onDownload: () => void;
   onCopyPrompt: () => void;
   onReuse: () => void;
@@ -340,35 +355,19 @@ export function DetailPanel(props: {
           <div className="pm-prompt-card">{row.prompt}</div>
         </Section>
 
-        {row.editSource && (
-          <Section label="来源作品">
-            <div className="pm-edit-source">
-              <button
-                type="button"
-                className="pm-source-thumb"
-                disabled={!props.sourceUrl}
-                aria-label="查看来源图片"
-                onClick={props.onViewSource}
-              >
-                {props.sourceUrl ? (
-                  <img src={props.sourceUrl} alt="来源作品" />
-                ) : (
-                  <span>图片不可用</span>
-                )}
-              </button>
-              <span>
-                {props.sourceExists ? "基于此图编辑" : "来源作品已删除"}
-              </span>
-              {props.sourceUrl && (
-                <button type="button" onClick={props.onViewSource}>
-                  查看
-                </button>
-              )}
-            </div>
+        {!!props.sources.length && (
+          <>
+            <InputImages
+              images={props.sources}
+              onPreview={props.onViewSource}
+            />
             <p className="pm-hint">
-              保留原图 · {row.editSource.inputFidelity === "high" ? "高" : "低"}
+              保留原图 ·{" "}
+              {(row.inputFidelity ?? row.editSource?.inputFidelity) === "high"
+                ? "高"
+                : "低"}
             </p>
-          </Section>
+          </>
         )}
         <Section label="操作">
           <div className="pm-act3">

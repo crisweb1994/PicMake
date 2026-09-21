@@ -12,7 +12,8 @@ import {
 import { DotsWave } from "./DotsWave";
 import { fmtTime } from "../lib/format";
 import { MODEL_LABELS, QUALITY_LABELS, sizeText } from "../lib/params";
-import type { DisplayGen, DisplayImage } from "../lib/view-models";
+import type { SizeSpec } from "../lib/types";
+import type { DisplayGen, DisplayImage, GenPlan } from "../lib/view-models";
 
 export function StageEmpty(props: { onStart: () => void }) {
   return (
@@ -42,11 +43,8 @@ export function StageEmpty(props: { onStart: () => void }) {
   );
 }
 
-export function StageGenerating(props: {
-  partialUrl: string | null;
-  partialIndex: number;
-  onCancel: () => void;
-}) {
+/** 生成占位卡：点阵在卡内波动；渐进预览到达后在原位淡入，替掉该卡的点阵 */
+function GenTile(props: { partialUrl: string | null }) {
   return (
     <>
       <div
@@ -58,7 +56,64 @@ export function StageGenerating(props: {
       {props.partialUrl && (
         <img src={props.partialUrl} alt="正在生成" className="pm-gen-img" />
       )}
-      <div className="pm-gen-pill">
+    </>
+  );
+}
+
+export function StageGenerating(props: {
+  n: number;
+  size: SizeSpec;
+  partialUrl: string | null;
+  partialIndex: number;
+  onCancel: () => void;
+}) {
+  const { n, size, partialUrl, partialIndex } = props;
+  return (
+    <>
+      {/* 占位与成品共用同一套布局（pm-single / pm-grid4），完成时图片原位替换点阵 */}
+      {n === 1 ? (
+        <figure className="pm-single">
+          <div
+            className="pm-gen-single"
+            style={
+              size === "auto"
+                ? undefined
+                : { aspectRatio: `${size.w} / ${size.h}` }
+            }
+          >
+            <GenTile partialUrl={partialUrl} />
+          </div>
+          {/* 预留说明行高度，完成切换时图片位置不动 */}
+          <figcaption className="pm-single-meta pm-reserve" aria-hidden="true">
+            &nbsp;
+          </figcaption>
+        </figure>
+      ) : (
+        <div className="pm-grid-wrap">
+          <div className="pm-grid4" aria-hidden="true">
+            {Array.from({ length: n }, (_, i) => (
+              <div key={i} className="pm-gen-tile">
+                <GenTile
+                  partialUrl={
+                    partialUrl && partialIndex === i ? partialUrl : null
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          {/* 预留说明栏高度，完成切换时网格位置不动 */}
+          <div className="pm-grid-cap pm-reserve" aria-hidden="true">
+            <span>共 {n} 张</span>
+            <Button variant="ghost" size="sm" isDisabled>
+              下载全部
+            </Button>
+            <Button variant="ghost" size="sm" isDisabled>
+              复用参数再生成
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="pm-gen-pill" role="status">
         <span className="pm-dots" aria-hidden="true">
           <i />
           <i />
@@ -212,9 +267,9 @@ export function StageToolbar(props: {
 
 /** 舞台总装：按 phase / display 选择形态（多张常驻网格，点选弹轮播浮层，见 App） */
 export function Stage(props: {
-  contextImage: DisplayImage | null;
   phase: "idle" | "generating";
   partial: { url: string; index: number } | null;
+  genPlan?: GenPlan | null;
   display: DisplayGen | null;
   onFocus: (idx: number | null) => void;
   onLightbox: (id: string) => void;
@@ -229,12 +284,8 @@ export function Stage(props: {
   const { display, phase, partial } = props;
   const isGen = phase === "generating";
   const done = !isGen && display;
-  const single = done && (props.contextImage || display.images.length === 1);
-  const bgUrl = isGen
-    ? (partial?.url ?? props.contextImage?.url)
-    : done
-      ? (props.contextImage?.url ?? display.images[0]?.url)
-      : null;
+  const single = done && display.images.length === 1;
+  const bgUrl = isGen ? partial?.url : done ? display.images[0]?.url : null;
 
   return (
     <div
@@ -248,7 +299,9 @@ export function Stage(props: {
       />
       {isGen && (
         <StageGenerating
-          partialUrl={partial?.url ?? props.contextImage?.url ?? null}
+          n={props.genPlan?.n ?? 1}
+          size={props.genPlan?.size ?? "auto"}
+          partialUrl={partial?.url ?? null}
           partialIndex={partial?.index ?? 0}
           onCancel={props.onCancel}
         />
@@ -258,18 +311,16 @@ export function Stage(props: {
         <>
           <StageSingle
             display={display}
-            img={props.contextImage ?? display.images[0]}
+            img={display.images[0]}
             onZoom={props.onLightbox}
           />
-          {!props.contextImage && (
-            <StageToolbar
-              onZoom={() => props.onLightbox(display.images[0].id)}
-              onDownload={() => props.onDownload(0)}
-              onReuse={props.onReuse}
-              onEdit={props.onEdit}
-              onDelete={props.onDelete}
-            />
-          )}
+          <StageToolbar
+            onZoom={() => props.onLightbox(display.images[0].id)}
+            onDownload={() => props.onDownload(0)}
+            onReuse={props.onReuse}
+            onEdit={props.onEdit}
+            onDelete={props.onDelete}
+          />
         </>
       )}
       {!isGen && done && !single && (

@@ -1,3 +1,4 @@
+import { historySources } from "../lib/input-images";
 import { db } from "./schema";
 import type { PreparedGeneration } from "../lib/generation";
 
@@ -5,14 +6,8 @@ export async function saveGeneration(
   prepared: PreparedGeneration,
 ): Promise<void> {
   await db.transaction("rw", db.images, db.history, async () => {
-    if (prepared.source && !(await db.images.get(prepared.source.imageId))) {
-      await db.images.put({
-        id: prepared.source.imageId,
-        blob: prepared.source.sourceBlob,
-        format: prepared.source.sourceFormat,
-        width: 0,
-        height: 0,
-      });
+    for (const image of prepared.sources) {
+      if (!(await db.images.get(image.id))) await db.images.put(image);
     }
     await db.images.bulkPut(prepared.images);
     await db.history.put(prepared.row);
@@ -26,7 +21,7 @@ export async function deleteHistory(id: string): Promise<void> {
     const retained = new Set(
       remaining.flatMap((row) => [
         ...row.imageIds,
-        ...(row.editSource ? [row.editSource.imageId] : []),
+        ...historySources(row).map((source) => source.imageId),
       ]),
     );
     const ids = await db.images.toCollection().primaryKeys();

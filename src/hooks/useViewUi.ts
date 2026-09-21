@@ -5,26 +5,17 @@ import type { DisplayImage } from "../lib/view-models";
 export function useViewUi() {
   const [focusIdx, setFocusIdx] = useState<number | null>(null);
   const [lightbox, setLightbox] = useState<DisplayImage | null>(null);
-  const [sourceLightboxOpen, setSourceLightboxOpen] = useState(false);
 
-  const clearResultViewingState = useCallback(() => {
+  const clearViewingState = useCallback(() => {
     setFocusIdx(null);
     setLightbox(null);
   }, []);
-
-  const clearViewingState = useCallback(() => {
-    clearResultViewingState();
-    setSourceLightboxOpen(false);
-  }, [clearResultViewingState]);
 
   return {
     focusIdx,
     setFocusIdx,
     lightbox,
     setLightbox,
-    sourceLightboxOpen,
-    setSourceLightboxOpen,
-    clearResultViewingState,
     clearViewingState,
   };
 }

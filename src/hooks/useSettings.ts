@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { useSettings } from "../store/settings";
 import { toast } from "@heroui/react";
+import { testConnection } from "../api/client";
+import { ERROR_HINTS } from "../lib/types";
 
 export const useSettingsModal = () => {
   const settings = useSettings();
@@ -22,12 +24,20 @@ export const useSettingsModal = () => {
     setSettingsOpen(true);
   }, []);
 
+  const runTestConnection = async (baseUrl: string, apiKey: string) => {
+    const result = await testConnection({ baseUrl, apiKey });
+    return result.ok
+      ? result
+      : { ok: false as const, message: ERROR_HINTS[result.error.kind] };
+  };
+
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
   }, []);
 
   return {
     settingsOpen,
+    runTestConnection,
     openSettings,
     closeSettings,
     setSettingsOpen,

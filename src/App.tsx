@@ -4,16 +4,15 @@ import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
 import { DetailPanel, GeneratePanel } from "./components/Inspector";
 import {
+  InputPreview,
   Carousel,
   ConfirmDialog,
-  ErrorIsland,
   HistoryDrawer,
   Lightbox,
   SettingsModal,
 } from "./components/Overlays";
 import { useHistory } from "./hooks/useHistory";
 import { useForm } from "./hooks/useForm";
-import { useEdit } from "./hooks/useEdit";
 import { usePicmake } from "./hooks/usePicmake";
 import { useViewUi } from "./hooks/useViewUi";
 import { fmtBytes } from "./lib/format";
@@ -28,18 +27,24 @@ function downloadUrl(url: string, name: string) {
 }
 
 export default function App() {
-  const { settingsOpen, saveSettings, openSettings, closeSettings } =
-    useSettingsModal();
+  const {
+    settingsOpen,
+    saveSettings,
+    openSettings,
+    closeSettings,
+    runTestConnection,
+  } = useSettingsModal();
   const view = useViewUi();
   const form = useForm();
-  const edit = useEdit();
-  const history = useHistory(edit.editDraft?.source.imageId);
+  const history = useHistory();
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const pm = usePicmake({
     history,
     form,
-    edit,
-    onViewReset: view.clearViewingState,
-    onEditGenerationStart: view.clearResultViewingState,
+    onViewReset: () => {
+      view.clearViewingState();
+      setPreviewId(null);
+    },
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -70,22 +75,15 @@ export default function App() {
   const editSelected = () => {
     if (selectedImageId) pm.editImage(selectedImageId);
   };
-  const testConn = pm.runTestConnection;
   const totalImages = history.rows.reduce((s, r) => s + r.imageIds.length, 0);
 
   return (
     <>
       <div className="pm-stage-col">
         <Stage
-          contextImage={
-            edit.editDraft
-              ? (history.display?.images.find(
-                  (image) => image.id === edit.editDraft?.source.imageId,
-                ) ?? null)
-              : null
-          }
           phase={pm.phase}
           partial={pm.partial}
+          genPlan={pm.plan}
           display={history.display}
           onFocus={view.setFocusIdx}
           onLightbox={(id) =>
@@ -101,27 +99,20 @@ export default function App() {
           onEdit={history.pendingSave ? undefined : editSelected}
           onDelete={() => history.display && pm.deleteGen(history.display.row)}
           onCancel={pm.cancelGenerate}
-          onStart={pm.newGeneration}
-        />
-        <ErrorIsland
-          error={pm.error}
-          onEdit={pm.goEditPrompt}
-          onRetry={pm.retry}
-          onDiscard={pm.discardPending}
+          onStart={form.focus}
         />
       </div>
 
       <TopNav onHistory={() => setDrawerOpen(true)} onSettings={openSettings} />
 
       <aside className="pm-island pm-insp" aria-label="检查器">
-        {history.display && pm.phase === "idle" && !edit.editDraft ? (
+        {history.display && pm.phase === "idle" ? (
           <DetailPanel
             display={history.display}
             selectedImageId={selectedImageId}
-            canEdit={!history.pendingSave}
-            sourceUrl={history.sourceUrl}
-            sourceExists={history.sourceExists}
-            onViewSource={() => view.setSourceLightboxOpen(true)}
+            canEdit={!history.pendingSave && !pm.saving}
+            sources={history.sourceImages}
+            onViewSource={setPreviewId}
             onDownload={() => downloadOne(view.focusIdx ?? 0)}
             onCopyPrompt={() => {
               if (history.display)
@@ -140,13 +131,21 @@ export default function App() {
           />
         ) : (
           <GeneratePanel
-            sourceUrl={history.sourceUrl}
-            inputFidelity={edit.editDraft?.inputFidelity}
-            onInputFidelity={edit.setInputFidelity}
-            onCloseEdit={pm.closeEdit}
+            images={form.images}
+            inputFidelity={form.inputFidelity}
+            reading={form.reading}
+            uploadError={form.uploadError}
+            onFiles={(files) => {
+              void form.addFiles(files);
+            }}
+            onRemove={form.removeInput}
+            onPreview={setPreviewId}
+            onInputFidelity={form.setInputFidelity}
+            canReturn={pm.canReturn}
+            onReturn={pm.returnToResult}
             form={form.form}
             customValid={form.customValid}
-            generating={pm.phase === "generating"}
+            generating={pm.phase === "generating" || pm.saving}
             promptRef={form.promptRef}
             onPatch={form.patchForm}
             onGenerate={pm.generate}
@@ -173,12 +172,11 @@ export default function App() {
         baseUrl={pm.settings.baseUrl}
         apiKey={pm.settings.apiKey}
         storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
-        onTest={testConn}
+        onTest={runTestConnection}
         onSave={saveSettings}
         onClose={closeSettings}
       />
       {history.display &&
-        !edit.editDraft &&
         pm.phase === "idle" &&
         history.display.images.length > 1 &&
         view.focusIdx !== null && (
@@ -221,22 +219,20 @@ export default function App() {
         }}
         onClose={() => view.setLightbox(null)}
       />
-      <Lightbox
-        img={
-          view.sourceLightboxOpen && history.sourceUrl
-            ? { id: "source", url: history.sourceUrl }
-            : null
+      <InputPreview
+        key={previewId ?? "closed"}
+        image={
+          (history.display ? history.sourceImages : form.images).find(
+            (image) => image.id === previewId,
+          ) ?? null
         }
-        prompt={history.sourceExists ? "来源作品" : "来源作品已删除"}
-        onDownload={() =>
-          history.sourceUrl &&
-          downloadUrl(
-            history.sourceUrl,
-            `PicMake-source.${history.sourceFormat === "jpeg" ? "jpg" : (history.sourceFormat ?? "png")}`,
-          )
-        }
-        onClose={() => view.setSourceLightboxOpen(false)}
+        onClose={() => setPreviewId(null)}
       />
+      {pm.saving && (
+        <p className="pm-saving" role="status">
+          正在保存到本地…
+        </p>
+      )}
     </>
   );
 }
