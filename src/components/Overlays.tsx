@@ -23,7 +23,7 @@ import { StageToolbar } from "./Stage";
 import type {
   ConfirmState,
   DisplayImage,
-  ErrorState,
+  DisplayInput,
 } from "../lib/view-models";
 
 interface TestResult {
@@ -154,7 +154,7 @@ export function ConfirmDialog(props: {
   });
   return (
     <Modal state={st}>
-      <ModalBackdrop className="pm-confirm">
+      <ModalBackdrop className="pm-confirm" isKeyboardDismissDisabled>
         <ModalContainer placement="center">
           <ModalDialog
             role="alertdialog"
@@ -299,56 +299,6 @@ export function Carousel(props: {
   );
 }
 
-/* ── 错误岛（PRD FR-8） ── */
-export function ErrorIsland(props: {
-  error: ErrorState | null;
-  onEdit: () => void;
-  onRetry: () => void;
-  onDiscard: () => void;
-}) {
-  if (!props.error) return null;
-  return (
-    <div className="pm-err" role="alert">
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path d="M12 9v4M12 17h.01" />
-        <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0Z" />
-      </svg>
-      <div>
-        <b>{props.error.title}</b>
-        <p>{props.error.message}</p>
-        <div className="acts">
-          {props.error.kind === "save-failed" ? (
-            <>
-              <button type="button" onClick={props.onRetry}>
-                重试保存
-              </button>
-              <button type="button" onClick={props.onDiscard}>
-                放弃结果
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={props.onEdit}>
-                去修改描述
-              </button>
-              <button type="button" onClick={props.onRetry}>
-                重试生成
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── 历史抽屉（PRD FR-6）：HeroUI Drawer，左侧滑出 ── */
 export function HistoryDrawer(props: {
   open: boolean;
@@ -421,5 +371,42 @@ export function HistoryDrawer(props: {
         </DrawerContent>
       </DrawerBackdrop>
     </Drawer>
+  );
+}
+
+/** 输入预览由 Modal 限制焦点和锁滚动；图片尺寸仅为加载后的 UI 测量。 */
+export function InputPreview(props: {
+  image: DisplayInput | null;
+  onClose: () => void;
+}) {
+  const [size, setSize] = useState("");
+  return (
+    <Modal
+      isOpen={!!props.image}
+      onOpenChange={(open) => {
+        if (!open) props.onClose();
+      }}
+    >
+      <ModalBackdrop isKeyboardDismissDisabled>
+        <ModalContainer placement="center">
+          <ModalDialog className="pm-input-preview" aria-label="输入图片预览">
+            <h3>{props.image?.label}</h3>
+            <img
+              src={props.image?.url}
+              alt={props.image?.name ?? "输入图片"}
+              onLoad={(event) =>
+                setSize(
+                  `${event.currentTarget.naturalWidth} × ${event.currentTarget.naturalHeight}`,
+                )
+              }
+            />
+            <p>{size}</p>
+            <Button variant="secondary" onPress={props.onClose}>
+              关闭预览
+            </Button>
+          </ModalDialog>
+        </ModalContainer>
+      </ModalBackdrop>
+    </Modal>
   );
 }

@@ -1,21 +1,22 @@
 /** 历史、当前选择与结果资源；URL 随结果替换或卸载释放。 */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, ensurePersistentStorage, type HistoryRow } from "../db/schema";
 import { deleteHistory, saveGeneration } from "../db/history";
 import type { PreparedGeneration } from "../lib/generation";
 import type { DisplayGen, DisplayImage } from "../lib/view-models";
+import { historySources } from "../lib/input-images";
 import { useImageAssets } from "./useImageAssets";
 
 const EMPTY_ROWS: HistoryRow[] = [];
 
-export function useHistory(editingImageId?: string) {
+export function useHistory() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingSave, setPendingSave] = useState<PreparedGeneration | null>(
     null,
   );
   const [pendingUrls, setPendingUrls] = useState<Record<string, string>>({});
-  const initializedRef = useRef(false);
+  const previousRowsRef = useRef<HistoryRow[] | undefined>(undefined);
   const rawRows = useLiveQuery(
     () => db.history.orderBy("createdAt").reverse().toArray(),
     [],
@@ -27,12 +28,18 @@ export function useHistory(editingImageId?: string) {
 
   useEffect(() => {
     if (!rawRows) return;
-    if (!initializedRef.current) {
-      initializedRef.current = true;
+    const previousRows = previousRowsRef.current;
+    previousRowsRef.current = rawRows;
+    if (!previousRows) {
       setSelectedId(rawRows[0]?.id ?? null);
       return;
     }
-    if (selectedId && !rawRows.some((row) => row.id === selectedId)) {
+    // 写入完成可早于 liveQuery 更新；仅回退确实从列表中删除的作品。
+    if (
+      selectedId &&
+      previousRows.some((row) => row.id === selectedId) &&
+      !rawRows.some((row) => row.id === selectedId)
+    ) {
       setSelectedId(rawRows[0]?.id ?? null);
     }
   }, [rawRows, selectedId]);
@@ -41,7 +48,7 @@ export function useHistory(editingImageId?: string) {
     void ensurePersistentStorage();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const next: Record<string, string> = {};
     for (const image of pendingSave?.images ?? [])
       next[image.id] = URL.createObjectURL(image.blob);
@@ -49,13 +56,18 @@ export function useHistory(editingImageId?: string) {
     return () => Object.values(next).forEach((url) => URL.revokeObjectURL(url));
   }, [pendingSave]);
 
-  const sourceId = editingImageId ?? selectedRow?.editSource?.imageId;
+  const displayRow = pendingSave?.row ?? selectedRow;
+  const sources = displayRow ? historySources(displayRow) : [];
+  const suppliedSources = useMemo(
+    () => pendingSave?.sources ?? [],
+    [pendingSave],
+  );
   const assetIds = [
     ...(selectedRow?.imageIds ?? []),
-    ...(sourceId ? [sourceId] : []),
+    ...sources.map((source) => source.imageId),
     ...rows.map((row) => row.imageIds[0]),
   ];
-  const { assets } = useImageAssets(assetIds);
+  const { assets } = useImageAssets(assetIds, suppliedSources);
   const thumbnailUrls = useMemo(
     () =>
       Object.fromEntries(
@@ -67,13 +79,18 @@ export function useHistory(editingImageId?: string) {
     [assets, rows],
   );
 
-  const sourceUrl = sourceId ? assets[sourceId]?.url : undefined;
-  const sourceFormat = sourceId ? assets[sourceId]?.row.format : undefined;
-  const sourceExists =
-    !!selectedRow?.editSource &&
-    rows.some((row) => row.id === selectedRow.editSource?.generationId);
+  const sourceImages = sources.map((source, index) => ({
+    id: source.imageId,
+    name: source.name ?? "已有作品",
+    label: `图${index + 1} · ${source.name ?? "已有作品"}`,
+    origin: !source.generationId
+      ? "上传的图片"
+      : rows.some((row) => row.id === source.generationId)
+        ? "来自已有作品"
+        : "来源作品已删除",
+    url: assets[source.imageId]?.url,
+  }));
 
-  const displayRow = pendingSave?.row ?? selectedRow;
   const images = (displayRow?.imageIds ?? []).map((id) => ({
     id,
     url: pendingSave ? pendingUrls[id] : assets[id]?.url,
@@ -97,9 +114,7 @@ export function useHistory(editingImageId?: string) {
     select: setSelectedId,
     display,
     thumbnailUrls,
-    sourceUrl,
-    sourceFormat,
-    sourceExists,
+    sourceImages,
     pendingSave,
     discardPending: () => setPendingSave(null),
     save,

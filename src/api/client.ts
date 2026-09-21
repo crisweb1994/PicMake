@@ -1,7 +1,7 @@
 /**
  * OpenAI 兼容 API 客户端（官方或中转站）。
- * 约定见 docs/gpt-image-2.5-api.md：响应恒为 b64_json；流式走 SSE，
- * 中转站流式失败自动降级为非流式重试一次。
+ * 约定见 docs/gpt-image-2.5-api.md：响应恒为 b64_json；流式走 SSE。
+ * 生成是单次请求事务：无自动降级、无重试、无会话级记忆（PRD FR-4，2026-09-22）。
  */
 import { createParser } from "eventsource-parser";
 import { apiUrl } from "../lib/url";
@@ -9,7 +9,6 @@ import {
   ApiError,
   MODEL_NAMES,
   type ApiConfig,
-  type ApiErrorKind,
   type GenParams,
   type ImageGenResult,
   type ImageRequestResult,
@@ -94,7 +93,7 @@ export async function testConnection(
 
 /* ── 参数映射 ── */
 
-function toBody(params: GenParams, stream: boolean): string {
+function toBody(params: GenParams): string {
   return JSON.stringify({
     model: MODEL_NAMES[params.model],
     prompt: params.prompt,
@@ -104,8 +103,8 @@ function toBody(params: GenParams, stream: boolean): string {
     background: params.background,
     output_format: params.outputFormat,
     moderation: "auto",
-    stream,
-    ...(stream ? { partial_images: 3 } : {}),
+    stream: true,
+    partial_images: 3,
   });
 }
 
@@ -244,31 +243,14 @@ async function resolveTaskResult(
   }
 }
 
-/* ── 流式生成：SSE 渐进预览，失败自动降级非流式 ── */
-
-/**
- * 流式能力记忆（会话级）：某地址「流式失败 + 非流式重试成功」一次后，
- * 本次会话内该地址直接走非流式——排队型中转要等 20–50s 才报流式错误，
- * 不该每次生成都撞一遍。不持久化：刷新重探一次的代价，远小于为此
- * 新增持久化（AGENTS.md §5：持久化只有 IndexedDB 与 settings 两处）。
- */
-const noStreamEndpoints = new Set<string>();
-
-/** 这些错误与传输方式无关，换非流式也必然同样失败，直接抛给用户 */
-const NO_FALLBACK_KINDS: ReadonlySet<ApiErrorKind> = new Set([
-  "auth",
-  "org-unverified",
-  "content-policy",
-]);
+/* ── 流式生成：SSE 渐进预览 ── */
 
 export interface StreamHandlers {
   onPartial?: (b64: string, index: number) => void;
-  /** 流式不可用、自动降级为非流式时通知（PRD FR-4：toast 告知） */
-  onFallback?: () => void;
   signal?: AbortSignal;
 }
 
-/** 文生图和编辑共享传输、错误与降级语义；配置在调用时固定。 */
+/** 文生图和编辑共享传输与错误语义；配置在调用时固定。 */
 export function generateImageStream(
   params: GenParams,
   config: ApiConfig,
@@ -286,19 +268,22 @@ export function generateImageEditStream(
 }
 
 /** 浏览器负责 multipart boundary；文件扩展名来自已存的来源格式。 */
-export function editFormData(
-  submission: EditSubmission,
-  stream: boolean,
-): FormData {
+export function editFormData(submission: EditSubmission): FormData {
   const form = new FormData();
-  const fields = JSON.parse(toBody(submission.params, stream));
+  const fields = JSON.parse(toBody(submission.params));
   delete fields.moderation;
   for (const [key, value] of Object.entries(fields))
     form.append(key, String(value));
   form.append("input_fidelity", submission.inputFidelity);
-  const ext =
-    submission.sourceFormat === "jpeg" ? "jpg" : submission.sourceFormat;
-  form.append("image", submission.sourceBlob, `source.${ext}`);
+  for (const { image } of submission.sources) {
+    const ext = image.format === "jpeg" ? "jpg" : image.format;
+    // 单图保留已有通道字段；多图使用 OpenAI 的 image[] multipart 数组。
+    form.append(
+      submission.sources.length === 1 ? "image" : "image[]",
+      image.blob,
+      `source.${ext}`,
+    );
+  }
   return form;
 }
 
@@ -356,60 +341,33 @@ async function requestImages(
     config.baseUrl,
     edit ? "/images/edits" : "/images/generations",
   );
-  const request = async (stream: boolean) => {
+  let res: Response;
+  try {
     handlers.signal?.throwIfAborted();
-    try {
-      return await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          ...(!edit ? { "Content-Type": "application/json" } : {}),
-        },
-        body: edit ? editFormData(edit, stream) : toBody(params, stream),
-        signal: handlers.signal,
-      });
-    } catch (e) {
-      if (handlers.signal?.aborted) throw e;
-      throw new ApiError("network", "无法连接到 API 地址");
-    }
-  };
-  const readJson = async (res: Response): Promise<ImageRequestResult> => {
-    if (!res.ok) await raise(res);
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        ...(!edit ? { "Content-Type": "application/json" } : {}),
+      },
+      body: edit ? editFormData(edit) : toBody(params),
+      signal: handlers.signal,
+    });
+  } catch (e) {
+    if (handlers.signal?.aborted) throw e;
+    throw new ApiError("network", "无法连接到 API 地址");
+  }
+  if (!res.ok) await raise(res);
+  // 中转对 stream 请求回 JSON（普通响应或任务单）时就地解析，
+  // 不重发请求——重发等于同一批图计费两次。
+  if ((res.headers.get("content-type") ?? "").includes("json")) {
     const j = await res.json();
     const taskId = extractTaskId(j);
     return taskId
       ? resolveTaskResult(taskId, config, handlers.signal)
       : parseGenResponse(j);
-  };
-  const fallback = async (): Promise<ImageRequestResult> => {
-    handlers.signal?.throwIfAborted();
-    handlers.onFallback?.();
-    const result = await readJson(await request(false));
-    noStreamEndpoints.add(url);
-    return result;
-  };
-  if (noStreamEndpoints.has(url)) return readJson(await request(false));
-
-  let res: Response;
-  try {
-    res = await request(true);
-  } catch (e) {
-    if (handlers.signal?.aborted) throw e;
-    return fallback();
   }
-  if (!res.ok) {
-    const err = await toApiError(res);
-    if (NO_FALLBACK_KINDS.has(err.kind)) throw err;
-    return fallback();
-  }
-  // 已接受的 JSON / 任务单就地处理；解析或任务失败也不重复提交。
-  if ((res.headers.get("content-type") ?? "").includes("json")) {
-    handlers.onFallback?.();
-    const result = await readJson(res);
-    noStreamEndpoints.add(url);
-    return result;
-  }
-  if (!res.body) return fallback();
+  if (!res.body) throw new ApiError("unknown", "响应没有内容");
   const result: ImageRequestResult = { images: [], usage: null };
   const parser = createImageParser(handlers, result);
   const reader = res.body.getReader();
@@ -430,14 +388,8 @@ async function requestImages(
     reader.releaseLock();
   }
   handlers.signal?.throwIfAborted();
-  if (streamError) {
-    if (
-      result.images.length ||
-      (streamError instanceof ApiError &&
-        NO_FALLBACK_KINDS.has(streamError.kind))
-    )
-      throw streamError;
-    return fallback();
-  }
-  return result.images.length ? result : fallback();
+  if (streamError) throw streamError;
+  if (!result.images.length)
+    throw new ApiError("unknown", "响应中没有图片数据");
+  return result;
 }

@@ -5,9 +5,7 @@ import type { HistoryRow, ImageRow } from "../db/schema";
 export interface PreparedGeneration {
   row: HistoryRow;
   images: ImageRow[];
-  source?: Pick<EditSubmission, "sourceBlob" | "sourceFormat"> & {
-    imageId: string;
-  };
+  sources: ImageRow[];
 }
 
 export function prepareGeneration(
@@ -38,7 +36,10 @@ export function prepareGeneration(
     params,
     usage: result.usage,
     ...(edit
-      ? { editSource: { ...edit.source, inputFidelity: edit.inputFidelity } }
+      ? {
+          inputSources: edit.sources.map(({ source }) => ({ ...source })),
+          inputFidelity: edit.inputFidelity,
+        }
       : {}),
     imageIds: images.map((image) => image.id),
     createdAt: Date.now(),
@@ -47,14 +48,6 @@ export function prepareGeneration(
   return {
     row,
     images,
-    ...(edit
-      ? {
-          source: {
-            imageId: edit.source.imageId,
-            sourceBlob: edit.sourceBlob,
-            sourceFormat: edit.sourceFormat,
-          },
-        }
-      : {}),
+    sources: edit?.sources.map(({ image }) => image) ?? [],
   };
 }

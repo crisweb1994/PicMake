@@ -1,6 +1,12 @@
 /** IndexedDB：图片 Blob 与生成历史（技术栈文档 §3.3） */
 import Dexie, { type EntityTable } from "dexie";
-import type { EditSource, GenParams, Usage } from "../lib/types";
+import type {
+  EditSource,
+  GenParams,
+  Usage,
+  InputSource,
+  InputFidelity,
+} from "../lib/types";
 
 export interface ImageRow {
   id: string;
@@ -17,7 +23,9 @@ export interface HistoryRow {
   usage: Usage | null;
   imageIds: string[];
   createdAt: number;
-  editSource?: EditSource;
+  editSource?: EditSource; // 兼容旧单图历史
+  inputSources?: InputSource[];
+  inputFidelity?: InputFidelity;
   durationMs: number;
 }
 

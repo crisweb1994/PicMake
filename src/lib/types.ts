@@ -36,16 +36,31 @@ export interface EditSource {
   inputFidelity: InputFidelity;
 }
 
+/** 有序输入来源；本地文件没有 generationId。 */
+export interface InputSource {
+  imageId: string;
+  generationId?: string;
+  name?: string;
+}
+
+export interface InputImage extends InputSource {
+  /** 仅上传草稿持有原图，历史作品在提交时读取。 */
+  upload?: import("../db/schema").ImageRow;
+}
+
 export interface EditDraft {
-  source: Omit<EditSource, "inputFidelity">;
+  inputs: InputImage[];
   inputFidelity: InputFidelity;
 }
 
-export interface EditSubmission extends EditDraft {
+export interface EditSubmission {
   params: GenParams;
-  sourceBlob: Blob;
-  sourceFormat: string;
+  sources: { source: InputSource; image: import("../db/schema").ImageRow }[];
+  inputFidelity: InputFidelity;
 }
+
+export const MAX_INPUT_IMAGES = 16;
+export const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 
 export interface Usage {
   totalTokens: number;
@@ -71,6 +86,9 @@ export interface ImageRequestResult {
 }
 
 export type ApiErrorKind =
+  | "invalid-image"
+  | "image-too-large"
+  | "too-many-images"
   | "source-unavailable"
   | "save-failed"
   | "auth" // 401：Key 无效
@@ -94,8 +112,12 @@ export class ApiError extends Error {
 }
 
 export const ERROR_HINTS: Record<ApiErrorKind, string> = {
+  "invalid-image": "请选择有效的 PNG、JPEG 或 WebP 图片。",
+  "image-too-large": "请选择小于 50 MiB 的非空图片。",
+  "too-many-images": "最多添加 16 张输入图片。",
   "source-unavailable": "来源图片不可用，无法继续编辑",
-  "save-failed": "图片已生成，但本地保存失败。可以重试保存，或放弃这次结果。",
+  "save-failed":
+    "图片已生成，但本地保存失败。结果暂存在内存，可查看或下载；离开前会再次确认。",
   auth: "API Key 无效或已失效，请在设置中检查。",
   "org-unverified":
     "组织尚未完成图片模型的资格验证（organization verification）。",
@@ -106,8 +128,11 @@ export const ERROR_HINTS: Record<ApiErrorKind, string> = {
   unknown: "生成失败，请重试。",
 };
 
-/** 错误横幅标题（FR-8） */
+/** 错误提示标题（FR-8，toast 反馈） */
 export const ERROR_TITLES: Record<ApiErrorKind, string> = {
+  "invalid-image": "图片无法读取",
+  "image-too-large": "图片大小不符合要求",
+  "too-many-images": "输入图片已达上限",
   "source-unavailable": "来源图片不可用",
   "save-failed": "本地保存失败",
   auth: "API Key 无效",

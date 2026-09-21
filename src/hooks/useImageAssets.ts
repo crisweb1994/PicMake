@@ -6,7 +6,12 @@ export interface ImageAsset {
   url: string;
 }
 
-export function useImageAssets(imageIds: string[]) {
+const EMPTY_IMAGES: ImageRow[] = [];
+
+export function useImageAssets(
+  imageIds: string[],
+  suppliedImages: ImageRow[] = EMPTY_IMAGES,
+) {
   const idsKey = [...new Set(imageIds.filter(Boolean))].join("|");
   const [assets, setAssets] = useState<Record<string, ImageAsset>>({});
 
@@ -14,12 +19,14 @@ export function useImageAssets(imageIds: string[]) {
     let cancelled = false;
     const urls: string[] = [];
     const ids = idsKey ? idsKey.split("|") : [];
+    const supplied = new Map(suppliedImages.map((row) => [row.id, row]));
     void db.images
-      .bulkGet(ids)
+      .bulkGet(ids.filter((id) => !supplied.has(id)))
+      .catch(() => [])
       .then((rows) => {
         if (cancelled) return;
         const next: Record<string, ImageAsset> = {};
-        for (const row of rows) {
+        for (const row of [...rows, ...suppliedImages]) {
           if (!row) continue;
           const url = URL.createObjectURL(row.blob);
           urls.push(url);
@@ -36,7 +43,7 @@ export function useImageAssets(imageIds: string[]) {
       cancelled = true;
       urls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [idsKey]);
+  }, [idsKey, suppliedImages]);
 
   return { assets };
 }

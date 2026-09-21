@@ -1,6 +1,5 @@
-/** 页面级编排：生成、错误恢复及历史/表单/编辑之间的页面转换。 */
-import { useCallback, useState } from "react";
-import { testConnection } from "../api/client";
+/** 页面级编排：生成、错误反馈（toast）及历史/表单/编辑之间的页面转换。 */
+import { useRef, useState } from "react";
 import type { HistoryRow } from "../db/schema";
 import {
   useGeneration,
@@ -9,7 +8,6 @@ import {
 } from "./useGeneration";
 import type { useHistory } from "./useHistory";
 import type { useForm } from "./useForm";
-import type { useEdit } from "./useEdit";
 import { prepareGeneration, type PreparedGeneration } from "../lib/generation";
 import {
   ApiError,
@@ -19,51 +17,46 @@ import {
   type EditDraft,
   type GenParams,
 } from "../lib/types";
-import type { ConfirmState, ErrorState } from "../lib/view-models";
+import type { ConfirmState } from "../lib/view-models";
 import { useSettings } from "../store/settings";
 import { toast } from "@heroui/react";
 
-function toErrorState(error: unknown): ErrorState {
-  if (error instanceof ApiError) {
-    return {
-      kind: error.kind,
-      title: ERROR_TITLES[error.kind],
-      message: error.message || ERROR_HINTS[error.kind],
-    };
-  }
-  return {
-    kind: "unknown",
-    title: ERROR_TITLES.unknown,
-    message: ERROR_HINTS.unknown,
-  };
+/** 错误反馈统一走 toast（PRD FR-8，2026-09-22）：标题 + 建议或原始信息 */
+function toastError(error: unknown) {
+  const kind = error instanceof ApiError ? error.kind : "unknown";
+  const detail =
+    error instanceof ApiError && error.message
+      ? error.message
+      : ERROR_HINTS[kind];
+  toast(`${ERROR_TITLES[kind]}：${detail}`);
 }
 
 export function usePicmake({
   history,
   form,
-  edit,
   onViewReset,
-  onEditGenerationStart,
 }: {
   history: ReturnType<typeof useHistory>;
   form: ReturnType<typeof useForm>;
-  edit: ReturnType<typeof useEdit>;
   onViewReset: () => void;
-  onEditGenerationStart: () => void;
 }) {
   const settings = useSettings();
   const { selectedId, selectedRow, display, pendingSave } = history;
-  const { editDraft } = edit;
-  const [error, setError] = useState<ErrorState | null>(null);
+  const [returnId, setReturnId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
-  const onFallback = useCallback(() => {
-    toast("已自动切换为普通请求，本次无渐进预览");
-  }, []);
-  const generation = useGeneration(onFallback);
+  const generation = useGeneration();
 
   const confirmPendingLeave = (onLeave: () => void) => {
     if (!pendingSave) {
-      onLeave();
+      if (form.dirty && !display) {
+        setConfirmState({
+          title: "放弃当前草稿？",
+          desc: "未提交的图片、描述和参数修改将被放弃。",
+          onOk: onLeave,
+        });
+      } else onLeave();
       return;
     }
     setConfirmState({
@@ -71,7 +64,6 @@ export function usePicmake({
       desc: "图片已经生成，但尚未保存到本机。离开后这次结果会丢失。",
       onOk: () => {
         history.discardPending();
-        setError(null);
         onLeave();
       },
     });
@@ -80,19 +72,22 @@ export function usePicmake({
   const savePrepared = async (
     prepared: PreparedGeneration,
   ): Promise<boolean> => {
+    if (savingRef.current) return false;
+    savingRef.current = true;
+    setSaving(true);
     try {
       await history.save(prepared);
+      form.initialize();
+      setReturnId(null);
       generation.reset();
-      setError(null);
       toast("生成完成");
       return true;
     } catch {
-      setError({
-        kind: "save-failed",
-        title: ERROR_TITLES["save-failed"],
-        message: ERROR_HINTS["save-failed"],
-      });
+      toast(`${ERROR_TITLES["save-failed"]}：${ERROR_HINTS["save-failed"]}`);
       return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -113,84 +108,61 @@ export function usePicmake({
     paramsForRun: GenParams,
     draft: EditDraft | null,
   ) => {
-    setError(null);
-    if (!draft) {
-      history.select(null);
-      onViewReset();
-    } else {
-      onEditGenerationStart();
-    }
+    history.select(null);
+    onViewReset();
     const config: ApiConfig = {
       baseUrl: settings.baseUrl,
       apiKey: settings.apiKey,
     };
     try {
-      const run = await generation.start(
-        paramsForRun,
-        draft ? { ...draft, source: { ...draft.source } } : null,
-        config,
-      );
+      const run = await generation.start(paramsForRun, draft, config);
       await handleRunResult(paramsForRun, run);
     } catch (caught) {
       if (isAbortError(caught)) {
         toast("已取消生成");
         return;
       }
-      setError(toErrorState(caught));
+      toastError(caught);
     }
   };
 
   const generate = () => {
-    if (generation.phase === "generating" || confirmState || pendingSave)
+    if (
+      generation.phase === "generating" ||
+      savingRef.current ||
+      form.reading ||
+      confirmState ||
+      pendingSave
+    )
       return;
     const params = form.getParams();
-    if (params) void startGeneration(params, editDraft);
-  };
-
-  const retry = () => {
-    setError(null);
-    if (pendingSave) {
-      void savePrepared(pendingSave);
-      return;
-    }
-    void generation
-      .retryRequest()
-      .then((run) => {
-        if (run) void handleRunResult(run.params, run);
-      })
-      .catch((caught) => {
-        if (isAbortError(caught)) return;
-        setError(toErrorState(caught));
-      });
-  };
-
-  const discardPending = () => {
-    history.discardPending();
-    setError(null);
-    onViewReset();
-    history.select(null);
-    toast("已放弃未保存结果");
+    if (params)
+      void startGeneration(
+        params,
+        form.inputs.length
+          ? { inputs: form.inputs, inputFidelity: form.inputFidelity }
+          : null,
+      );
   };
 
   const selectHistory = (row: HistoryRow) => {
-    if (generation.phase === "generating") return;
+    if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
       generation.reset();
       history.select(row.id);
-      edit.close();
-      setError(null);
+      form.initialize();
+      setReturnId(null);
       onViewReset();
     });
   };
 
   const reuseParams = (row: HistoryRow) => {
-    if (generation.phase === "generating") return;
+    if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
       generation.reset();
-      form.fill(row.params);
+      form.initialize(row.params);
       history.select(null);
-      edit.close();
-      setError(null);
+      setReturnId(null);
       onViewReset();
       toast("参数已回填，可直接生成");
     });
@@ -205,32 +177,45 @@ export function usePicmake({
     )
       return;
     if (!display.images.some((image) => image.id === imageId)) return;
-    form.fill(selectedRow.params);
-    edit.start({ generationId: selectedRow.id, imageId });
+    form.initialize({ ...selectedRow.params, prompt: "" }, [
+      {
+        generationId: selectedRow.id,
+        imageId,
+        name: `已有作品 · 第 ${selectedRow.imageIds.indexOf(imageId) + 1} 张`,
+      },
+    ]);
+    setReturnId(selectedRow.id);
+    history.select(null);
     onViewReset();
-    setError(null);
     generation.reset();
   };
 
-  const closeEdit = () => {
-    generation.reset();
-    edit.close();
-    setError(null);
+  const returnToResult = () => {
+    if (generation.phase === "generating" || savingRef.current || !returnId)
+      return;
+    confirmPendingLeave(() => {
+      generation.reset();
+      form.initialize();
+      history.select(returnId);
+      setReturnId(null);
+      onViewReset();
+    });
   };
 
   const newGeneration = () => {
-    if (generation.phase === "generating") return;
+    if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
       generation.reset();
       history.select(null);
-      edit.close();
-      setError(null);
+      form.initialize();
+      setReturnId(null);
       onViewReset();
     });
   };
 
   const deleteGen = (row: HistoryRow) => {
-    if (generation.phase === "generating" || pendingSave) return;
+    if (generation.phase === "generating" || savingRef.current || pendingSave)
+      return;
     setConfirmState({
       title: "删除这次生成？",
       desc: `包含 ${row.imageIds.length} 张图片，删除后无法恢复。`,
@@ -241,47 +226,32 @@ export function usePicmake({
             toast("已删除");
             if (selectedId === row.id) {
               generation.reset();
-              edit.close();
-              setError(null);
+              form.initialize();
+              setReturnId(null);
               onViewReset();
             }
           })
-          .catch((caught) => setError(toErrorState(caught)));
+          .catch((caught) => toastError(caught));
       },
     });
-  };
-
-  const runTestConnection = async (baseUrl: string, apiKey: string) => {
-    const result = await testConnection({ baseUrl, apiKey });
-    return result.ok
-      ? result
-      : { ok: false as const, message: ERROR_HINTS[result.error.kind] };
-  };
-
-  const goEditPrompt = () => {
-    setError(null);
-    if (!editDraft) newGeneration();
-    form.focus();
   };
 
   return {
     phase: generation.phase,
     partial: generation.partial,
+    plan: generation.plan,
     generate,
     cancelGenerate: generation.cancel,
     selectHistory,
     deleteGen,
     reuseParams,
     editImage,
-    closeEdit,
+    returnToResult,
+    canReturn: !!returnId && history.rows.some((row) => row.id === returnId),
+    saving,
     newGeneration,
-    error,
-    retry,
-    discardPending,
-    goEditPrompt,
     confirmState,
     setConfirmState,
     settings,
-    runTestConnection,
   };
 }

@@ -19,15 +19,24 @@ const submission: EditSubmission = {
     background: 'auto',
     outputFormat: 'webp',
   },
-  source: { generationId: 'parent', imageId: 'source' },
-  sourceBlob: new Blob(['source'], { type: 'image/jpeg' }),
-  sourceFormat: 'jpeg',
+  sources: [
+    {
+      source: { generationId: 'parent', imageId: 'source' },
+      image: {
+        id: 'source',
+        blob: new Blob(['source'], { type: 'image/jpeg' }),
+        format: 'jpeg',
+        width: 1,
+        height: 1,
+      },
+    },
+  ],
   inputFidelity: 'high',
 }
 
 describe('编辑请求映射', () => {
   it('multipart 保留来源格式、保真度和生成参数', () => {
-    const body = editFormData(submission, true)
+    const body = editFormData(submission)
     expect(body.get('image')).toBeInstanceOf(Blob)
     expect((body.get('image') as File).name).toBe('source.jpg')
     expect((body.get('image') as File).type).toBe('image/jpeg')
@@ -44,10 +53,35 @@ describe('编辑请求映射', () => {
       partial_images: '3',
     })
   })
-  it('非流式不携带 partial_images', () => {
-    const body = editFormData(submission, false)
-    expect(body.get('stream')).toBe('false')
-    expect(body.has('partial_images')).toBe(false)
+  it('多图按输入顺序使用 image[]', async () => {
+    const multi: EditSubmission = {
+      ...submission,
+      sources: [
+        ...submission.sources,
+        {
+          source: { imageId: 'second' },
+          image: {
+            id: 'second',
+            blob: new Blob(['second'], { type: 'image/png' }),
+            format: 'png',
+            width: 1,
+            height: 1,
+          },
+        },
+      ],
+    };
+    const body = editFormData(multi);
+    expect(body.has('image')).toBe(false);
+    const images = body.getAll('image[]') as File[];
+    expect(images.map((file) => file.type)).toEqual([
+      'image/jpeg',
+      'image/png',
+    ]);
+    expect(await Promise.all(images.map((file) => file.text()))).toEqual([
+      'source',
+      'second',
+    ]);
+    expect(body.get('n')).toBe('2');
   })
 })
 
