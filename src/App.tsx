@@ -17,6 +17,7 @@ import { usePicmake } from "./hooks/usePicmake";
 import { useViewUi } from "./hooks/useViewUi";
 import { fmtBytes } from "./lib/format";
 import { useSettingsModal } from "./hooks/useSettings";
+import { useTheme } from "./hooks/useTheme";
 import { toast } from "@heroui/react";
 
 function downloadUrl(url: string, name: string) {
@@ -37,6 +38,7 @@ export default function App() {
   const view = useViewUi();
   const form = useForm();
   const history = useHistory();
+  const theme = useTheme();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const pm = usePicmake({
     history,
@@ -103,7 +105,12 @@ export default function App() {
         />
       </div>
 
-      <TopNav onHistory={() => setDrawerOpen(true)} onSettings={openSettings} />
+      <TopNav
+        theme={theme.resolved}
+        onToggleTheme={theme.toggle}
+        onHistory={() => setDrawerOpen(true)}
+        onSettings={openSettings}
+      />
 
       <aside className="pm-island pm-insp" aria-label="检查器">
         {history.display && pm.phase === "idle" ? (
@@ -172,6 +179,8 @@ export default function App() {
         baseUrl={pm.settings.baseUrl}
         apiKey={pm.settings.apiKey}
         storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
+        theme={theme.pref}
+        onThemeChange={theme.setPref}
         onTest={runTestConnection}
         onSave={saveSettings}
         onClose={closeSettings}
