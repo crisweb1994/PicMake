@@ -19,12 +19,14 @@ import {
 import { ChevronLeft, ChevronRight, Settings2, X } from "lucide-react";
 import { fmtTime } from "../lib/format";
 import type { HistoryRow } from "../db/schema";
+import { Segmented } from "./controls";
 import { StageToolbar } from "./Stage";
 import type {
   ConfirmState,
   DisplayImage,
   DisplayInput,
 } from "../lib/view-models";
+import type { ThemePref } from "../lib/theme";
 
 interface TestResult {
   ok: true;
@@ -66,6 +68,8 @@ export function SettingsModal(props: {
   baseUrl: string;
   apiKey: string;
   storageText: string;
+  theme: ThemePref;
+  onThemeChange: (theme: ThemePref) => void;
   onTest: TestConn;
   onSave: (baseUrl: string, apiKey: string) => void;
   onClose: () => void;
@@ -88,9 +92,21 @@ export function SettingsModal(props: {
             <Modal.CloseTrigger />
             <h3>连接你的 API</h3>
             <p className="sub">配置一次即可，数据只保存在本机浏览器。</p>
+            <label>外观</label>
+            <Segmented
+              ariaLabel="外观"
+              options={[
+                { value: "light", label: "浅色" },
+                { value: "dark", label: "深色" },
+                { value: "system", label: "跟随系统" },
+              ]}
+              value={props.theme}
+              onChange={props.onThemeChange}
+            />
             <label htmlFor="s-base">API 地址</label>
             <Input
               id="s-base"
+              autoComplete="off"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
             />
@@ -102,6 +118,7 @@ export function SettingsModal(props: {
             <Input
               id="s-key"
               type="password"
+              autoComplete="off"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />

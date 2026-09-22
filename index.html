@@ -1,10 +1,34 @@
 <!doctype html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f8f9" />
     <title>PicMake</title>
+    <script>
+      // 主题防闪烁：先于首帧把 .dark 落到 <html>（偏好存于 PicMake-settings，默认跟随系统）
+      (() => {
+        let pref = "system";
+        try {
+          const stored = JSON.parse(
+            localStorage.getItem("PicMake-settings") || "null",
+          );
+          const t = stored && stored.state && stored.state.theme;
+          if (t === "light" || t === "dark" || t === "system") pref = t;
+        } catch (e) {
+          /* 坏数据按默认处理 */
+        }
+        var dark =
+          pref === "dark" ||
+          (pref === "system" &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+        document.querySelector('meta[name="theme-color"]').content = dark
+          ? "#0e0f11"
+          : "#f7f8f9";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
