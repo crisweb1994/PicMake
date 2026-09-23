@@ -1,4 +1,4 @@
-/** 受控展示组件：通用小控件（分段选择器 / 比例 chip 行 / 数量步进器） */
+/** 受控展示组件：通用小控件（分段选择器，CreateBar 弹层使用） */
 
 interface SegOption<T extends string> {
   value: T
@@ -34,20 +34,6 @@ export function Segmented<T extends string>(props: {
           {o.label}
         </button>
       ))}
-    </div>
-  )
-}
-
-export function Stepper(props: { value: number; min: number; max: number; onChange: (v: number) => void; ariaLabel: string }) {
-  return (
-    <div className="pm-stepper" role="group" aria-label={props.ariaLabel}>
-      <button type="button" aria-label="减少" onClick={() => props.onChange(Math.max(props.min, props.value - 1))}>
-        −
-      </button>
-      <b>{props.value}</b>
-      <button type="button" aria-label="增加" onClick={() => props.onChange(Math.min(props.max, props.value + 1))}>
-        ＋
-      </button>
     </div>
   )
 }

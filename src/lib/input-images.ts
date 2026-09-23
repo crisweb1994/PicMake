@@ -9,17 +9,7 @@ import {
 
 /** 唯一的新旧来源投影，展示和删除必须使用相同规则。 */
 export function historySources(row: HistoryRow): InputSource[] {
-  return (
-    row.inputSources ??
-    (row.editSource
-      ? [
-          {
-            imageId: row.editSource.imageId,
-            generationId: row.editSource.generationId,
-          },
-        ]
-      : [])
-  );
+  return row.inputSources ?? [];
 }
 
 export function imageFormat(bytes: Uint8Array): OutputFormat | null {

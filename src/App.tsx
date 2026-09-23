@@ -1,8 +1,10 @@
-/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props。 */
-import { useEffect, useState } from "react";
+/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props。
+ *  布局（PRD §5.1，2026-09-23）：全幅舞台 + 底部 CreateBar + 舞台右上 DetailCard。 */
+import { useEffect, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
-import { DetailPanel, GeneratePanel } from "./components/Inspector";
+import { CreateBar } from "./components/bar/CreateBar";
+import { DetailCard } from "./components/DetailCard";
 import {
   InputPreview,
   Carousel,
@@ -49,6 +51,11 @@ export default function App() {
     },
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  /** 底栏 UI 状态（PRD §5.2）：mini 收起 / full 展开；generating、complete 由流程态覆盖 */
+  const [barMode, setBarMode] = useState<"mini" | "full">("mini");
+  /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
+  const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const [usageText, setUsageText] = useState("");
   useEffect(() => {
@@ -66,6 +73,8 @@ export default function App() {
         : history.display.row.params.outputFormat;
     downloadUrl(im.url, `PicMake-${history.display.row.id.slice(0, 8)}.${ext}`);
   };
+  const downloadAll = () =>
+    history.display?.images.forEach((_, i) => downloadOne(i));
 
   const selectedImageId = history.display
     ? history.display.images.length === 1
@@ -79,9 +88,102 @@ export default function App() {
   };
   const totalImages = history.rows.reduce((s, r) => s + r.imageIds.length, 0);
 
+  /** complete 态只在展示的确实是刚保存的那次生成时成立 */
+  const doneGen =
+    pm.lastDone && history.display?.row.id === pm.lastDone.id
+      ? history.display
+      : null;
+
+  const expandBar = () => {
+    pm.clearDone();
+    setBarMode("full");
+    form.focus();
+  };
+
+  // full 态点条外收起：仅在无草稿（未改过任何字段、无输入图、无编辑来源）时
+  useEffect(() => {
+    if (barMode !== "full") return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (
+        !t ||
+        t.closest(".pm-bar") ||
+        t.closest(".pm-detail") ||
+        t.closest(".modal__backdrop")
+      )
+        return;
+      if (!form.dirty && !form.images.length && !pm.canReturn)
+        setBarMode("mini");
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [barMode, form.dirty, form.images.length, pm.canReturn]);
+
+  // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
+  const detailVisible =
+    !!history.display &&
+    pm.phase === "idle" &&
+    detailClosedFor !== history.display.row.id;
+
+  // 舞台滚轮切换历史（PRD FR-6，2026-09-23）：仅无草稿、无未保存结果、无弹层且非生成中时响应；
+  // 有任何阻断条件时不挂监听（滚轮落到默认行为），避免误触丢草稿。
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const blocked =
+      pm.phase === "generating" ||
+      pm.saving ||
+      !!pm.confirmState ||
+      !!history.pendingSave ||
+      form.dirty ||
+      form.inputs.length > 0 ||
+      settingsOpen ||
+      drawerOpen ||
+      !!view.lightbox ||
+      view.focusIdx !== null;
+    if (blocked) return;
+    let last = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      const now = performance.now();
+      if (now - last < 300 || Math.abs(e.deltaY) < 16) return;
+      last = now;
+      const rows = history.rows;
+      if (!rows.length) return;
+      const idx = rows.findIndex((r) => r.id === history.selectedId);
+      const next =
+        idx === -1
+          ? 0
+          : e.deltaY > 0
+            ? Math.min(rows.length - 1, idx + 1)
+            : Math.max(0, idx - 1);
+      if (next === idx) return;
+      void pm.selectHistory(rows[next]);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+
+  const useAsReference = () => {
+    if (!history.display) return;
+    const imageId =
+      selectedImageId ?? history.display.images[0]?.id ?? null;
+    if (!imageId) return;
+    const idx = history.display.row.imageIds.indexOf(imageId);
+    form.appendExisting(
+      imageId,
+      history.display.row.id,
+      `已有作品 · 第 ${idx + 1} 张`,
+    );
+    pm.clearDone();
+    setBarMode("full");
+    toast("已加入参考图，继续描述后生成");
+  };
+
   return (
     <>
-      <div className="pm-stage-col">
+      <div className="pm-stage-col" ref={stageRef}>
         <Stage
           phase={pm.phase}
           partial={pm.partial}
@@ -94,14 +196,12 @@ export default function App() {
             )
           }
           onDownload={downloadOne}
-          onDownloadAll={() =>
-            history.display?.images.forEach((_, i) => downloadOne(i))
-          }
+          onDownloadAll={downloadAll}
           onReuse={() => history.display && pm.reuseParams(history.display.row)}
           onEdit={history.pendingSave ? undefined : editSelected}
           onDelete={() => history.display && pm.deleteGen(history.display.row)}
           onCancel={pm.cancelGenerate}
-          onStart={form.focus}
+          onStart={expandBar}
         />
       </div>
 
@@ -112,53 +212,73 @@ export default function App() {
         onSettings={openSettings}
       />
 
-      <aside className="pm-island pm-insp" aria-label="检查器">
-        {history.display && pm.phase === "idle" ? (
-          <DetailPanel
-            display={history.display}
-            selectedImageId={selectedImageId}
-            canEdit={!history.pendingSave && !pm.saving}
-            sources={history.sourceImages}
-            onViewSource={setPreviewId}
-            onDownload={() => downloadOne(view.focusIdx ?? 0)}
-            onCopyPrompt={() => {
-              if (history.display)
-                void navigator.clipboard
-                  ?.writeText(history.display.row.prompt)
-                  .then(() => toast("画面描述已复制"));
-            }}
-            onReuse={() =>
-              history.display && pm.reuseParams(history.display.row)
-            }
-            onEdit={pm.editImage}
-            onDelete={() =>
-              history.display && pm.deleteGen(history.display.row)
-            }
-            onNew={pm.newGeneration}
-          />
-        ) : (
-          <GeneratePanel
-            images={form.images}
-            inputFidelity={form.inputFidelity}
-            reading={form.reading}
-            uploadError={form.uploadError}
-            onFiles={(files) => {
-              void form.addFiles(files);
-            }}
-            onRemove={form.removeInput}
-            onPreview={setPreviewId}
-            onInputFidelity={form.setInputFidelity}
-            canReturn={pm.canReturn}
-            onReturn={pm.returnToResult}
-            form={form.form}
-            customValid={form.customValid}
-            generating={pm.phase === "generating" || pm.saving}
-            promptRef={form.promptRef}
-            onPatch={form.patchForm}
-            onGenerate={pm.generate}
-          />
-        )}
-      </aside>
+      {history.display && detailVisible && (
+        <DetailCard
+          display={history.display}
+          selectedImageId={selectedImageId}
+          canEdit={!history.pendingSave && !pm.saving}
+          sources={history.sourceImages}
+          onViewSource={setPreviewId}
+          onDownload={() => downloadOne(view.focusIdx ?? 0)}
+          onCopyPrompt={() => {
+            if (history.display)
+              void navigator.clipboard
+                ?.writeText(history.display.row.prompt)
+                .then(() => toast("画面描述已复制"));
+          }}
+          onReuse={() =>
+            history.display && pm.reuseParams(history.display.row)
+          }
+          onEdit={pm.editImage}
+          onDelete={() =>
+            history.display && pm.deleteGen(history.display.row)
+          }
+          onNew={pm.newGeneration}
+          onClose={() =>
+            history.display && setDetailClosedFor(history.display.row.id)
+          }
+        />
+      )}
+
+      <CreateBar
+        mode={barMode}
+        generating={pm.phase === "generating"}
+        saving={pm.saving}
+        done={doneGen}
+        partialIndex={pm.partial?.index ?? 0}
+        form={form.form}
+        customValid={form.customValid}
+        images={form.images}
+        inputFidelity={form.inputFidelity}
+        reading={form.reading}
+        uploadError={form.uploadError}
+        canReturn={pm.canReturn}
+        promptRef={form.promptRef}
+        onPatch={form.patchForm}
+        onGenerate={pm.generate}
+        onCancel={pm.cancelGenerate}
+        onFiles={(files) => {
+          void form.addFiles(files);
+        }}
+        onRemove={(id) => form.removeInput(id)}
+        onPreview={setPreviewId}
+        onInputFidelity={form.setInputFidelity}
+        onExpand={expandBar}
+        onReturn={pm.returnToResult}
+        onAgain={() => doneGen && pm.regenerate(doneGen.row)}
+        onTweak={() => {
+          if (!doneGen) return;
+          pm.reuseParams(doneGen.row);
+          setBarMode("full");
+        }}
+        onDownloadAll={downloadAll}
+        onUseAsRef={useAsReference}
+        onDismissDone={() => {
+          pm.clearDone();
+          setBarMode("full");
+          form.focus();
+        }}
+      />
 
       <HistoryDrawer
         open={drawerOpen}

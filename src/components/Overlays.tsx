@@ -94,6 +94,7 @@ export function SettingsModal(props: {
             <p className="sub">配置一次即可，数据只保存在本机浏览器。</p>
             <label>外观</label>
             <Segmented
+              full
               ariaLabel="外观"
               options={[
                 { value: "light", label: "浅色" },

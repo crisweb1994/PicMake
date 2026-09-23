@@ -1,6 +1,7 @@
 /** 页面级编排：生成、错误反馈（toast）及历史/表单/编辑之间的页面转换。 */
 import { useRef, useState } from "react";
 import type { HistoryRow } from "../db/schema";
+import { db } from "../db/schema";
 import {
   useGeneration,
   isAbortError,
@@ -46,7 +47,10 @@ export function usePicmake({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  /** 底栏 complete 态的数据源：最近一次保存成功的结果（chipbar §5.2） */
+  const [lastDone, setLastDone] = useState<HistoryRow | null>(null);
   const generation = useGeneration();
+  const clearDone = () => setLastDone(null);
 
   const confirmPendingLeave = (onLeave: () => void) => {
     if (!pendingSave) {
@@ -80,6 +84,7 @@ export function usePicmake({
       form.initialize();
       setReturnId(null);
       generation.reset();
+      setLastDone(prepared.row);
       toast("生成完成");
       return true;
     } catch {
@@ -94,14 +99,27 @@ export function usePicmake({
   const handleRunResult = async (
     paramsForRun: GenParams,
     run: GenerationRun,
+    originPrompt?: string,
   ) => {
     const prepared = prepareGeneration(
       paramsForRun,
       run.result,
       run.edit,
       run.startedAt,
+      undefined,
+      originPrompt,
     );
     await savePrepared(prepared);
+  };
+
+  /** 编辑/参考生成时取首个输入源记录的原始描述（沿链路取最初那条；PRD 2026-09-23） */
+  const resolveOriginPrompt = async (
+    inputs: Array<{ generationId?: string }>,
+  ): Promise<string | undefined> => {
+    const sourceId = inputs.find((input) => input.generationId)?.generationId;
+    if (!sourceId) return undefined;
+    const source = await db.history.get(sourceId);
+    return source ? (source.originPrompt ?? source.prompt) : undefined;
   };
 
   const startGeneration = async (
@@ -115,8 +133,11 @@ export function usePicmake({
       apiKey: settings.apiKey,
     };
     try {
+      const originPrompt = draft
+        ? await resolveOriginPrompt(draft.inputs)
+        : undefined;
       const run = await generation.start(paramsForRun, draft, config);
-      await handleRunResult(paramsForRun, run);
+      await handleRunResult(paramsForRun, run, originPrompt);
     } catch (caught) {
       if (isAbortError(caught)) {
         toast("已取消生成");
@@ -135,6 +156,7 @@ export function usePicmake({
       pendingSave
     )
       return;
+    setLastDone(null);
     const params = form.getParams();
     if (params)
       void startGeneration(
@@ -145,9 +167,27 @@ export function usePicmake({
       );
   };
 
+  /** 「再来一版」：用历史记录的参数与输入源直接重发一次（chipbar complete 态） */
+  const regenerate = (row: HistoryRow) => {
+    if (generation.phase === "generating" || savingRef.current || pendingSave)
+      return;
+    setLastDone(null);
+    const draft: EditDraft | null = row.inputSources?.length
+      ? {
+          inputs: row.inputSources.map((source) => ({
+            imageId: source.imageId,
+            generationId: source.generationId,
+          })),
+          inputFidelity: row.inputFidelity ?? "high",
+        }
+      : null;
+    void startGeneration({ ...row.params }, draft);
+  };
+
   const selectHistory = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
+      clearDone();
       generation.reset();
       history.select(row.id);
       form.initialize();
@@ -159,6 +199,7 @@ export function usePicmake({
   const reuseParams = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
+      clearDone();
       generation.reset();
       form.initialize(row.params);
       history.select(null);
@@ -177,6 +218,7 @@ export function usePicmake({
     )
       return;
     if (!display.images.some((image) => image.id === imageId)) return;
+    clearDone();
     form.initialize({ ...selectedRow.params, prompt: "" }, [
       {
         generationId: selectedRow.id,
@@ -194,6 +236,7 @@ export function usePicmake({
     if (generation.phase === "generating" || savingRef.current || !returnId)
       return;
     confirmPendingLeave(() => {
+      clearDone();
       generation.reset();
       form.initialize();
       history.select(returnId);
@@ -205,6 +248,7 @@ export function usePicmake({
   const newGeneration = () => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
+      clearDone();
       generation.reset();
       history.select(null);
       form.initialize();
@@ -225,6 +269,7 @@ export function usePicmake({
           .then(() => {
             toast("已删除");
             if (selectedId === row.id) {
+              clearDone();
               generation.reset();
               form.initialize();
               setReturnId(null);
@@ -241,6 +286,7 @@ export function usePicmake({
     partial: generation.partial,
     plan: generation.plan,
     generate,
+    regenerate,
     cancelGenerate: generation.cancel,
     selectHistory,
     deleteGen,
@@ -253,5 +299,7 @@ export function usePicmake({
     confirmState,
     setConfirmState,
     settings,
+    lastDone,
+    clearDone,
   };
 }
