@@ -309,11 +309,13 @@ export function Stage(props: {
       {!isGen && !done && <StageEmpty onStart={props.onStart} />}
       {single && done && (
         <>
-          <StageSingle
-            display={display}
-            img={display.images[0]}
-            onZoom={props.onLightbox}
-          />
+          <div key={display.row.id} className="pm-stage-swap">
+            <StageSingle
+              display={display}
+              img={display.images[0]}
+              onZoom={props.onLightbox}
+            />
+          </div>
           <StageToolbar
             onZoom={() => props.onLightbox(display.images[0].id)}
             onDownload={() => props.onDownload(0)}
@@ -324,13 +326,15 @@ export function Stage(props: {
         </>
       )}
       {!isGen && done && !single && (
-        <StageGrid
-          display={display}
-          onZoomIn={(i) => props.onFocus(i)}
-          onDownload={props.onDownload}
-          onDownloadAll={props.onDownloadAll}
-          onReuse={props.onReuse}
-        />
+        <div key={display.row.id} className="pm-stage-swap">
+          <StageGrid
+            display={display}
+            onZoomIn={(i) => props.onFocus(i)}
+            onDownload={props.onDownload}
+            onDownloadAll={props.onDownloadAll}
+            onReuse={props.onReuse}
+          />
+        </div>
       )}
     </div>
   );

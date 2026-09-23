@@ -14,6 +14,8 @@ export function prepareGeneration(
   edit: EditSubmission | undefined,
   startedAt: number,
   id: () => string = () => crypto.randomUUID(),
+  /** 编辑/参考生成时首个输入源记录的原始描述（PRD 2026-09-23） */
+  originPrompt?: string,
 ): PreparedGeneration {
   const mime =
     params.outputFormat === "jpeg"
@@ -41,6 +43,7 @@ export function prepareGeneration(
           inputFidelity: edit.inputFidelity,
         }
       : {}),
+    ...(originPrompt ? { originPrompt } : {}),
     imageIds: images.map((image) => image.id),
     createdAt: Date.now(),
     durationMs: Math.max(0, Date.now() - startedAt),

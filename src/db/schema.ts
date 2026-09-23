@@ -1,7 +1,6 @@
 /** IndexedDB：图片 Blob 与生成历史（技术栈文档 §3.3） */
 import Dexie, { type EntityTable } from "dexie";
 import type {
-  EditSource,
   GenParams,
   Usage,
   InputSource,
@@ -23,9 +22,10 @@ export interface HistoryRow {
   usage: Usage | null;
   imageIds: string[];
   createdAt: number;
-  editSource?: EditSource; // 兼容旧单图历史
   inputSources?: InputSource[];
   inputFidelity?: InputFidelity;
+  /** 编辑/参考图生成的原始描述（首个输入源记录的 prompt，链路取最初；PRD 2026-09-23） */
+  originPrompt?: string;
   durationMs: number;
 }
 

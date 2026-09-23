@@ -30,12 +30,6 @@ export interface GenParams {
   outputFormat: OutputFormat;
 }
 
-export interface EditSource {
-  generationId: string;
-  imageId: string;
-  inputFidelity: InputFidelity;
-}
-
 /** 有序输入来源；本地文件没有 generationId。 */
 export interface InputSource {
   imageId: string;

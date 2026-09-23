@@ -80,6 +80,22 @@ export function useForm() {
     setUploadError("");
     toast("图片编号已更新，请检查描述中的图序号");
   };
+  /** 「设为参考图」：把一条已有结果追加为输入源，不打断当前草稿（chipbar complete 态） */
+  const appendExisting = (
+    imageId: string,
+    generationId: string | undefined,
+    name: string,
+  ) => {
+    if (inputs.some((input) => input.imageId === imageId)) return;
+    if (inputs.length >= MAX_INPUT_IMAGES) {
+      toast(ERROR_HINTS["too-many-images"]);
+      return;
+    }
+    setInputs((current) => [...current, { imageId, generationId, name }]);
+    setDirty(true);
+    if (!inputs.length)
+      setForm((current) => ({ ...current, ratio: "auto", cw: "", ch: "" }));
+  };
   const addFiles = async (files: File[]) => {
     if (!files.length || readingRef.current) return;
     const token = ++readRef.current;
@@ -151,6 +167,7 @@ export function useForm() {
     uploadError,
     addFiles,
     removeInput,
+    appendExisting,
     setInputFidelity: (value: InputFidelity) => {
       setFidelity(value);
       setDirty(true);

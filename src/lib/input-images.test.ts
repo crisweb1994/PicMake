@@ -14,17 +14,7 @@ describe("多图输入边界与来源", () => {
     for (const text of ["", "<svg></svg>", "not a photo", "RIFF"])
       expect(imageFormat(new TextEncoder().encode(text))).toBeNull();
   });
-  it("旧来源按单项读取，新来源按提交顺序保存，Blob 不写进历史元信息", () => {
-    const legacy = {
-      editSource: {
-        imageId: "old",
-        generationId: "parent",
-        inputFidelity: "low",
-      },
-    } as HistoryRow;
-    expect(historySources(legacy)).toEqual([
-      { imageId: "old", generationId: "parent" },
-    ]);
+  it("无来源的历史返回空，新来源按提交顺序保存，Blob 不写进历史元信息", () => {
     expect(historySources({} as HistoryRow)).toEqual([]);
     const params = formToParams(DEFAULT_FORM);
     const sources = ["b", "a"].map((id) => ({
