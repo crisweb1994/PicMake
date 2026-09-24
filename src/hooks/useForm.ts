@@ -18,6 +18,7 @@ import {
   type InputFidelity,
 } from "../lib/types";
 import { readInputImage } from "../lib/input-images";
+import type { ImageRow } from "../db/schema";
 import { useImageAssets } from "./useImageAssets";
 
 export function useForm() {
@@ -44,6 +45,7 @@ export function useForm() {
     name: input.name ?? "已有作品",
     label: `图${index + 1} · ${input.name ?? "已有作品"}`,
     url: assets[input.imageId]?.url,
+    isSketch: !!input.upload?.sketch,
   }));
   const stopReading = () => {
     readRef.current++;
@@ -95,6 +97,38 @@ export function useForm() {
     setDirty(true);
     if (!inputs.length)
       setForm((current) => ({ ...current, ratio: "auto", cw: "", ch: "" }));
+  };
+  /** 画板确认的草图落附件（SKETCH §6.2/§8.4）：原位替换或追加；首版仅一个活动草图。
+   *  最终数量与替换目标校验在此完成，失败返回 false 由画板保留。 */
+  const applySketch = (image: ImageRow, replaces: string | null): boolean => {
+    const target =
+      replaces ?? inputs.find((input) => input.upload?.sketch)?.imageId ?? null;
+    if (target) {
+      const idx = inputs.findIndex((input) => input.imageId === target);
+      if (idx < 0) {
+        toast("原草图附件已变化，请重新确认");
+        return false;
+      }
+      setInputs((current) =>
+        current.map((input, i) =>
+          i === idx
+            ? { imageId: image.id, name: "草图", upload: image }
+            : input,
+        ),
+      );
+      setDirty(true);
+      return true;
+    }
+    if (inputs.length >= MAX_INPUT_IMAGES) {
+      toast(ERROR_HINTS["too-many-images"]);
+      return false;
+    }
+    setInputs((current) => [
+      ...current,
+      { imageId: image.id, name: "草图", upload: image },
+    ]);
+    setDirty(true);
+    return true;
   };
   const addFiles = async (files: File[]) => {
     if (!files.length || readingRef.current) return;
@@ -168,6 +202,7 @@ export function useForm() {
     addFiles,
     removeInput,
     appendExisting,
+    applySketch,
     setInputFidelity: (value: InputFidelity) => {
       setFidelity(value);
       setDirty(true);

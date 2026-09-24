@@ -1,11 +1,11 @@
-@import 'tailwindcss';
-@import '@heroui/styles';
+@import "tailwindcss";
+@import "@heroui/styles";
 
 /* Tailwind v4 preflight 移除了 v3 的 button 默认 cursor: pointer，此处补回。
    放 base 层：下方未分层的 .pm-* 规则（zoom-in / not-allowed 等）优先级更高，可自由覆写。 */
 @layer base {
   button:not(:disabled),
-  [role='button']:not(:disabled) {
+  [role="button"]:not(:disabled) {
     cursor: pointer;
   }
 }
@@ -41,7 +41,8 @@
   --pm-scrim: rgba(24, 24, 28, 0.4);
   --pm-scrim-soft: rgba(250, 250, 252, 0.88);
   --pm-scrim-strong: rgba(252, 252, 253, 0.92);
-  --pm-shadow-lg: 0 16px 48px rgba(23, 23, 26, 0.12), 0 2px 8px rgba(23, 23, 26, 0.08);
+  --pm-shadow-lg:
+    0 16px 48px rgba(23, 23, 26, 0.12), 0 2px 8px rgba(23, 23, 26, 0.08);
   --pm-shadow-tile: 0 16px 44px rgba(23, 23, 26, 0.22);
   --pm-shadow-img: 0 30px 90px rgba(23, 23, 26, 0.26);
   --pm-shadow-lb: 0 40px 120px rgba(23, 23, 26, 0.22);
@@ -49,7 +50,11 @@
   --pm-scrollbar: rgba(23, 23, 26, 0.18);
   --pm-vignette: rgba(247, 248, 249, 0.8);
   --pm-stage-gen:
-    radial-gradient(120% 90% at 50% 38%, rgba(255, 255, 255, 0.5), transparent 55%),
+    radial-gradient(
+      120% 90% at 50% 38%,
+      rgba(255, 255, 255, 0.5),
+      transparent 55%
+    ),
     linear-gradient(180deg, #fdfdfe, #f0f1f3);
 
   /* HeroUI 主题对齐 PicMake 令牌（浅色 + 杏色 accent，替换默认蓝色主题） */
@@ -87,6 +92,20 @@
   --field-border-hover: rgba(23, 23, 26, 0.13);
   --field-border-focus: rgba(255, 154, 98, 0.5);
   --field-focus: rgba(255, 154, 98, 0.16);
+
+  /* 草图画板纸面与控件令牌（SKETCH §7.3）：两主题同值——纸面恒白、绘画内容不随主题 */
+  --pm-sketch-paper: #ffffff;
+  --pm-sketch-edge: #ececec;
+  --pm-sketch-hint: #d9d9d9;
+  --pm-sketch-ink: #1a1a1a;
+  --pm-sketch-ink-dis: #bdbdbd;
+  --pm-sketch-line: #e8e8e8;
+  --pm-sketch-hover: #f4f4f4;
+  --pm-sketch-track: #e4e4e4;
+  --pm-sketch-knob: #dcdcdc;
+  --pm-sketch-idle: #f2f2f2;
+  --pm-sketch-accent-ink: #e27a3b;
+  --pm-sketch-meta: #a8a8a8;
 }
 
 /* 深色覆盖（现状视觉，对照 docs/prd.md §5.3 原始定义） */
@@ -120,7 +139,8 @@
   --pm-scrim: rgba(8, 8, 10, 0.66);
   --pm-scrim-soft: rgba(10, 10, 12, 0.82);
   --pm-scrim-strong: rgba(10, 10, 12, 0.88);
-  --pm-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --pm-shadow-lg:
+    0 16px 48px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.25);
   --pm-shadow-tile: 0 16px 44px rgba(0, 0, 0, 0.55);
   --pm-shadow-img: 0 30px 90px rgba(0, 0, 0, 0.65);
   --pm-shadow-lb: 0 40px 120px rgba(0, 0, 0, 0.6);
@@ -178,12 +198,8 @@ body {
   background: var(--pm-bg);
   color: var(--pm-text-1);
   font-family:
-    'Space Grotesk',
-    'PingFang SC',
-    'Hiragino Sans GB',
-    'Microsoft YaHei',
-    system-ui,
-    sans-serif;
+    "Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -265,10 +281,14 @@ body {
   pointer-events: none;
 }
 .pm-stage-bg::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 90% at 50% 40%, transparent 40%, var(--pm-vignette));
+  background: radial-gradient(
+    120% 90% at 50% 40%,
+    transparent 40%,
+    var(--pm-vignette)
+  );
 }
 
 .pm-stage-swap {
@@ -296,7 +316,11 @@ body {
   transform: translate(-50%, -50%);
   width: 380px;
   height: 220px;
-  background: radial-gradient(closest-side, rgba(255, 154, 98, 0.09), transparent 70%);
+  background: radial-gradient(
+    closest-side,
+    rgba(255, 154, 98, 0.09),
+    transparent 70%
+  );
   pointer-events: none;
 }
 .pm-stack {
@@ -315,23 +339,41 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 14px;
-  box-shadow: 0 0 0 1px var(--pm-line), var(--pm-shadow-card);
+  box-shadow:
+    0 0 0 1px var(--pm-line),
+    var(--pm-shadow-card);
 }
 .pm-stack i:nth-child(1) {
   transform: rotate(-7deg) translate(-28px, 5px);
   opacity: 0.38;
-  background: linear-gradient(135deg, rgba(125, 107, 255, 0.22), rgba(63, 208, 201, 0.1));
+  background: linear-gradient(
+    135deg,
+    rgba(125, 107, 255, 0.22),
+    rgba(63, 208, 201, 0.1)
+  );
 }
 .pm-stack i:nth-child(2) {
   transform: rotate(5deg) translate(26px, 3px);
   opacity: 0.55;
-  background: linear-gradient(135deg, rgba(232, 97, 140, 0.24), rgba(255, 154, 98, 0.12));
+  background: linear-gradient(
+    135deg,
+    rgba(232, 97, 140, 0.24),
+    rgba(255, 154, 98, 0.12)
+  );
 }
 .pm-stack i:nth-child(3) {
   opacity: 0.95;
   background:
-    radial-gradient(120% 90% at 30% 18%, rgba(255, 154, 98, 0.3), transparent 55%),
-    radial-gradient(120% 100% at 75% 85%, rgba(125, 107, 255, 0.24), transparent 60%),
+    radial-gradient(
+      120% 90% at 30% 18%,
+      rgba(255, 154, 98, 0.3),
+      transparent 55%
+    ),
+    radial-gradient(
+      120% 100% at 75% 85%,
+      rgba(125, 107, 255, 0.24),
+      transparent 60%
+    ),
     linear-gradient(160deg, rgba(63, 208, 201, 0.1), rgba(232, 97, 140, 0.14));
 }
 .pm-stack svg {
@@ -364,7 +406,7 @@ body {
 }
 
 /* 生成中：占位卡与最终结果同几何（pm-single / pm-grid4），完成时图片原位替换点阵 */
-.pm-stage[data-mode='gen'] {
+.pm-stage[data-mode="gen"] {
   background: var(--pm-stage-gen);
 }
 .pm-dots-wave {
@@ -386,7 +428,9 @@ body {
   border-radius: 11px;
   overflow: hidden;
   background: var(--pm-surface-faint);
-  box-shadow: var(--pm-shadow-tile), 0 0 0 1px var(--pm-line);
+  box-shadow:
+    var(--pm-shadow-tile),
+    0 0 0 1px var(--pm-line);
 }
 .pm-gen-single {
   position: relative;
@@ -395,7 +439,9 @@ body {
   border-radius: 14px;
   overflow: hidden;
   background: var(--pm-surface-faint);
-  box-shadow: var(--pm-shadow-img), 0 0 0 1px var(--pm-line);
+  box-shadow:
+    var(--pm-shadow-img),
+    0 0 0 1px var(--pm-line);
 }
 .pm-gen-img {
   position: relative;
@@ -468,7 +514,9 @@ body {
   width: min(56vh, 58vw);
   border-radius: 14px;
   background-size: cover;
-  box-shadow: var(--pm-shadow-img), 0 0 0 1px var(--pm-line);
+  box-shadow:
+    var(--pm-shadow-img),
+    0 0 0 1px var(--pm-line);
   cursor: zoom-in;
 }
 .pm-single img:focus-visible {
@@ -538,7 +586,9 @@ body {
   border-radius: 11px;
   overflow: hidden;
   cursor: zoom-in;
-  box-shadow: var(--pm-shadow-tile), 0 0 0 1px var(--pm-line);
+  box-shadow:
+    var(--pm-shadow-tile),
+    0 0 0 1px var(--pm-line);
   transition: transform 0.14s;
 }
 .pm-gtile:hover {
@@ -596,12 +646,12 @@ body {
     padding 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 0.22s;
 }
-.pm-bar[data-state='full'],
-.pm-bar[data-state='generating'],
-.pm-bar[data-state='complete'] {
+.pm-bar[data-state="full"],
+.pm-bar[data-state="generating"],
+.pm-bar[data-state="complete"] {
   padding: 11px 12px 12px;
 }
-.pm-bar[data-state='full'] {
+.pm-bar[data-state="full"] {
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.55),
     0 0 0 1px var(--pm-accent-border);
@@ -701,6 +751,27 @@ body {
   object-fit: cover;
   display: block;
 }
+/* 草图缩略图：白底 contain，不裁掉构图；右下画笔标识（SKETCH §6.3） */
+.pm-bar-thumb > button.sk {
+  background: var(--pm-sketch-paper);
+}
+.pm-bar-thumb > button.sk img {
+  object-fit: contain;
+}
+.pm-bar-thumb .pen {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  background: var(--pm-panel-solid);
+  border: 1px solid var(--pm-line-2);
+  display: grid;
+  place-items: center;
+  color: var(--pm-accent);
+  z-index: 2;
+}
 .pm-bar-thumb .no {
   position: absolute;
   left: -5px;
@@ -756,10 +827,10 @@ body {
   padding: 11px 12px;
   resize: none;
   outline: none;
-  background:transparent;
-  font-size:13.5px;
-  line-height:1.5;
-  border:0;
+  background: transparent;
+  font-size: 13.5px;
+  line-height: 1.5;
+  border: 0;
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -805,14 +876,30 @@ body {
 .pm-bar-row2 > * {
   animation: pm-chip-in 0.18s ease-out backwards;
 }
-.pm-bar-row2 > *:nth-child(1) { animation-delay: 0.05s; }
-.pm-bar-row2 > *:nth-child(2) { animation-delay: 0.09s; }
-.pm-bar-row2 > *:nth-child(3) { animation-delay: 0.13s; }
-.pm-bar-row2 > *:nth-child(4) { animation-delay: 0.17s; }
-.pm-bar-row2 > *:nth-child(5) { animation-delay: 0.21s; }
-.pm-bar-row2 > *:nth-child(6) { animation-delay: 0.25s; }
-.pm-bar-row2 > *:nth-child(7) { animation-delay: 0.29s; }
-.pm-bar-row2 > *:nth-child(8) { animation-delay: 0.33s; }
+.pm-bar-row2 > *:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.pm-bar-row2 > *:nth-child(2) {
+  animation-delay: 0.09s;
+}
+.pm-bar-row2 > *:nth-child(3) {
+  animation-delay: 0.13s;
+}
+.pm-bar-row2 > *:nth-child(4) {
+  animation-delay: 0.17s;
+}
+.pm-bar-row2 > *:nth-child(5) {
+  animation-delay: 0.21s;
+}
+.pm-bar-row2 > *:nth-child(6) {
+  animation-delay: 0.25s;
+}
+.pm-bar-row2 > *:nth-child(7) {
+  animation-delay: 0.29s;
+}
+.pm-bar-row2 > *:nth-child(8) {
+  animation-delay: 0.33s;
+}
 
 /* 值 chip（arena/Krea 语法：印当前值 + chevron） */
 .pm-chip-wrap {
@@ -1036,6 +1123,33 @@ body {
   line-height: 1.5;
   margin: 0;
 }
+.pm-pop-hint.warn {
+  color: var(--pm-error);
+}
+/* 弹层菜单行（带图标）：附件「上传图片 / 画草图」等入口 */
+.pm-pop-opt.with-ic {
+  align-items: center;
+}
+.pm-pop-opt.with-ic .ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--pm-fill);
+  display: grid;
+  place-items: center;
+  color: var(--pm-text-2);
+  flex: none;
+}
+.pm-pop-opt.with-ic .tx {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.pm-pop-opt.with-ic:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .pm-pop-n {
   display: flex;
   gap: 4px;
@@ -1121,11 +1235,16 @@ body {
   overflow: hidden;
 }
 .pm-shimmer::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--pm-accent), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--pm-accent),
+    transparent
+  );
   background-size: 200% 100%;
   animation: pm-shimmer 1.4s linear infinite;
 }
@@ -1179,11 +1298,21 @@ body {
 .pm-bar-donerow > * {
   animation: pm-chip-in 0.2s ease-out backwards;
 }
-.pm-bar-donerow > *:nth-child(1) { animation-delay: 0.05s; }
-.pm-bar-donerow > *:nth-child(2) { animation-delay: 0.11s; }
-.pm-bar-donerow > *:nth-child(3) { animation-delay: 0.17s; }
-.pm-bar-donerow > *:nth-child(4) { animation-delay: 0.23s; }
-.pm-bar-donerow > *:nth-child(5) { animation-delay: 0.29s; }
+.pm-bar-donerow > *:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.pm-bar-donerow > *:nth-child(2) {
+  animation-delay: 0.11s;
+}
+.pm-bar-donerow > *:nth-child(3) {
+  animation-delay: 0.17s;
+}
+.pm-bar-donerow > *:nth-child(4) {
+  animation-delay: 0.23s;
+}
+.pm-bar-donerow > *:nth-child(5) {
+  animation-delay: 0.29s;
+}
 .pm-bar-donecap {
   font-size: 11px;
   color: var(--pm-text-3);
@@ -1233,7 +1362,7 @@ body {
   padding: 3px 10px;
   border-radius: 6px;
   font-size: 12px;
-  flex:1;
+  flex: 1;
   color: var(--pm-text-3);
   transition:
     color 0.12s,
@@ -1242,7 +1371,7 @@ body {
 .pm-seg button:hover {
   color: var(--pm-text-1);
 }
-.pm-seg button[aria-pressed='true'] {
+.pm-seg button[aria-pressed="true"] {
   background: var(--pm-fill-active);
   color: var(--pm-text-1);
 }
@@ -1478,8 +1607,8 @@ body {
 /* 确认弹窗退出不挂动画：RAC 要等 animation.finished 才卸载遮罩，动画时钟
    停摆（标签页被遮挡/渲染节流）时 finished 永不结算，遮罩会留在页面上挡住
    交互。去掉退出动画后 getAnimations() 为空，RAC 在同一帧内立即卸载 */
-.modal__backdrop.pm-confirm[data-exiting='true'],
-.pm-confirm .modal__container[data-exiting='true'] {
+.modal__backdrop.pm-confirm[data-exiting="true"],
+.pm-confirm .modal__container[data-exiting="true"] {
   animation: none;
 }
 .pm-modal {
@@ -1553,7 +1682,9 @@ body {
   background-size: cover;
   background-position: center;
   cursor: zoom-out;
-  box-shadow: var(--pm-shadow-lb), 0 0 0 1px var(--pm-line);
+  box-shadow:
+    var(--pm-shadow-lb),
+    0 0 0 1px var(--pm-line);
 }
 .pm-lb-bar {
   display: flex;
@@ -1592,7 +1723,9 @@ body {
   max-height: 70vh;
   border-radius: 12px;
   object-fit: contain;
-  box-shadow: var(--pm-shadow-lb), 0 0 0 1px var(--pm-line);
+  box-shadow:
+    var(--pm-shadow-lb),
+    0 0 0 1px var(--pm-line);
 }
 .pm-car-fig figcaption {
   font-size: 12px;
@@ -1685,7 +1818,7 @@ body {
 .pm-ditem:hover {
   background: var(--pm-fill-hover);
 }
-.pm-ditem[aria-current='true'] {
+.pm-ditem[aria-current="true"] {
   background: var(--pm-fill-hover);
   box-shadow: inset 0 0 0 1px var(--pm-line-2);
 }
@@ -1902,10 +2035,20 @@ body {
   .pm-shimmer::after,
   .pm-dsearch,
   .pm-dfav,
-  .pm-dstar {
+  .pm-dstar,
+  .pm-sk-overlay,
+  .pm-sk-board,
+  .pm-sk-hint,
+  .pm-sk-sw,
+  .pm-sk-use,
+  .pm-sk-tool,
+  .pm-sk-close,
+  .pm-sk-hist button,
+  .pm-sk-size-dot {
     animation: none !important;
     transition: none !important;
   }
+  /* 确认中的加载指示为功能性反馈，reduced-motion 下保留 */
 }
 
 /* 输入图片预览弹窗（Overlays InputPreview 使用） */
@@ -1944,4 +2087,397 @@ body {
   padding: 12px;
   border: 1px solid var(--pm-line);
   border-radius: 8px;
+}
+
+.pm-input-preview-continue {
+  margin: 12px 0 8px;
+}
+
+/* ══ 草图画板 SketchModal（SKETCH §6/§7，对照 docs/demos/sketch-demo.html）══
+   ChatGPT Sketch 式白色全幅编辑器：整张白纸铺满弹层，控件浮在纸面上——
+   左上 ✕ / 顶中工具胶囊 / 右上撤销重做清空 / 左侧大小滑杆 / 底部色板 / 右下 ✓。
+   z 低于 HeroUI 弹层（100000），放弃修改确认框与 toast 盖在画板之上。 */
+.pm-sk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: var(--pm-scrim);
+  animation: pm-sk-fade 0.18s ease-out;
+}
+@keyframes pm-sk-fade {
+  from {
+    opacity: 0;
+  }
+}
+.pm-sk-board {
+  position: relative;
+  width: min(1080px, calc(100vw - 48px));
+  height: min(780px, calc(100dvh - 48px));
+  background: var(--pm-sketch-paper);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 20px;
+  box-shadow:
+    0 32px 96px rgba(0, 0, 0, 0.38),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: pm-sk-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes pm-sk-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+.pm-sk-zone {
+  position: absolute;
+  inset: 0;
+}
+.pm-sk-paper {
+  position: absolute;
+  background: var(--pm-sketch-paper);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow:
+    0 0 0 1px var(--pm-sketch-edge),
+    0 2px 16px rgba(0, 0, 0, 0.06);
+}
+.pm-sk-paper.pen {
+  cursor: crosshair;
+}
+.pm-sk-paper.eraser {
+  cursor: none;
+}
+.pm-sk-paper canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.pm-sk-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0 24px;
+  font-size: 13px;
+  line-height: 1.8;
+  text-align: center;
+  color: var(--pm-sketch-hint);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.pm-sk-ghost {
+  position: absolute;
+  border: 1.5px solid rgba(20, 20, 24, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 浮动控件（命中区域经 ::after 扩到 ≥44px） */
+.pm-sk-close {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  transition: background 0.12s;
+  z-index: 6;
+}
+.pm-sk-close:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-close:disabled {
+  opacity: 0.4;
+}
+.pm-sk-pill {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 26px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  z-index: 6;
+}
+.pm-sk-tool {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  border: 1px solid transparent;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.pm-sk-tool::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+}
+.pm-sk-tool:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-tool.on {
+  background: var(--pm-sketch-paper);
+  border-color: var(--pm-sketch-line);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+}
+.pm-sk-tool:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+.pm-sk-hist {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  display: flex;
+  gap: 6px;
+  z-index: 6;
+}
+.pm-sk-hist button {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  transition: background 0.12s;
+}
+.pm-sk-hist button::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+}
+.pm-sk-hist button:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-hist button:disabled {
+  color: var(--pm-sketch-ink-dis);
+  pointer-events: none;
+}
+
+/* 左侧工具大小滑杆（上大下小，hover/聚焦显当前笔径） */
+.pm-sk-sizer-wrap {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+}
+.pm-sk-sizer {
+  position: relative;
+  width: 36px;
+  height: 184px;
+  touch-action: none;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.pm-sk-sizer-track {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--pm-sketch-track);
+  border-radius: 2px;
+}
+.pm-sk-sizer-fill {
+  position: absolute;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--pm-sketch-ink);
+  border-radius: 2px;
+}
+.pm-sk-sizer-knob {
+  position: absolute;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-sketch-knob);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transform: translate(-50%, -50%);
+}
+.pm-sk-size-dot {
+  position: absolute;
+  left: 52px;
+  border-radius: 50%;
+  background: var(--pm-sketch-ink);
+  pointer-events: none;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.pm-sk-sizer-wrap:hover .pm-sk-size-dot,
+.pm-sk-sizer:focus-visible + .pm-sk-size-dot {
+  opacity: 1;
+}
+
+/* 底部色板（首个彩虹圈 = 自定义取色；选中环用品牌强调色） */
+.pm-sk-colors {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 200px);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  z-index: 6;
+}
+.pm-sk-sw {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  position: relative;
+  transition: transform 0.12s;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
+}
+.pm-sk-sw:hover {
+  transform: scale(1.1);
+}
+.pm-sk-sw.on {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.09),
+    0 0 0 2.5px #ffffff,
+    0 0 0 5px var(--pm-accent);
+}
+.pm-sk-sw.rainbow {
+  background: conic-gradient(
+    #e53935,
+    #f5a623,
+    #f4772e,
+    #2e9e4f,
+    #1b8a7a,
+    #26a9e0,
+    #2e6fe8,
+    #4f46e5,
+    #8b2fd6,
+    #d6247a,
+    #e53935
+  );
+}
+
+/* 右下确认 FAB：空白灰禁用 → 有墨淡橙 → hover 实心强调 */
+.pm-sk-use {
+  position: absolute;
+  right: 34px;
+  bottom: 34px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pm-sketch-idle);
+  color: var(--pm-sketch-ink-dis);
+  z-index: 6;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+.pm-sk-use:disabled {
+  cursor: not-allowed;
+}
+.pm-sk-use.ready {
+  background: var(--pm-accent-soft);
+  color: var(--pm-sketch-accent-ink);
+}
+.pm-sk-use.ready:hover {
+  background: var(--pm-accent);
+  color: var(--pm-accent-ink);
+  transform: scale(1.06);
+}
+.pm-sk-use.busy svg {
+  animation: pm-sk-spin 1s linear infinite;
+}
+@keyframes pm-sk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 左下画布信息 */
+.pm-sk-meta {
+  position: absolute;
+  left: 26px;
+  bottom: 32px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--pm-sketch-meta);
+  font-variant-numeric: tabular-nums;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* 画板控件焦点环（FR-9：focus-visible 可见） */
+.pm-sk-close:focus-visible,
+.pm-sk-tool:focus-visible,
+.pm-sk-hist button:focus-visible,
+.pm-sk-use:focus-visible,
+.pm-sk-sizer:focus-visible,
+.pm-sk-sw:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .pm-sk-board {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+  }
+  .pm-sk-colors {
+    gap: 8px;
+    max-width: calc(100% - 150px);
+  }
+  .pm-sk-sw {
+    width: 26px;
+    height: 26px;
+  }
+  .pm-sk-tool {
+    width: 34px;
+    height: 34px;
+  }
+  .pm-sk-hist button,
+  .pm-sk-close {
+    width: 34px;
+    height: 34px;
+  }
+  .pm-sk-sizer-wrap {
+    left: 10px;
+  }
+  .pm-sk-use {
+    width: 44px;
+    height: 44px;
+    right: 16px;
+    bottom: 18px;
+  }
+  .pm-sk-meta {
+    display: none;
+  }
 }

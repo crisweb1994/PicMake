@@ -53,6 +53,35 @@ export interface EditSubmission {
   inputFidelity: InputFidelity;
 }
 
+/** ══ 草图（SKETCH_RESEARCH_AND_SPEC §8.1）：可重放的绘制命令文档，随 ImageRow 持久化 ══ */
+
+export interface SketchPoint {
+  x: number;
+  y: number;
+}
+
+/** 一笔 = 一次完整拖动或一次单击（圆点）；橡皮忽略颜色 */
+export interface SketchStroke {
+  type: "stroke";
+  tool: "pen" | "eraser";
+  color?: string;
+  width: number;
+  points: SketchPoint[];
+}
+
+export interface SketchClear {
+  type: "clear";
+}
+
+export type SketchCommand = SketchStroke | SketchClear;
+
+export interface SketchDocument {
+  version: 1;
+  width: number;
+  height: number;
+  commands: SketchCommand[];
+}
+
 export const MAX_INPUT_IMAGES = 16;
 export const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 

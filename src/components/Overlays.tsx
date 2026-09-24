@@ -16,7 +16,14 @@ import {
   Spinner,
   useOverlayState,
 } from "@heroui/react";
-import { ChevronLeft, ChevronRight, Search, Settings2, Star, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Settings2,
+  Star,
+  X,
+} from "lucide-react";
 import { fmtTime } from "../lib/format";
 import type { HistoryRow } from "../db/schema";
 import {
@@ -190,7 +197,7 @@ export function ConfirmDialog(props: {
             <p className="sub">{props.state?.desc}</p>
             <div className="pm-mbtns">
               <Button variant="secondary" onPress={props.onCancel}>
-                取消
+                {props.state?.cancelLabel ?? "取消"}
               </Button>
               <Button
                 variant="primary"
@@ -200,7 +207,7 @@ export function ConfirmDialog(props: {
                   ok?.();
                 }}
               >
-                继续
+                {props.state?.okLabel ?? "继续"}
               </Button>
             </div>
           </ModalDialog>
@@ -374,7 +381,9 @@ export function HistoryDrawer(props: {
                   aria-label="搜索历史描述"
                   autoComplete="off"
                   spellCheck={false}
-                  onChange={(e) => setFilter({ ...filter, query: e.target.value })}
+                  onChange={(e) =>
+                    setFilter({ ...filter, query: e.target.value })
+                  }
                 />
                 {filter.query !== "" && (
                   <button
@@ -504,9 +513,11 @@ export function HistoryDrawer(props: {
   );
 }
 
-/** 输入预览由 Modal 限制焦点和锁滚动；图片尺寸仅为加载后的 UI 测量。 */
+/** 输入预览由 Modal 限制焦点和锁滚动；图片尺寸仅为加载后的 UI 测量。
+ *  历史来源的草图额外提供「继续画这张草图」——以新草稿打开画板，不改旧记录（SKETCH §6.3）。 */
 export function InputPreview(props: {
   image: DisplayInput | null;
+  onContinueSketch?: () => void;
   onClose: () => void;
 }) {
   const [size, setSize] = useState("");
@@ -531,6 +542,15 @@ export function InputPreview(props: {
               }
             />
             <p>{size}</p>
+            {props.image?.isSketch && props.onContinueSketch && (
+              <Button
+                variant="primary"
+                onPress={props.onContinueSketch}
+                className="pm-input-preview-continue"
+              >
+                继续画这张草图
+              </Button>
+            )}
             <Button variant="secondary" onPress={props.onClose}>
               关闭预览
             </Button>

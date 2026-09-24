@@ -21,6 +21,9 @@ export interface ConfirmState {
   title: string;
   desc: string;
   onOk: () => void;
+  /** 自定义按钮文案（缺省「取消 / 继续」）；画板放弃修改等场景使用 */
+  okLabel?: string;
+  cancelLabel?: string;
 }
 
 export interface DisplayInput {
@@ -29,4 +32,6 @@ export interface DisplayInput {
   label: string;
   url?: string;
   origin?: string;
+  /** 草图附件：点击重新打开画板而非普通预览（SKETCH §6.3） */
+  isSketch?: boolean;
 }

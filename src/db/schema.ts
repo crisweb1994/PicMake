@@ -5,6 +5,7 @@ import type {
   Usage,
   InputSource,
   InputFidelity,
+  SketchDocument,
 } from "../lib/types";
 
 export interface ImageRow {
@@ -13,6 +14,9 @@ export interface ImageRow {
   width: number;
   height: number;
   format: string;
+  /** 草图附件的可重放命令文档（SKETCH §8.1）；普通图片没有该字段。
+   *  可选非索引字段，旧图片行按普通图片处理，无需升级 Dexie store。 */
+  sketch?: SketchDocument;
 }
 
 export interface HistoryRow {
