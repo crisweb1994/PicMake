@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, ensurePersistentStorage, type HistoryRow } from "../db/schema";
-import { deleteHistory, saveGeneration } from "../db/history";
+import { deleteHistory, saveGeneration, toggleStar } from "../db/history";
 import type { PreparedGeneration } from "../lib/generation";
 import type { DisplayGen, DisplayImage } from "../lib/view-models";
 import { historySources } from "../lib/input-images";
@@ -119,5 +119,6 @@ export function useHistory() {
     discardPending: () => setPendingSave(null),
     save,
     remove: deleteHistory,
+    toggleStar,
   };
 }

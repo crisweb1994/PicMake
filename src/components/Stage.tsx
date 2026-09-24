@@ -146,7 +146,16 @@ export function StageSingle(props: {
       <img
         src={props.img.url}
         alt={row.prompt}
+        role="button"
+        tabIndex={0}
+        aria-label="放大查看大图"
         onClick={() => props.onZoom(props.img.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            props.onZoom(props.img.id);
+          }
+        }}
       />
       <figcaption className="pm-single-meta">
         {MODEL_LABELS[p.model]} · {QUALITY_LABELS[p.quality]} ·{" "}

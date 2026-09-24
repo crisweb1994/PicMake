@@ -1,5 +1,5 @@
 /** 舞台右上详情浮卡（PRD §5.2，2026-09-23）：承接原右坞「本次生成详情」，纯展示。 */
-import { X } from "lucide-react";
+import { Star, X } from "lucide-react";
 import { fmtDuration, fmtTime } from "../lib/format";
 import { MODEL_LABELS, QUALITY_LABELS, sizeText } from "../lib/params";
 import type { DisplayGen, DisplayInput } from "../lib/view-models";
@@ -8,6 +8,7 @@ export function DetailCard(props: {
   display: DisplayGen;
   selectedImageId: string | null;
   canEdit: boolean;
+  starred: boolean;
   sources: DisplayInput[];
   onViewSource: (id: string) => void;
   onDownload: () => void;
@@ -15,6 +16,7 @@ export function DetailCard(props: {
   onReuse: () => void;
   onEdit: (imageId: string) => void;
   onDelete: () => void;
+  onToggleStar: () => void;
   onNew: () => void;
   onClose: () => void;
 }) {
@@ -26,6 +28,16 @@ export function DetailCard(props: {
       <header className="pm-detail-cap">
         <b>本次生成</b>
         <span className="t">{fmtTime(row.createdAt)}</span>
+        <button
+          type="button"
+          className={"pm-detail-star" + (props.starred ? " on" : "")}
+          aria-pressed={props.starred}
+          aria-label={props.starred ? "取消收藏" : "收藏这次生成"}
+          title={props.starred ? "取消收藏" : "收藏"}
+          onClick={props.onToggleStar}
+        >
+          <Star size={13} fill={props.starred ? "currentColor" : "none"} />
+        </button>
         <button type="button" aria-label="收起详情" onClick={props.onClose}>
           <X size={12} />
         </button>

@@ -28,3 +28,10 @@ export async function deleteHistory(id: string): Promise<void> {
     await db.images.bulkDelete(ids.filter((imageId) => !retained.has(imageId)));
   });
 }
+
+/** 收藏开关（2026-09-23）：行不存在时静默忽略（如未保存的 pending 结果） */
+export async function toggleStar(id: string): Promise<void> {
+  const row = await db.history.get(id);
+  if (!row) return;
+  await db.history.update(id, { starred: !row.starred });
+}
