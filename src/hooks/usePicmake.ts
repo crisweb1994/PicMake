@@ -36,10 +36,13 @@ export function usePicmake({
   history,
   form,
   onViewReset,
+  onDraftReady,
 }: {
   history: ReturnType<typeof useHistory>;
   form: ReturnType<typeof useForm>;
   onViewReset: () => void;
+  /** 编辑此图 / 复用参数把草稿落位后回调：页面据此展开创作条并聚焦（PRD §5.1/§5.2） */
+  onDraftReady: () => void;
 }) {
   const settings = useSettings();
   const { selectedId, selectedRow, display, pendingSave } = history;
@@ -205,6 +208,7 @@ export function usePicmake({
       history.select(null);
       setReturnId(null);
       onViewReset();
+      onDraftReady();
       toast("参数已回填，可直接生成");
     });
   };
@@ -230,6 +234,7 @@ export function usePicmake({
     history.select(null);
     onViewReset();
     generation.reset();
+    onDraftReady();
   };
 
   const returnToResult = () => {

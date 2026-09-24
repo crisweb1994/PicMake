@@ -42,6 +42,8 @@ export default function App() {
   const history = useHistory();
   const theme = useTheme();
   const [previewId, setPreviewId] = useState<string | null>(null);
+  /** 底栏 UI 状态（PRD §5.2）：mini 收起 / full 展开；generating、complete 由流程态覆盖 */
+  const [barMode, setBarMode] = useState<"mini" | "full">("mini");
   const pm = usePicmake({
     history,
     form,
@@ -49,10 +51,12 @@ export default function App() {
       view.clearViewingState();
       setPreviewId(null);
     },
+    onDraftReady: () => {
+      setBarMode("full");
+      form.focus();
+    },
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
-  /** 底栏 UI 状态（PRD §5.2）：mini 收起 / full 展开；generating、complete 由流程态覆盖 */
-  const [barMode, setBarMode] = useState<"mini" | "full">("mini");
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -167,8 +171,7 @@ export default function App() {
 
   const useAsReference = () => {
     if (!history.display) return;
-    const imageId =
-      selectedImageId ?? history.display.images[0]?.id ?? null;
+    const imageId = selectedImageId ?? history.display.images[0]?.id ?? null;
     if (!imageId) return;
     const idx = history.display.row.imageIds.indexOf(imageId);
     form.appendExisting(
@@ -218,6 +221,7 @@ export default function App() {
           selectedImageId={selectedImageId}
           canEdit={!history.pendingSave && !pm.saving}
           sources={history.sourceImages}
+          starred={!!history.display.row.starred}
           onViewSource={setPreviewId}
           onDownload={() => downloadOne(view.focusIdx ?? 0)}
           onCopyPrompt={() => {
@@ -226,13 +230,13 @@ export default function App() {
                 ?.writeText(history.display.row.prompt)
                 .then(() => toast("画面描述已复制"));
           }}
-          onReuse={() =>
-            history.display && pm.reuseParams(history.display.row)
-          }
+          onReuse={() => history.display && pm.reuseParams(history.display.row)}
           onEdit={pm.editImage}
-          onDelete={() =>
-            history.display && pm.deleteGen(history.display.row)
-          }
+          onDelete={() => history.display && pm.deleteGen(history.display.row)}
+          onToggleStar={() => {
+            if (history.display)
+              void history.toggleStar(history.display.row.id);
+          }}
           onNew={pm.newGeneration}
           onClose={() =>
             history.display && setDetailClosedFor(history.display.row.id)
@@ -267,9 +271,7 @@ export default function App() {
         onReturn={pm.returnToResult}
         onAgain={() => doneGen && pm.regenerate(doneGen.row)}
         onTweak={() => {
-          if (!doneGen) return;
-          pm.reuseParams(doneGen.row);
-          setBarMode("full");
+          if (doneGen) pm.reuseParams(doneGen.row);
         }}
         onDownloadAll={downloadAll}
         onUseAsRef={useAsReference}
@@ -290,6 +292,7 @@ export default function App() {
           if (row) void pm.selectHistory(row);
           setDrawerOpen(false);
         }}
+        onToggleStar={(id) => void history.toggleStar(id)}
         onClose={() => setDrawerOpen(false)}
       />
 

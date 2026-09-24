@@ -26,6 +26,8 @@ export interface HistoryRow {
   inputFidelity?: InputFidelity;
   /** 编辑/参考图生成的原始描述（首个输入源记录的 prompt，链路取最初；PRD 2026-09-23） */
   originPrompt?: string;
+  /** 用户收藏标记（2026-09-23，市场调研基线维度）：缺省视为未收藏，无索引、内存过滤 */
+  starred?: boolean;
   durationMs: number;
 }
 
