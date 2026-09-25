@@ -157,17 +157,6 @@ export function freezeMask(
   return { ...doc, commands: doc.commands.slice(0, cursor) };
 }
 
-export function cloneMaskDocument(doc: MaskDocument): MaskDocument {
-  return {
-    ...doc,
-    commands: doc.commands.map((cmd) =>
-      cmd.type === "stroke"
-        ? { ...cmd, points: cmd.points.map((p) => ({ ...p })) }
-        : { ...cmd },
-    ),
-  };
-}
-
 /**
  * 读取校验（IP-11.4）：版本、底图绑定、尺寸、有限坐标、笔宽与点数上限。
  *  允许本功能支持的底图尺寸，不继承草图的 3840 边长上限（TECH §6.2）。

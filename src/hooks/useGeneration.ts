@@ -2,12 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { generateImageEditStream, generateImageStream } from "../api/client";
 import { db } from "../db/schema";
 import { b64ToBlob } from "../lib/blob";
-import { cloneSketchDocument } from "../lib/sketch";
-import {
-  MASK_MAX_BYTES,
-  cloneMaskDocument,
-  validateMaskDocument,
-} from "../lib/inpaint";
+import { MASK_MAX_BYTES, validateMaskDocument } from "../lib/inpaint";
 import {
   ApiError,
   ERROR_HINTS,
@@ -19,7 +14,6 @@ import {
   type EditSubmission,
   type GenParams,
   type ImageRequestResult,
-  type InpaintIssue,
 } from "../lib/types";
 import type { GenPlan } from "../lib/view-models";
 
@@ -37,7 +31,7 @@ interface RequestSnapshot {
   edit?: EditSubmission;
 }
 
-/** 由草稿构建 mask 提交快照；失败抛 InpaintDraftError（IP-11：缺一项则不发送） */
+/** 由草稿构建 mask 提交快照；校验失败则不发送（IP-11）。 */
 function buildInpaintSubmission(
   draft: NonNullable<EditDraft["inpaint"]>,
   base: {
@@ -53,9 +47,10 @@ function buildInpaintSubmission(
     width: base.image.width,
     height: base.image.height,
   });
-  if ("issue" in validated) throw new InpaintDraftError(validated.issue);
+  if ("issue" in validated)
+    throw new Error(INPAINT_ISSUE_HINTS[validated.issue]);
   if (!mask.blob.size || mask.blob.size >= MASK_MAX_BYTES)
-    throw new InpaintDraftError("mask-too-large");
+    throw new Error(INPAINT_ISSUE_HINTS["mask-too-large"]);
   return {
     maskImage: { ...mask, mask: validated.doc },
     ...(original
@@ -66,16 +61,6 @@ function buildInpaintSubmission(
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-/** 局部重绘草稿校验（IP-11.3~5）：选区可识别、绑定与尺寸一致、mask 为有效 PNG。
- *  任一失败不发生成请求，不静默退化为普通编辑。 */
-class InpaintDraftError extends Error {
-  issue: InpaintIssue;
-  constructor(issue: InpaintIssue) {
-    super(INPAINT_ISSUE_HINTS[issue]);
-    this.issue = issue;
-  }
 }
 
 export function useGeneration() {
@@ -196,7 +181,7 @@ export function useGeneration() {
                       ...input,
                       upload: {
                         ...input.upload,
-                        sketch: cloneSketchDocument(input.upload.sketch),
+                        sketch: structuredClone(input.upload.sketch),
                       },
                     }
                   : { ...input },
@@ -207,7 +192,7 @@ export function useGeneration() {
                       ...draft.inpaint,
                       mask: {
                         ...draft.inpaint.mask,
-                        mask: cloneMaskDocument(draft.inpaint.mask.mask),
+                        mask: structuredClone(draft.inpaint.mask.mask),
                       },
                     },
                   }

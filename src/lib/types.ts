@@ -182,11 +182,6 @@ export interface Usage {
 
 export interface ImageGenResult {
   b64: string;
-  /** 回显参数（可缺省） */
-  size?: string;
-  quality?: string;
-  background?: string;
-  outputFormat?: string;
 }
 
 export interface ImageRequestResult {

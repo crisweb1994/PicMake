@@ -2291,6 +2291,22 @@ body {
   cursor: pointer;
   border-radius: 10px;
 }
+.pm-sk-size-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  cursor: pointer;
+}
+.pm-sk-sizer:has(:focus-visible) {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 3px;
+}
 .pm-sk-sizer-track {
   position: absolute;
   left: 50%;
@@ -2331,7 +2347,7 @@ body {
   transition: opacity 0.12s;
 }
 .pm-sk-sizer-wrap:hover .pm-sk-size-dot,
-.pm-sk-sizer:focus-visible + .pm-sk-size-dot {
+.pm-sk-sizer:focus-within + .pm-sk-size-dot {
   opacity: 1;
 }
 

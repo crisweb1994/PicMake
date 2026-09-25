@@ -13,7 +13,6 @@ import type {
 import {
   blankMask,
   checkInpaintBase,
-  cloneMaskDocument,
   commitMaskCommand,
   freezeMask,
   maskSnapshotKey,
@@ -139,7 +138,7 @@ export function useInpaint(props: {
           { width: base.width, height: base.height },
         );
         if ("issue" in validated) return fail(validated.issue);
-        const doc = cloneMaskDocument(validated.doc);
+        const doc = structuredClone(validated.doc);
         if (urlRef.current) URL.revokeObjectURL(urlRef.current);
         const baseUrl = URL.createObjectURL(base.blob);
         urlRef.current = baseUrl;
@@ -220,19 +219,6 @@ export function useInpaint(props: {
     );
   }, []);
 
-  const clearAll = useCallback(() => {
-    setError(null);
-    setSession((current) => {
-      if (!current) return current;
-      const next = commitMaskCommand(current.doc, current.cursor, {
-        type: "clear",
-      });
-      return next
-        ? { ...current, doc: next.doc, cursor: next.cursor }
-        : current;
-    });
-  }, []);
-
   /** 使用选区（IP-07）：导出 + 校验，成功才替换草稿；失败保留工作副本 */
   const confirm = useCallback(() => {
     const current = session;
@@ -311,7 +297,7 @@ export function useInpaint(props: {
     stroke,
     undo,
     redo,
-    clearAll,
+    clearAll: () => stroke({ type: "clear" }),
     confirm,
     clearError: () => setError(null),
   };

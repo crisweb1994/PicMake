@@ -172,34 +172,26 @@ export async function exportMaskPng(
   } catch {
     return { blob: null, issue: "canvas-failed", selected: 0 };
   }
-  const out = document.createElement("canvas");
-  out.width = doc.width;
-  out.height = doc.height;
-  const octx = out.getContext("2d");
-  if (!octx) return { blob: null, issue: "canvas-failed", selected: 0 };
   let selected = 0;
-  const src = image.data;
-  const dst = new Uint8ClampedArray(src.length);
-  for (let i = 0; i < src.length; i += 4) {
-    dst[i] = 255;
-    dst[i + 1] = 255;
-    dst[i + 2] = 255;
-    const alpha = maskOutputAlpha(src[i + 3]);
+  const data = image.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = 255;
+    data[i + 1] = 255;
+    data[i + 2] = 255;
+    const alpha = maskOutputAlpha(data[i + 3]);
     if (alpha === 0) selected++;
-    dst[i + 3] = alpha;
+    data[i + 3] = alpha;
   }
   if (selected === 0) return { blob: null, issue: "empty-mask", selected: 0 };
   try {
-    octx.putImageData(new ImageData(dst, doc.width, doc.height), 0, 0);
+    cctx.putImageData(image, 0, 0);
   } catch {
     return { blob: null, issue: "canvas-failed", selected: 0 };
   }
   const blob = await new Promise<Blob | null>((resolve) =>
-    out.toBlob(resolve, "image/png"),
+    cov.toBlob(resolve, "image/png"),
   );
   cov.width = 0;
   cov.height = 0;
-  out.width = 0;
-  out.height = 0;
   return { blob, issue: blob ? null : "canvas-failed", selected };
 }

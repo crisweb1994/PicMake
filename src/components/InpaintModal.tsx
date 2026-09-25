@@ -5,8 +5,9 @@
  *  进行中笔触为组件内部交互状态。坐标以底图像素为逻辑单位，缩放不改已有笔宽。
  *  背景点击与 Esc 不关闭（FR-9）；有未确认修改时关闭由接线层确认；焦点圈闭并在关闭后还原。
  *
- *  副作用清单：ResizeObserver(stage)、焦点圈闭 keydown、指针捕获（stage），
+ *  副作用清单：ResizeObserver(stage)、画笔初始焦点 rAF、指针捕获（stage），
  *  均随卸载清理；进行中笔触只画进 Canvas，松手才提交一个完整命令。 */
+import { FocusScope } from "react-aria";
 import {
   useCallback,
   useEffect,
@@ -87,7 +88,6 @@ export function InpaintModal(props: {
   onLimit: (kind: "commands" | "points") => void;
 }) {
   const { doc, cursor } = props;
-  const boardRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const covRef = useRef<HTMLCanvasElement>(null);
@@ -176,35 +176,10 @@ export function InpaintModal(props: {
     setHasSelection(maskHasSelectionQuick(doc, cursor));
   }, [doc, cursor, box, renderDisplay]);
 
-  /* ── 焦点圈闭：进入聚焦画笔，卸载还原打开者 ── */
+  // FocusScope 负责限制与恢复焦点；进入时仍聚焦画笔。
   useEffect(() => {
-    const board = boardRef.current;
-    if (!board) return;
-    const opener = document.activeElement as HTMLElement | null;
-    requestAnimationFrame(() => penBtnRef.current?.focus());
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      const focusables = Array.from(
-        board.querySelectorAll<HTMLElement>(
-          "button:not(:disabled),[href],input,select,textarea,[tabindex]:not([tabindex='-1'])",
-        ),
-      ).filter((el) => el.offsetParent !== null);
-      if (!focusables.length) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    board.addEventListener("keydown", onKey);
-    return () => {
-      board.removeEventListener("keydown", onKey);
-      opener?.focus?.();
-    };
+    const frame = requestAnimationFrame(() => penBtnRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   /* ── 缩放 / 平移：围绕视口中心，0.25 步长，1×–8×；平移只改视图 ──
@@ -419,222 +394,225 @@ export function InpaintModal(props: {
     : undefined;
 
   return (
-    <div className="pm-ip-overlay">
-      <div
-        className="pm-ip-board"
-        role="dialog"
-        aria-modal="true"
-        aria-label="选择修改区域"
-        ref={boardRef}
-      >
+    <FocusScope contain restoreFocus>
+      <div className="pm-ip-overlay">
         <div
-          className={"pm-ip-stage" + (tool === "pan" ? " panning" : "")}
-          ref={stageRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={(e) => endDraw(e, false)}
-          onPointerCancel={(e) => endDraw(e, true)}
-          onLostPointerCapture={(e) => endDraw(e, true)}
+          className="pm-ip-board"
+          role="dialog"
+          aria-modal="true"
+          aria-label="选择修改区域"
         >
-          {box && frameStyle && (
-            <div className="pm-ip-frame" ref={frameRef} style={frameStyle}>
-              <img
-                src={props.baseUrl}
-                alt={props.name}
-                draggable={false}
-                onLoad={() => renderDisplay(null)}
-              />
-              <canvas
-                ref={covRef}
-                className={"pm-ip-cov" + (overlayHidden ? " hidden" : "")}
-                width={Math.round(box.fitW * box.dpr)}
-                height={Math.round(box.fitH * box.dpr)}
-                aria-hidden
-              />
-            </div>
-          )}
           <div
-            className="pm-ip-ring"
-            ref={cursorRingRef}
-            style={{ display: "none" }}
-          />
-        </div>
+            className={"pm-ip-stage" + (tool === "pan" ? " panning" : "")}
+            ref={stageRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={(e) => endDraw(e, false)}
+            onPointerCancel={(e) => endDraw(e, true)}
+            onLostPointerCapture={(e) => endDraw(e, true)}
+          >
+            {box && frameStyle && (
+              <div className="pm-ip-frame" ref={frameRef} style={frameStyle}>
+                <img
+                  src={props.baseUrl}
+                  alt={props.name}
+                  draggable={false}
+                  onLoad={() => renderDisplay(null)}
+                />
+                <canvas
+                  ref={covRef}
+                  className={"pm-ip-cov" + (overlayHidden ? " hidden" : "")}
+                  width={Math.round(box.fitW * box.dpr)}
+                  height={Math.round(box.fitH * box.dpr)}
+                  aria-hidden
+                />
+              </div>
+            )}
+            <div
+              className="pm-ip-ring"
+              ref={cursorRingRef}
+              style={{ display: "none" }}
+            />
+          </div>
 
-        <button
-          type="button"
-          className="pm-ip-close"
-          aria-label="关闭"
-          disabled={busy}
-          onClick={props.onRequestClose}
-        >
-          <X size={18} />
-        </button>
+          <button
+            type="button"
+            className="pm-ip-close"
+            aria-label="关闭"
+            disabled={busy}
+            onClick={props.onRequestClose}
+          >
+            <X size={18} />
+          </button>
 
-        <div className="pm-ip-title">
-          <b>选择修改区域</b>
-          <span className="name">{props.name}</span>
-          <span className="dims">
-            {props.baseW} × {props.baseH} px
-          </span>
-          {props.normalized && (
-            <span className="norm">已校正图片方向，原文件保留</span>
+          <div className="pm-ip-title">
+            <b>选择修改区域</b>
+            <span className="name">{props.name}</span>
+            <span className="dims">
+              {props.baseW} × {props.baseH} px
+            </span>
+            {props.normalized && (
+              <span className="norm">已校正图片方向，原文件保留</span>
+            )}
+          </div>
+
+          <div className="pm-ip-hist" role="group" aria-label="撤销重做与显隐">
+            <button
+              type="button"
+              aria-label="撤销"
+              disabled={!canUndo || busy}
+              onClick={props.onUndo}
+            >
+              <Undo2 size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="重做"
+              disabled={!canRedo || busy}
+              onClick={props.onRedo}
+            >
+              <Redo2 size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="清空选区"
+              disabled={!hasSelection || busy}
+              onClick={props.onClear}
+            >
+              <Trash2 size={16} />
+            </button>
+            <span className="vr" />
+            <button
+              type="button"
+              aria-pressed={overlayHidden}
+              disabled={busy}
+              title={
+                overlayHidden
+                  ? "显示选区"
+                  : "隐藏选区（隐藏时暂停涂画，不清空）"
+              }
+              onClick={() => setOverlayHidden((v) => !v)}
+            >
+              {overlayHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+              {overlayHidden ? "显示选区" : "隐藏选区"}
+            </button>
+          </div>
+
+          <div className="pm-ip-zoombar" role="group" aria-label="缩放与平移">
+            <button
+              type="button"
+              aria-label="缩小"
+              disabled={zoom <= 1 || busy}
+              onClick={() => applyZoom(-0.25)}
+            >
+              <Minus size={14} />
+            </button>
+            <b>{Math.round(zoom * 100)}%</b>
+            <button
+              type="button"
+              aria-label="放大"
+              disabled={zoom >= 8 || busy}
+              onClick={() => applyZoom(0.25)}
+            >
+              <Plus size={14} />
+            </button>
+            <button type="button" onClick={fitView} disabled={busy}>
+              <Maximize size={14} />
+              适应窗口
+            </button>
+            <button
+              type="button"
+              className={tool === "pan" ? "on" : ""}
+              aria-pressed={tool === "pan"}
+              title="拖动画布平移视图，不影响选区"
+              onClick={() => setTool((t) => (t === "pan" ? "pen" : "pan"))}
+            >
+              <Hand size={14} />
+              拖动画布
+            </button>
+          </div>
+
+          <div className="pm-ip-tools" role="toolbar" aria-label="绘画工具">
+            <button
+              type="button"
+              ref={penBtnRef}
+              className={tool === "pen" ? "on" : ""}
+              aria-label="画笔"
+              aria-pressed={tool === "pen"}
+              title="画笔：扩大待修改区域"
+              disabled={busy}
+              onClick={() => setTool("pen")}
+            >
+              <Brush size={15} />
+              画笔
+            </button>
+            <button
+              type="button"
+              className={tool === "eraser" ? "on" : ""}
+              aria-label="擦除"
+              aria-pressed={tool === "eraser"}
+              title="擦除：缩小待修改区域，不擦除原图"
+              disabled={busy}
+              onClick={() => setTool("eraser")}
+            >
+              <Eraser size={15} />
+              擦除
+            </button>
+            <span className="vr" />
+            <label className="pm-ip-size">
+              粗细
+              <input
+                type="range"
+                aria-label="画笔粗细（底图像素）"
+                min={brushRange.min}
+                max={brushRange.max}
+                step={1}
+                value={brush}
+                onChange={(e) => setBrush(Number(e.target.value))}
+              />
+              <input
+                type="number"
+                aria-label="画笔粗细数值"
+                min={brushRange.min}
+                max={brushRange.max}
+                step={1}
+                value={brush}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n))
+                    setBrush(
+                      Math.min(
+                        brushRange.max,
+                        Math.max(brushRange.min, Math.round(n)),
+                      ),
+                    );
+                }}
+              />
+              px
+            </label>
+          </div>
+
+          {props.error && (
+            <p className="pm-ip-error" role="alert">
+              {INPAINT_ISSUE_HINTS[props.error]}
+            </p>
           )}
-        </div>
+          {!props.error && !hasSelection && !busy && (
+            <p className="pm-ip-hint">请先涂选需要修改的区域</p>
+          )}
 
-        <div className="pm-ip-hist" role="group" aria-label="撤销重做与显隐">
           <button
             type="button"
-            aria-label="撤销"
-            disabled={!canUndo || busy}
-            onClick={props.onUndo}
-          >
-            <Undo2 size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label="重做"
-            disabled={!canRedo || busy}
-            onClick={props.onRedo}
-          >
-            <Redo2 size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label="清空选区"
+            className={"pm-ip-use" + (hasSelection && !busy ? " ready" : "")}
             disabled={!hasSelection || busy}
-            onClick={props.onClear}
+            onClick={props.onConfirm}
           >
-            <Trash2 size={16} />
-          </button>
-          <span className="vr" />
-          <button
-            type="button"
-            aria-pressed={overlayHidden}
-            disabled={busy}
-            title={
-              overlayHidden ? "显示选区" : "隐藏选区（隐藏时暂停涂画，不清空）"
-            }
-            onClick={() => setOverlayHidden((v) => !v)}
-          >
-            {overlayHidden ? <EyeOff size={16} /> : <Eye size={16} />}
-            {overlayHidden ? "显示选区" : "隐藏选区"}
+            {busy ? <Loader2 size={16} /> : <Check size={16} />}
+            {busy ? "处理中…" : "使用选区"}
           </button>
         </div>
-
-        <div className="pm-ip-zoombar" role="group" aria-label="缩放与平移">
-          <button
-            type="button"
-            aria-label="缩小"
-            disabled={zoom <= 1 || busy}
-            onClick={() => applyZoom(-0.25)}
-          >
-            <Minus size={14} />
-          </button>
-          <b>{Math.round(zoom * 100)}%</b>
-          <button
-            type="button"
-            aria-label="放大"
-            disabled={zoom >= 8 || busy}
-            onClick={() => applyZoom(0.25)}
-          >
-            <Plus size={14} />
-          </button>
-          <button type="button" onClick={fitView} disabled={busy}>
-            <Maximize size={14} />
-            适应窗口
-          </button>
-          <button
-            type="button"
-            className={tool === "pan" ? "on" : ""}
-            aria-pressed={tool === "pan"}
-            title="拖动画布平移视图，不影响选区"
-            onClick={() => setTool((t) => (t === "pan" ? "pen" : "pan"))}
-          >
-            <Hand size={14} />
-            拖动画布
-          </button>
-        </div>
-
-        <div className="pm-ip-tools" role="toolbar" aria-label="绘画工具">
-          <button
-            type="button"
-            ref={penBtnRef}
-            className={tool === "pen" ? "on" : ""}
-            aria-label="画笔"
-            aria-pressed={tool === "pen"}
-            title="画笔：扩大待修改区域"
-            disabled={busy}
-            onClick={() => setTool("pen")}
-          >
-            <Brush size={15} />
-            画笔
-          </button>
-          <button
-            type="button"
-            className={tool === "eraser" ? "on" : ""}
-            aria-label="擦除"
-            aria-pressed={tool === "eraser"}
-            title="擦除：缩小待修改区域，不擦除原图"
-            disabled={busy}
-            onClick={() => setTool("eraser")}
-          >
-            <Eraser size={15} />
-            擦除
-          </button>
-          <span className="vr" />
-          <label className="pm-ip-size">
-            粗细
-            <input
-              type="range"
-              aria-label="画笔粗细（底图像素）"
-              min={brushRange.min}
-              max={brushRange.max}
-              step={1}
-              value={brush}
-              onChange={(e) => setBrush(Number(e.target.value))}
-            />
-            <input
-              type="number"
-              aria-label="画笔粗细数值"
-              min={brushRange.min}
-              max={brushRange.max}
-              step={1}
-              value={brush}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n))
-                  setBrush(
-                    Math.min(
-                      brushRange.max,
-                      Math.max(brushRange.min, Math.round(n)),
-                    ),
-                  );
-              }}
-            />
-            px
-          </label>
-        </div>
-
-        {props.error && (
-          <p className="pm-ip-error" role="alert">
-            {INPAINT_ISSUE_HINTS[props.error]}
-          </p>
-        )}
-        {!props.error && !hasSelection && !busy && (
-          <p className="pm-ip-hint">请先涂选需要修改的区域</p>
-        )}
-
-        <button
-          type="button"
-          className={"pm-ip-use" + (hasSelection && !busy ? " ready" : "")}
-          disabled={!hasSelection || busy}
-          onClick={props.onConfirm}
-        >
-          {busy ? <Loader2 size={16} /> : <Check size={16} />}
-          {busy ? "处理中…" : "使用选区"}
-        </button>
       </div>
-    </div>
+    </FocusScope>
   );
 }
 

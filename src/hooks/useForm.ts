@@ -259,29 +259,16 @@ export function useForm() {
   const focus = () => requestAnimationFrame(() => promptRef.current?.focus());
   const getParams = () => {
     if (readingRef.current) return null;
-    // 局部重绘：输出尺寸按 IP-10 目标（原尺寸或建议尺寸），不开放任意比例
-    if (inpaint && inpaintInfo) {
-      const params = formToParams(form);
-      params.size = { w: inpaintInfo.tw, h: inpaintInfo.th };
-      const validation = validateParams(params);
-      if (validation.length) {
-        toast(validation[0]);
-        if (!params.prompt.trim()) focus();
-        return null;
-      }
-      if (inputs.length > MAX_INPUT_IMAGES) {
-        toast(ERROR_HINTS["too-many-images"]);
-        return null;
-      }
-      return params;
-    }
-    if (!customValid) {
+    if (!(inpaint && inpaintInfo) && !customValid) {
       toast(
         "自定义尺寸无效：宽高须被 16 整除，比例 1:3 ～ 3:1，不超过 3840 × 2160",
       );
       return null;
     }
     const params = formToParams(form);
+    // 局部重绘：输出尺寸按 IP-10 目标（原尺寸或建议尺寸），不开放任意比例
+    if (inpaint && inpaintInfo)
+      params.size = { w: inpaintInfo.tw, h: inpaintInfo.th };
     const validation = validateParams(params);
     if (validation.length) {
       toast(validation[0]);

@@ -116,18 +116,6 @@ export function freezeSketch(
   return { ...doc, commands: doc.commands.slice(0, cursor) };
 }
 
-/** 深拷贝文档（命令与点数组全新），用于会话快照防御性复制 */
-export function cloneSketchDocument(doc: SketchDocument): SketchDocument {
-  return {
-    ...doc,
-    commands: doc.commands.map((cmd) =>
-      cmd.type === "stroke"
-        ? { ...cmd, points: cmd.points.map((p) => ({ ...p })) }
-        : { ...cmd },
-    ),
-  };
-}
-
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** 读取校验（§9）：拒绝异常尺寸、非有限坐标、越界笔宽、坏颜色与不支持的版本 */

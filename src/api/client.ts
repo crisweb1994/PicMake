@@ -131,10 +131,6 @@ export function mapUsage(u: any): Usage | null {
 export function parseGenResponse(j: any): ImageRequestResult {
   const results: ImageGenResult[] = (j.data ?? []).map((d: any) => ({
     b64: d.b64_json,
-    size: j.size,
-    quality: j.quality,
-    background: j.background,
-    outputFormat: j.output_format,
   }));
   if (
     !results.length ||
@@ -324,10 +320,6 @@ export function createImageParser(
       ) {
         const image: ImageGenResult = {
           b64: d.b64_json,
-          size: d.size,
-          quality: d.quality,
-          background: d.background,
-          outputFormat: d.output_format,
         };
         result.images.push(image);
         // usage 是请求级总量，后续完成事件的总量回显覆盖，绝不按图相加。
