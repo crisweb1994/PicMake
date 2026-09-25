@@ -41,6 +41,7 @@
     "dexie-react-hooks": "~4.4.0",
     "eventsource-parser": "~4.1.1",
     "lucide-react": "~1.47.0",
+    "perfect-freehand": "~1.2.3",
     "react": "^19.2.8",
     "react-aria": "~3.52.1",
     "react-aria-components": "~1.21.1",

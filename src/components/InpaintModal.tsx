@@ -45,10 +45,8 @@ import {
   totalMaskPoints,
 } from "../lib/inpaint";
 import {
-  drawMaskCommand,
   maskHasSelectionQuick,
-  paintOverlay,
-  replayCoverage,
+  paintOverlayLayer,
 } from "../lib/inpaint-canvas";
 
 /** 显示覆盖层颜色（IP-04：专用令牌 --pm-inpaint-*，两主题可辨）。
@@ -153,30 +151,30 @@ export function InpaintModal(props: {
     return () => ro.disconnect();
   }, [fit]);
 
-  /* ── coverage 重放：显示层与 coverage 同一命令序列（D5 不分叉）── */
-  const repaint = useCallback(() => {
-    const cov = covRef.current;
-    const ctx = cov?.getContext("2d");
-    if (!cov || !ctx || !box) return;
-    const scale = cov.width / doc.width;
-    replayCoverage(ctx, doc, cursor, scale);
-    // 着色层：整层从 coverage 位图生成，不透明度是纯视觉参数
-    const overlay = document.createElement("canvas");
-    overlay.width = cov.width;
-    overlay.height = cov.height;
-    const octx = overlay.getContext("2d");
-    if (octx) {
-      replayCoverage(octx, doc, cursor, scale);
-      paintOverlay(ctx, overlay, overlayFill());
-      overlay.width = 0;
-      overlay.height = 0;
-    }
-  }, [doc, cursor, box]);
+  /* ── 显示层立即模式重绘：clear → 已提交命令 → 进行中笔触（tldraw 同思路）。
+   *  每帧全量重画同一 perfect-freehand 轮廓，无增量合成 → 无衰减、无接缝；
+   *  显示与判空/导出共用 drawMaskCommand，请求范围与所见范围同构（D5）── */
+  const renderDisplay = useCallback(
+    (live: MaskStroke | null) => {
+      const cov = covRef.current;
+      const ctx = cov?.getContext("2d");
+      if (!cov || !ctx || !box) return;
+      paintOverlayLayer(
+        ctx,
+        doc,
+        cursor,
+        live,
+        cov.width / doc.width,
+        overlayFill(),
+      );
+    },
+    [doc, cursor, box],
+  );
 
   useEffect(() => {
-    repaint();
+    renderDisplay(null);
     setHasSelection(maskHasSelectionQuick(doc, cursor));
-  }, [doc, cursor, box, repaint]);
+  }, [doc, cursor, box, renderDisplay]);
 
   /* ── 焦点圈闭：进入聚焦画笔，卸载还原打开者 ── */
   useEffect(() => {
@@ -273,34 +271,21 @@ export function InpaintModal(props: {
     };
   };
 
-  const liveSeg = useCallback(
-    (from: SketchPoint | null, to: SketchPoint, cmd: MaskStroke) => {
-      const cov = covRef.current;
-      const ctx = cov?.getContext("2d");
-      if (!cov || !ctx) return;
-      const scale = cov.width / doc.width;
-      ctx.save();
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      drawMaskCommand(ctx, { ...cmd, points: from ? [from, to] : [to] }, doc);
-      ctx.restore();
+  /** rAF 节流的全量重绘调度：拖动期间每帧重画已提交 + 当前笔触 */
+  const rafRef = useRef(0);
+  const scheduleRender = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      renderDisplay(drawingRef.current?.cmd ?? null);
+    });
+  }, [renderDisplay]);
+  useEffect(
+    () => () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     },
-    [doc],
+    [],
   );
-
-  const repaintOverlayOnly = useCallback(() => {
-    const cov = covRef.current;
-    const ctx = cov?.getContext("2d");
-    if (!cov || !ctx) return;
-    const overlay = document.createElement("canvas");
-    overlay.width = cov.width;
-    overlay.height = cov.height;
-    const octx = overlay.getContext("2d");
-    if (!octx) return;
-    octx.drawImage(cov, 0, 0);
-    paintOverlay(ctx, overlay, overlayFill());
-    overlay.width = 0;
-    overlay.height = 0;
-  }, []);
 
   const moveCursorRing = useCallback(
     (clientX: number, clientY: number) => {
@@ -336,7 +321,7 @@ export function InpaintModal(props: {
       // 多指：终止未完成笔触，不触发新手势（TECH §6.1）
       if (drawingRef.current) {
         drawingRef.current = null;
-        repaint();
+        renderDisplay(null);
       }
       return;
     }
@@ -365,8 +350,7 @@ export function InpaintModal(props: {
     } catch {
       /* 无活动指针时降级为普通跟踪 */
     }
-    liveSeg(null, pt, cmd);
-    repaintOverlayOnly();
+    renderDisplay(cmd);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -388,7 +372,8 @@ export function InpaintModal(props: {
     if (!d || e.pointerId !== d.pid) return;
     const pt = toDocPoint(e.clientX, e.clientY);
     if (!pt) return;
-    if (Math.hypot(pt.x - d.last.x, pt.y - d.last.y) < 1) return;
+    // perfect-freehand 的 streamline 负责抖动平滑；此处只做极小距离去重
+    if (Math.hypot(pt.x - d.last.x, pt.y - d.last.y) < 0.8) return;
     if (
       totalMaskPoints(doc, cursor) + d.cmd.points.length >=
       SKETCH_MAX_POINTS
@@ -399,10 +384,9 @@ export function InpaintModal(props: {
       }
       return;
     }
-    liveSeg(d.last, pt, d.cmd);
-    repaintOverlayOnly();
     d.cmd.points.push(pt);
     d.last = pt;
+    scheduleRender();
   };
 
   const endDraw = (e: React.PointerEvent, discard: boolean) => {
@@ -415,7 +399,7 @@ export function InpaintModal(props: {
     if (!d || e.pointerId !== d.pid) return;
     drawingRef.current = null;
     if (discard) {
-      repaint(); // 指针中断：丢弃未完成的一笔（IP-05）
+      renderDisplay(null); // 指针中断：丢弃未完成的一笔（IP-05）
       return;
     }
     props.onStroke(d.cmd);
@@ -458,7 +442,7 @@ export function InpaintModal(props: {
                 src={props.baseUrl}
                 alt={props.name}
                 draggable={false}
-                onLoad={repaint}
+                onLoad={() => renderDisplay(null)}
               />
               <canvas
                 ref={covRef}
@@ -693,17 +677,14 @@ export function MaskViewModal(props: {
       height: props.baseH,
       commands: props.commands,
     };
-    const scale = cv.width / props.baseW;
-    const overlay = document.createElement("canvas");
-    overlay.width = cv.width;
-    overlay.height = cv.height;
-    const octx = overlay.getContext("2d");
-    if (octx) {
-      replayCoverage(octx, doc, doc.commands.length, scale);
-      paintOverlay(ctx, overlay, overlayFill());
-      overlay.width = 0;
-      overlay.height = 0;
-    }
+    paintOverlayLayer(
+      ctx,
+      doc,
+      doc.commands.length,
+      null,
+      cv.width / props.baseW,
+      overlayFill(),
+    );
   }, [props.commands, props.baseW, props.baseH, width]);
 
   return (

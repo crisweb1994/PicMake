@@ -1,12 +1,53 @@
 /** 局部重绘 Canvas 浏览器侧（TECH_INPAINTING §6）：唯一覆盖率语义的栅格化与导出。
- *  coverage 缓冲：初始透明（0=未选），画笔 source-over 白色增加 alpha，
- *  擦除 destination-out 减少 alpha；selected = coverageAlpha ≥ 128（D5）。
- *  显示覆盖层与请求 mask 由同一命令序列重放产生，UI 有效范围与请求透明范围不分叉。
- *  不含 React 状态；不依赖 DPR（文档坐标即底图像素）。 */
+ *  笔触几何统一走 perfect-freehand（tldraw / Excalidraw freedraw 同款）：
+ *  getStroke 由输入点列生成平滑的多边形轮廓，恒定宽度（thinning 0，IP-05 无压力变化），
+ *  同一轮廓同时用于显示覆盖层、判空重放与 mask 导出——显示与请求不分叉（D5）。
+ *  coverage 语义不变：初始透明，画笔 source-over 增加 alpha，擦除 destination-out。
+ *  渲染为立即模式全量重绘（clear → 已提交命令 → 进行中笔触），
+ *  不做任何增量合成，从根上避免半透明叠加产生的衰减与接缝。 */
+import { getStroke } from "perfect-freehand";
 import { MASK_ALPHA_THRESHOLD, maskOutputAlpha } from "./inpaint";
-import type { MaskCommand, MaskDocument } from "./types";
+import type { MaskCommand, MaskDocument, MaskStroke } from "./types";
 
-/** 单条命令绘制到 coverage；调用方须已设置好指向文档坐标的 transform */
+/** perfect-freehand 统一参数：恒定宽度圆头笔（IP-05：无羽化、无压力变化） */
+const STROKE_OPTIONS = {
+  size: 16,
+  thinning: 0,
+  smoothing: 0.5,
+  streamline: 0.35,
+  simulatePressure: false,
+  easing: (t: number) => t,
+  start: { cap: true, taper: 0 },
+  end: { cap: true, taper: 0 },
+} as const;
+
+/** 点列 → 平滑笔触轮廓（文档坐标）；单击（单点）得到圆形轮廓 */
+export function strokeOutline(
+  points: MaskStroke["points"],
+  size: number,
+): Array<[number, number]> {
+  return getStroke(
+    points.map((p) => [p.x, p.y] as [number, number]),
+    { ...STROKE_OPTIONS, size },
+  ) as Array<[number, number]>;
+}
+
+function outlinePath(outline: Array<[number, number]>): Path2D {
+  const path = new Path2D();
+  if (!outline.length) return path;
+  path.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 1; i < outline.length; i++)
+    path.lineTo(outline[i][0], outline[i][1]);
+  path.closePath();
+  return path;
+}
+
+/**
+ * 单条命令的笔触填充。调用方须已设置好指向文档坐标的 transform：
+ * - pen：以 fillStyle 填充轮廓（coverage 重放传白色，显示层传覆盖色）
+ * - eraser：destination-out 填充同一轮廓（减少覆盖）
+ * - clear：清空画布
+ */
 export function drawMaskCommand(
   ctx: CanvasRenderingContext2D,
   cmd: MaskCommand,
@@ -18,24 +59,8 @@ export function drawMaskCommand(
   }
   ctx.save();
   if (cmd.tool === "eraser") ctx.globalCompositeOperation = "destination-out";
-  // RGB 填白只为简化缓冲；选区判断只看 alpha，白色不参与语义
-  ctx.strokeStyle = "#FFFFFF";
   ctx.fillStyle = "#FFFFFF";
-  ctx.lineWidth = cmd.width;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  const points = cmd.points;
-  if (points.length === 1) {
-    ctx.beginPath();
-    ctx.arc(points[0].x, points[0].y, cmd.width / 2, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++)
-      ctx.lineTo(points[i].x, points[i].y);
-    ctx.stroke();
-  }
+  ctx.fill(outlinePath(strokeOutline(cmd.points, cmd.width)));
   ctx.restore();
 }
 
@@ -46,27 +71,57 @@ export function replayCoverage(
   cursor = doc.commands.length,
   scale = 1,
 ): void {
+  ctx.save();
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, doc.width, doc.height);
   for (let i = 0; i < cursor; i++) drawMaskCommand(ctx, doc.commands[i], doc);
+  ctx.restore();
 }
 
-/** 显示覆盖层：把 coverage 位图以指定颜色整层着色（同一栅格结果，
- *  不透明度是独立视觉参数，不参与请求 alpha 计算——D5） */
-export function paintOverlay(
+/**
+ * 显示覆盖层重绘：全量重画已提交命令 + 进行中笔触。
+ * 画笔以覆盖色 + 半透明呈现（独立视觉参数，不参与请求 alpha 计算——D5）；
+ * 擦除以不透明度 1 的 destination-out 完全移除显示——半透明 destination-out
+ * 只削掉一半 alpha 留残影，会与 coverage 语义（完全移除）分叉。
+ */
+export function paintOverlayLayer(
   ctx: CanvasRenderingContext2D,
-  coverage: HTMLCanvasElement,
+  doc: MaskDocument,
+  cursor = doc.commands.length,
+  live: MaskStroke | null,
+  scale: number,
   color: string,
   alpha = 0.5,
 ): void {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = alpha;
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(coverage, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.globalCompositeOperation = "source-in";
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.fillStyle = color;
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  const fillStroke = (cmd: MaskStroke) => {
+    ctx.save();
+    if (cmd.tool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.globalAlpha = alpha;
+    }
+    ctx.fill(outlinePath(strokeOutline(cmd.points, cmd.width)));
+    ctx.restore();
+  };
+  for (let i = 0; i < cursor; i++) {
+    const cmd = doc.commands[i];
+    if (cmd.type === "clear") {
+      // clear 命令清掉此前所有覆盖
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.restore();
+      continue;
+    }
+    fillStroke(cmd);
+  }
+  if (live) fillStroke(live);
   ctx.restore();
 }
 
