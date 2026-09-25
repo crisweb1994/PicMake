@@ -1,10 +1,11 @@
 /** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props。
  *  布局（PRD §5.1，2026-09-23）：全幅舞台 + 底部 CreateBar + 舞台右上 DetailCard。 */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
 import { CreateBar } from "./components/bar/CreateBar";
 import { DetailCard } from "./components/DetailCard";
+import { SketchModal } from "./components/SketchModal";
 import {
   InputPreview,
   Carousel,
@@ -16,8 +17,13 @@ import {
 import { useHistory } from "./hooks/useHistory";
 import { useForm } from "./hooks/useForm";
 import { usePicmake } from "./hooks/usePicmake";
+import { useSketch } from "./hooks/useSketch";
 import { useViewUi } from "./hooks/useViewUi";
+import { db } from "./db/schema";
 import { fmtBytes } from "./lib/format";
+import { formSize } from "./lib/params";
+import { SKETCH_DEFAULT_SIZE, ratioMismatch } from "./lib/sketch";
+import { ERROR_HINTS, MAX_INPUT_IMAGES } from "./lib/types";
 import { useSettingsModal } from "./hooks/useSettings";
 import { useTheme } from "./hooks/useTheme";
 import { toast } from "@heroui/react";
@@ -60,6 +66,112 @@ export default function App() {
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+
+  /* ── 草图画板（SKETCH §6/§8）：画板只产出附件，确认落回创作条，不发请求 ── */
+  const sketch = useSketch({
+    onApply: ({ image, replaces }) => {
+      const wasEmpty = !replaces && form.inputs.length === 0;
+      const sizeBefore = formSize(form.form);
+      const promptEmpty = !form.form.prompt.trim();
+      if (!form.applySketch(image, replaces)) return false;
+      // §6.4 草图首次成为唯一输入且输出为 auto：确认时显式设置为草图尺寸
+      if (wasEmpty && sizeBefore === "auto") {
+        form.patchForm({ cw: String(image.width), ch: String(image.height) });
+        toast(`输出尺寸已设为草图尺寸 ${image.width} × ${image.height}`);
+      }
+      // §6.3 首次添加草图且描述为空：填入可见可编辑的起始文字（不覆盖已有文字）
+      if (!replaces && promptEmpty) {
+        form.patchForm({
+          prompt: `以图${form.inputs.length + 1}的草图为构图参考，保留主体的相对位置与比例，将粗略线条转成完整画面。`,
+        });
+      }
+      setBarMode("full");
+      form.focus();
+      return true;
+    },
+  });
+  /** 已确认草图的逻辑尺寸（比例不一致提示） */
+  const sketchInput = form.inputs.find((input) => input.upload?.sketch);
+  const sketchSize = useMemo(
+    () =>
+      sketchInput?.upload
+        ? { w: sketchInput.upload.width, h: sketchInput.upload.height }
+        : null,
+    [sketchInput],
+  );
+
+  const canOpenSketch = () =>
+    pm.phase !== "generating" &&
+    !pm.saving &&
+    !form.reading &&
+    !history.pendingSave &&
+    !pm.confirmState &&
+    !sketch.session;
+
+  /** 菜单「画草图 / 继续画草图」：新画布 = 当前输出尺寸，auto 时 1024×1024（§6.4） */
+  const openSketchNew = () => {
+    if (!canOpenSketch()) return;
+    if (
+      !form.images.some((image) => image.isSketch) &&
+      form.inputs.length >= MAX_INPUT_IMAGES
+    ) {
+      toast(ERROR_HINTS["too-many-images"]);
+      return;
+    }
+    const size = formSize(form.form);
+    sketch.openNew(
+      ...(size === "auto"
+        ? ([SKETCH_DEFAULT_SIZE, SKETCH_DEFAULT_SIZE] as const)
+        : ([size.w, size.h] as const)),
+    );
+  };
+
+  const editAttachmentSketch = (imageId: string) => {
+    if (!canOpenSketch()) return;
+    const idx = form.inputs.findIndex((input) => input.imageId === imageId);
+    const doc = form.inputs[idx]?.upload?.sketch;
+    if (!doc) return;
+    sketch.openEdit(doc, imageId, idx);
+  };
+
+  /** 历史来源草图：以新草稿打开画板，确认产生新 imageId，不改旧记录（§8.2） */
+  const continueHistorySketch = (imageId: string) => {
+    if (!canOpenSketch()) return;
+    setPreviewId(null);
+    void db.images.get(imageId).then((row) => {
+      if (!row) {
+        toast("来源图片不可用，无法继续编辑这张草图");
+        return;
+      }
+      sketch.openHistory(row.sketch);
+    });
+  };
+
+  const requestCloseSketch = () => {
+    if (sketch.confirming) return;
+    if (sketch.changed) {
+      pm.setConfirmState({
+        title: "放弃本次草图修改？",
+        desc: "未确认的笔画不会保存；已确认的草图附件保持不变。",
+        okLabel: "放弃修改",
+        cancelLabel: "继续画",
+        onOk: sketch.close,
+      });
+      return;
+    }
+    sketch.close();
+  };
+
+  // 比例不一致 toast（§6.4）：仅在进入不一致状态时提示一次，就地提示见尺寸弹层
+  const mismatchRef = useRef(false);
+  useEffect(() => {
+    const size = formSize(form.form);
+    const mismatch =
+      !!sketchSize && size !== "auto" && ratioMismatch(size, sketchSize);
+    if (mismatch && !mismatchRef.current)
+      toast("输出比例与草图不同，构图可能调整");
+    mismatchRef.current = mismatch;
+  }, [form.form, sketchSize]);
 
   const [usageText, setUsageText] = useState("");
   useEffect(() => {
@@ -104,7 +216,8 @@ export default function App() {
     form.focus();
   };
 
-  // full 态点条外收起：仅在无草稿（未改过任何字段、无输入图、无编辑来源）时
+  // full 态点条外收起：仅在无草稿（未改过任何字段、无输入图、无编辑来源）时；
+  // 画板打开期间点击落在浮层上，不收回（SK13 同源阻断）
   useEffect(() => {
     if (barMode !== "full") return;
     const onDown = (e: PointerEvent) => {
@@ -113,7 +226,8 @@ export default function App() {
         !t ||
         t.closest(".pm-bar") ||
         t.closest(".pm-detail") ||
-        t.closest(".modal__backdrop")
+        t.closest(".modal__backdrop") ||
+        t.closest(".pm-sk-overlay")
       )
         return;
       if (!form.dirty && !form.images.length && !pm.canReturn)
@@ -121,7 +235,7 @@ export default function App() {
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [barMode, form.dirty, form.images.length, pm.canReturn]);
+  }, [barMode, form.dirty, form.images.length, pm.canReturn, sketch.session]);
 
   // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
   const detailVisible =
@@ -144,6 +258,7 @@ export default function App() {
       settingsOpen ||
       drawerOpen ||
       !!view.lightbox ||
+      !!sketch.session ||
       view.focusIdx !== null;
     if (blocked) return;
     let last = 0;
@@ -257,6 +372,7 @@ export default function App() {
         reading={form.reading}
         uploadError={form.uploadError}
         canReturn={pm.canReturn}
+        sketchSize={sketchSize}
         promptRef={form.promptRef}
         onPatch={form.patchForm}
         onGenerate={pm.generate}
@@ -266,6 +382,8 @@ export default function App() {
         }}
         onRemove={(id) => form.removeInput(id)}
         onPreview={setPreviewId}
+        onOpenSketch={openSketchNew}
+        onEditSketch={editAttachmentSketch}
         onInputFidelity={form.setInputFidelity}
         onExpand={expandBar}
         onReturn={pm.returnToResult}
@@ -358,8 +476,37 @@ export default function App() {
             (image) => image.id === previewId,
           ) ?? null
         }
+        onContinueSketch={
+          previewId &&
+          (history.display ? history.sourceImages : form.images).some(
+            (image) => image.id === previewId && image.isSketch,
+          )
+            ? () => continueHistorySketch(previewId)
+            : undefined
+        }
         onClose={() => setPreviewId(null)}
       />
+      {sketch.session && (
+        <SketchModal
+          doc={sketch.session.doc}
+          cursor={sketch.session.cursor}
+          meta={sketch.session.meta}
+          confirming={sketch.confirming}
+          onStroke={sketch.stroke}
+          onClear={sketch.clearAll}
+          onUndo={sketch.undo}
+          onRedo={sketch.redo}
+          onConfirm={sketch.confirm}
+          onRequestClose={requestCloseSketch}
+          onLimit={(kind) =>
+            toast(
+              kind === "commands"
+                ? "已达绘制上限（2000 步），请撤销或清空后再继续"
+                : "已达采样点上限，本笔到此为止",
+            )
+          }
+        />
+      )}
       {pm.saving && (
         <p className="pm-saving" role="status">
           正在保存到本地…

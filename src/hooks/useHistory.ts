@@ -89,6 +89,8 @@ export function useHistory() {
         ? "来自已有作品"
         : "来源作品已删除",
     url: assets[source.imageId]?.url,
+    /** 来源是草图：预览时提供「继续画这张草图」（SKETCH §6.3/§8.2，不改旧记录） */
+    isSketch: !!assets[source.imageId]?.row.sketch,
   }));
 
   const images = (displayRow?.imageIds ?? []).map((id) => ({

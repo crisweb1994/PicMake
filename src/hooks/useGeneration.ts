@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { generateImageEditStream, generateImageStream } from "../api/client";
 import { db } from "../db/schema";
 import { b64ToBlob } from "../lib/blob";
+import { cloneSketchDocument } from "../lib/sketch";
 import {
   ApiError,
   ERROR_HINTS,
@@ -131,8 +132,23 @@ export function useGeneration() {
           ...params,
           size: params.size === "auto" ? "auto" : { ...params.size },
         },
+        // 草图附件带嵌套命令文档：快照深拷贝文档，提交后的可恢复笔画不会与
+        // 后续编辑分叉（SKETCH §8.4——文档不可原地修改，修改走新 ImageRow）
         draft: draft
-          ? { ...draft, inputs: draft.inputs.map((input) => ({ ...input })) }
+          ? {
+              ...draft,
+              inputs: draft.inputs.map((input) =>
+                input.upload?.sketch
+                  ? {
+                      ...input,
+                      upload: {
+                        ...input.upload,
+                        sketch: cloneSketchDocument(input.upload.sketch),
+                      },
+                    }
+                  : { ...input },
+              ),
+            }
           : null,
         config: { ...config },
       };

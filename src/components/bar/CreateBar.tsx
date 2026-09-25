@@ -2,7 +2,14 @@
  *  定稿对照 docs/demos/redesign/chipbar/final.html；弹层开合为组件内部 UI 状态。
  *  自定义开发：值 chip 与弹层原语见同目录 BarChip.tsx（BarChip / PopRow）。 */
 import { useRef, type RefObject } from "react";
-import { ArrowUp, Paperclip, RotateCcw, Sparkles } from "lucide-react";
+import {
+  ArrowUp,
+  Paperclip,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { fmtDuration } from "../../lib/format";
 import {
   BASE_LABELS,
@@ -10,12 +17,14 @@ import {
   MODEL_LABELS,
   QUALITY_LABELS,
   RATIO_CHIPS,
+  formSize,
   isCustomActive,
   type GenForm,
 } from "../../lib/params";
+import { ratioMismatch } from "../../lib/sketch";
 import type { DisplayGen, DisplayInput } from "../../lib/view-models";
 import type {
-  InputFidelity,
+  FidelityChoice,
   ModelId,
   OutputFormat,
   Quality,
@@ -61,7 +70,11 @@ function MiniBar(props: {
       <p className="pm-bar-mini-meta">
         当前 {MODEL_LABELS[f.model]} · {size} · {QUALITY_LABELS[f.quality]} · ×
         {f.n} · {f.fmt.toUpperCase()} ·{" "}
-        {f.bg === "auto" ? "自动背景" : f.bg === "transparent" ? "透明背景" : "纯色背景"}
+        {f.bg === "auto"
+          ? "自动背景"
+          : f.bg === "transparent"
+            ? "透明背景"
+            : "纯色背景"}
       </p>
     </div>
   );
@@ -72,26 +85,40 @@ function FullBar(props: {
   form: GenForm;
   customValid: boolean;
   images: DisplayInput[];
-  inputFidelity: InputFidelity;
+  inputFidelity: FidelityChoice;
   reading: boolean;
   uploadError: string;
   generating: boolean;
   canReturn: boolean;
+  /** 已确认草图的逻辑尺寸（比例不一致提示用；无草图为 null） */
+  sketchSize: { w: number; h: number } | null;
   promptRef: RefObject<HTMLTextAreaElement | null>;
   onPatch: (patch: Partial<GenForm>) => void;
   onGenerate: () => void;
   onFiles: (files: File[]) => void;
   onRemove: (id: string) => void;
   onPreview: (id: string) => void;
-  onInputFidelity: (value: InputFidelity) => void;
+  /** 打开新画板（菜单「画草图 / 继续画草图」入口） */
+  onOpenSketch: () => void;
+  /** 点击草图缩略图重新打开画板 */
+  onEditSketch: (id: string) => void;
+  onInputFidelity: (value: FidelityChoice) => void;
   onReturn: () => void;
 }) {
   const { form: f, onPatch } = props;
   const fileRef = useRef<HTMLInputElement>(null);
   const usingCustom = isCustomActive(f);
   const editing = props.images.length > 0;
+  const sketchIdx = props.images.findIndex((image) => image.isSketch);
+  const hasSketch = sketchIdx >= 0;
+  const atMax = props.images.length >= MAX_INPUT_IMAGES;
   const ready =
     !props.generating && !props.reading && f.prompt.trim().length > 0;
+  const explicitSize = formSize(f);
+  const sizeMismatch =
+    !!props.sketchSize &&
+    explicitSize !== "auto" &&
+    ratioMismatch(explicitSize, props.sketchSize);
   return (
     <div className="pm-bar-full">
       <input
@@ -113,17 +140,34 @@ function FullBar(props: {
             <div className="pm-bar-thumb" key={image.id}>
               <button
                 type="button"
-                aria-label={`预览图${index + 1}`}
+                className={image.isSketch ? "sk" : ""}
+                aria-label={
+                  image.isSketch
+                    ? `编辑图${index + 1}草图`
+                    : `预览图${index + 1}`
+                }
                 disabled={!image.url}
-                onClick={() => props.onPreview(image.id)}
+                onClick={() =>
+                  image.isSketch
+                    ? props.onEditSketch(image.id)
+                    : props.onPreview(image.id)
+                }
               >
                 {image.url ? (
-                  <img src={image.url} alt={image.name} />
+                  <img
+                    src={image.url}
+                    alt={image.isSketch ? `图${index + 1} 草图` : image.name}
+                  />
                 ) : (
                   <span>不可用</span>
                 )}
               </button>
               <span className="no">{index + 1}</span>
+              {image.isSketch && (
+                <span className="pen" aria-hidden>
+                  <Pencil size={9} />
+                </span>
+              )}
               <button
                 type="button"
                 className="rm"
@@ -138,7 +182,9 @@ function FullBar(props: {
         </div>
       )}
       {props.uploadError && (
-        <p className="pm-bar-err" role="alert">{props.uploadError}</p>
+        <p className="pm-bar-err" role="alert">
+          {props.uploadError}
+        </p>
       )}
       <div className="pm-bar-row1">
         <textarea
@@ -148,9 +194,11 @@ function FullBar(props: {
           maxLength={32000}
           value={f.prompt}
           placeholder={
-            editing
-              ? "例如：保留图1的商品，使用图2的背景"
-              : "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
+            hasSketch
+              ? `根据图${sketchIdx + 1}的草图描述你想要的画面，例如材质、光线和风格。`
+              : editing
+                ? "例如：保留图1的商品，使用图2的背景"
+                : "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
           }
           disabled={props.generating || props.reading}
           rows={1}
@@ -159,7 +207,9 @@ function FullBar(props: {
         <button
           type="button"
           className={"pm-bar-send" + (ready ? " ready" : "")}
-          aria-label={editing ? "生成编辑结果" : "生成图片"}
+          aria-label={
+            hasSketch ? "根据草图生成" : editing ? "生成编辑结果" : "生成图片"
+          }
           disabled={!ready}
           onClick={props.onGenerate}
         >
@@ -168,20 +218,57 @@ function FullBar(props: {
       </div>
       <div className="pm-bar-row2">
         {props.canReturn && (
-          <button type="button" className="pm-chip pm-chip-return" onClick={props.onReturn}>
+          <button
+            type="button"
+            className="pm-chip pm-chip-return"
+            onClick={props.onReturn}
+          >
             <RotateCcw size={11} />
             返回结果
           </button>
         )}
-        <button
-          type="button"
-          className="pm-chip icon"
-          aria-label="添加参考图"
-          disabled={props.generating || props.reading || props.images.length >= MAX_INPUT_IMAGES}
-          onClick={() => fileRef.current?.click()}
+        <BarChip
+          ariaLabel="添加输入"
+          icon={<Plus size={13} />}
+          disabled={props.generating || props.reading}
+          popWidth={252}
+          closeOnSelect
         >
-          <Paperclip size={12} />
-        </button>
+          <button
+            type="button"
+            className="pm-pop-opt with-ic"
+            disabled={atMax}
+            onClick={() => fileRef.current?.click()}
+          >
+            <span className="ic">
+              <Paperclip size={14} />
+            </span>
+            <span className="tx">
+              <span className="nm">上传图片</span>
+              <span className="ds">PNG / JPEG / WebP · 连草图最多 16 张</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="pm-pop-opt with-ic"
+            disabled={!hasSketch && atMax}
+            onClick={props.onOpenSketch}
+          >
+            <span className="ic">
+              <Pencil size={14} />
+            </span>
+            <span className="tx">
+              <span className="nm">{hasSketch ? "继续画草图" : "画草图"}</span>
+              <span className="ds">
+                {hasSketch
+                  ? "打开已确认的草图继续修改"
+                  : atMax
+                    ? "已达 16 张输入上限"
+                    : "画构图、轮廓与色块，确认后作为输入"}
+              </span>
+            </span>
+          </button>
+        </BarChip>
 
         <BarChip
           ariaLabel="模型"
@@ -214,7 +301,11 @@ function FullBar(props: {
                 ? "自动"
                 : `${f.ratio} · ${BASE_LABELS.find((b) => b.id === f.base)?.label}`
           }
-          dirty={f.ratio !== DEFAULT_FORM.ratio || f.base !== DEFAULT_FORM.base || usingCustom}
+          dirty={
+            f.ratio !== DEFAULT_FORM.ratio ||
+            f.base !== DEFAULT_FORM.base ||
+            usingCustom
+          }
           disabled={props.generating}
           popWidth={252}
         >
@@ -267,7 +358,17 @@ function FullBar(props: {
             />
             <span>px</span>
           </div>
-          <p className="pm-pop-hint">宽高须被 16 整除 · 比例 1:3 ～ 3:1 · ≤ 3840 × 2160</p>
+          <p className="pm-pop-hint">
+            宽高须被 16 整除 · 比例 1:3 ～ 3:1 · ≤ 3840 × 2160
+          </p>
+          <p className="pm-pop-hint">
+            画草图的画布尺寸 = 当前输出尺寸；「自动」时为 1024 × 1024
+          </p>
+          {sizeMismatch && (
+            <p className="pm-pop-hint warn" role="status">
+              输出比例与草图不同，构图可能调整
+            </p>
+          )}
         </BarChip>
 
         <BarChip
@@ -317,7 +418,9 @@ function FullBar(props: {
               </button>
             ))}
           </div>
-          <p className="pm-pop-hint">一次请求生成，逐张入库；n&gt;1 时舞台以 2×2 网格展示</p>
+          <p className="pm-pop-hint">
+            一次请求生成，逐张入库；n&gt;1 时舞台以 2×2 网格展示
+          </p>
         </BarChip>
 
         <BarChip
@@ -367,16 +470,26 @@ function FullBar(props: {
           {editing && (
             <>
               <p className="pm-pop-lb">保留原图</p>
-              <Segmented
+              <Segmented<FidelityChoice>
                 full
                 ariaLabel="保留原图"
                 value={props.inputFidelity}
                 onChange={props.onInputFidelity}
                 options={[
+                  { value: "auto", label: "自动" },
                   { value: "low", label: "低" },
                   { value: "high", label: "高" },
                 ]}
               />
+              <p className="pm-pop-hint">
+                自动不发送保真度参数，按服务端默认；部分中转站不支持显式低 /
+                高。
+              </p>
+              {hasSketch && (
+                <p className="pm-pop-hint">
+                  草图仅作构图参考——「保留原图 · 高」不会精确还原手绘线条。
+                </p>
+              )}
             </>
           )}
         </BarChip>
@@ -398,17 +511,25 @@ function GenBar(props: {
       <div className="pm-bar-genrow">
         <span className="pm-bar-genmodel">{MODEL_LABELS[props.model]}</span>
         <span className="pm-dots" aria-hidden>
-          <i /><i /><i />
+          <i />
+          <i />
+          <i />
         </span>
         <span className="pm-bar-genst">
           {props.saving ? (
             <>生成完成，正在保存到本地…</>
           ) : (
-            <>正在生成 · 渐进预览 <b>{step}/3</b></>
+            <>
+              正在生成 · 渐进预览 <b>{step}/3</b>
+            </>
           )}
         </span>
         {!props.saving && (
-          <button type="button" className="pm-bar-cancel" onClick={props.onCancel}>
+          <button
+            type="button"
+            className="pm-bar-cancel"
+            onClick={props.onCancel}
+          >
             ✕ 取消
           </button>
         )}
@@ -451,16 +572,28 @@ function DoneBar(props: {
       </div>
       <div className="pm-bar-donerow">
         <span className="pm-bar-donecap">接下来</span>
-        <button type="button" className="pm-chip act primary" onClick={props.onAgain}>
+        <button
+          type="button"
+          className="pm-chip act primary"
+          onClick={props.onAgain}
+        >
           再来一版
         </button>
         <button type="button" className="pm-chip act" onClick={props.onTweak}>
           微调描述
         </button>
-        <button type="button" className="pm-chip act" onClick={props.onDownloadAll}>
+        <button
+          type="button"
+          className="pm-chip act"
+          onClick={props.onDownloadAll}
+        >
           下载全部
         </button>
-        <button type="button" className="pm-chip act" onClick={props.onUseAsRef}>
+        <button
+          type="button"
+          className="pm-chip act"
+          onClick={props.onUseAsRef}
+        >
           <Sparkles size={11} />
           设为参考图
         </button>
@@ -479,10 +612,11 @@ export function CreateBar(props: {
   form: GenForm;
   customValid: boolean;
   images: DisplayInput[];
-  inputFidelity: InputFidelity;
+  inputFidelity: FidelityChoice;
   reading: boolean;
   uploadError: string;
   canReturn: boolean;
+  sketchSize: { w: number; h: number } | null;
   promptRef: RefObject<HTMLTextAreaElement | null>;
   onPatch: (patch: Partial<GenForm>) => void;
   onGenerate: () => void;
@@ -490,7 +624,9 @@ export function CreateBar(props: {
   onFiles: (files: File[]) => void;
   onRemove: (id: string) => void;
   onPreview: (id: string) => void;
-  onInputFidelity: (value: InputFidelity) => void;
+  onOpenSketch: () => void;
+  onEditSketch: (id: string) => void;
+  onInputFidelity: (value: FidelityChoice) => void;
   onExpand: () => void;
   onReturn: () => void;
   onAgain: () => void;
@@ -505,9 +641,17 @@ export function CreateBar(props: {
       ? "complete"
       : props.mode;
   return (
-    <section className="pm-island pm-bar" aria-label="创作条" data-state={state}>
+    <section
+      className="pm-island pm-bar"
+      aria-label="创作条"
+      data-state={state}
+    >
       {state === "mini" && (
-        <MiniBar form={props.form} disabled={props.reading} onExpand={props.onExpand} />
+        <MiniBar
+          form={props.form}
+          disabled={props.reading}
+          onExpand={props.onExpand}
+        />
       )}
       {state === "full" && (
         <FullBar
@@ -519,12 +663,15 @@ export function CreateBar(props: {
           uploadError={props.uploadError}
           generating={false}
           canReturn={props.canReturn}
+          sketchSize={props.sketchSize}
           promptRef={props.promptRef}
           onPatch={props.onPatch}
           onGenerate={props.onGenerate}
           onFiles={props.onFiles}
           onRemove={props.onRemove}
           onPreview={props.onPreview}
+          onOpenSketch={props.onOpenSketch}
+          onEditSketch={props.onEditSketch}
           onInputFidelity={props.onInputFidelity}
           onReturn={props.onReturn}
         />
