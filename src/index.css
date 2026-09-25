@@ -2382,6 +2382,19 @@ body {
     #e53935
   );
 }
+/* 原生取色输入：绝对定位不占 flex 布局，锚在色板行左下（彩虹圈一侧），
+   弹出的取色窗跟随该锚点而非回退到视口左上角 */
+.pm-sk-custom-input {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  padding: 0;
+}
 
 /* 右下确认 FAB：空白灰禁用 → 有墨淡橙 → hover 实心强调 */
 .pm-sk-use {

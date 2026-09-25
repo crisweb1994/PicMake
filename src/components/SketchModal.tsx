@@ -484,6 +484,19 @@ export function SketchModal(props: {
         </div>
 
         <div className="pm-sk-colors" role="group" aria-label="画笔颜色">
+          {/* 原生取色输入：保留 1px 布局盒锚在彩虹圈旁，取色窗就近弹出
+              （display:none 会让弹窗回退到视口左上角）；不参与 Tab 与可访问树 */}
+          <input
+            ref={customColorRef}
+            type="color"
+            className="pm-sk-custom-input"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(e) => {
+              setColorIdx(-1);
+              setColorHex(e.target.value);
+            }}
+          />
           <button
             type="button"
             className="pm-sk-sw rainbow"
@@ -511,15 +524,6 @@ export function SketchModal(props: {
             />
           ))}
         </div>
-        <input
-          ref={customColorRef}
-          type="color"
-          hidden
-          onChange={(e) => {
-            setColorIdx(-1);
-            setColorHex(e.target.value);
-          }}
-        />
 
         <button
           type="button"
