@@ -2494,3 +2494,495 @@ body {
     display: none;
   }
 }
+
+/* ══════════ 局部重绘（PRD_INPAINTING / docs/demos/inpaint-demo.html 对照）══════════
+   选区编辑器：弹层涂选，控件浮在画布上——左上关闭 / 顶中标题 / 右上撤销重做清空+显隐 /
+   左下缩放平移 / 底中工具与粗细 / 右下「使用选区」。缩放倍率相对适应窗口（IP-06）。 */
+
+/* 覆盖层专用令牌（IP-04：两主题与明暗底图均可辨；不把大面积品牌色当装饰） */
+:root {
+  --pm-inpaint-fill: #e66e28;
+}
+.dark {
+  --pm-inpaint-fill: #ff9a62;
+}
+
+.pm-ip-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--pm-scrim);
+  backdrop-filter: blur(4px);
+  display: grid;
+  padding: 12px;
+}
+.pm-ip-board {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--pm-panel-solid);
+  border: 1px solid var(--pm-line-2);
+  border-radius: 14px;
+  box-shadow:
+    0 32px 96px rgba(0, 0, 0, 0.28),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.pm-ip-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  background: var(--pm-surface-faint);
+}
+.pm-ip-stage.panning {
+  cursor: grab;
+}
+.pm-ip-frame {
+  position: absolute;
+  box-shadow:
+    0 0 0 1px var(--pm-line-2),
+    0 24px 70px rgba(0, 0, 0, 0.28);
+  line-height: 0;
+}
+.pm-ip-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+}
+.pm-ip-cov {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.pm-ip-cov.hidden {
+  visibility: hidden;
+}
+.pm-ip-ring {
+  position: absolute;
+  border: 1.5px solid var(--pm-accent);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.pm-ip-close {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 8;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--pm-panel);
+  border: 1px solid var(--pm-line);
+  color: var(--pm-text-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.pm-ip-close:hover {
+  color: var(--pm-text-1);
+  background: var(--pm-fill-hover);
+}
+
+.pm-ip-title {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  max-width: min(60%, 560px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--pm-panel);
+  border: 1px solid var(--pm-line);
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+}
+.pm-ip-title b {
+  color: var(--pm-text-1);
+  font-size: 12px;
+}
+.pm-ip-title .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pm-ip-title .dims {
+  color: var(--pm-text-3);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+}
+.pm-ip-title .norm {
+  color: var(--pm-accent);
+  font-size: 10.5px;
+}
+
+.pm-ip-hist,
+.pm-ip-zoombar,
+.pm-ip-tools {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--pm-panel);
+  border: 1px solid var(--pm-line);
+  backdrop-filter: blur(12px);
+}
+.pm-ip-hist {
+  top: 14px;
+  right: 14px;
+}
+.pm-ip-hist button,
+.pm-ip-zoombar button,
+.pm-ip-tools button {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pm-ip-hist button:hover:not(:disabled),
+.pm-ip-zoombar button:hover:not(:disabled),
+.pm-ip-tools button:hover:not(:disabled) {
+  background: var(--pm-fill-hover);
+  color: var(--pm-text-1);
+}
+.pm-ip-hist button:disabled,
+.pm-ip-zoombar button:disabled,
+.pm-ip-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pm-ip-hist button[aria-pressed="true"],
+.pm-ip-zoombar button[aria-pressed="true"],
+.pm-ip-tools button[aria-pressed="true"] {
+  background: var(--pm-accent-soft);
+  color: var(--pm-text-1);
+  box-shadow: inset 0 0 0 1px var(--pm-accent-border);
+}
+.pm-ip-hist .vr,
+.pm-ip-tools .vr {
+  width: 1px;
+  height: 18px;
+  background: var(--pm-line-2);
+  margin: 0 3px;
+}
+
+.pm-ip-zoombar {
+  left: 14px;
+  bottom: 14px;
+}
+.pm-ip-zoombar b {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--pm-text-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-ip-tools {
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 320px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.pm-ip-size {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  padding: 0 7px;
+  white-space: nowrap;
+}
+.pm-ip-size input[type="range"] {
+  width: 104px;
+  height: 3px;
+  accent-color: var(--pm-accent);
+}
+.pm-ip-size input[type="number"] {
+  width: 52px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  border: 1px solid var(--pm-line);
+  background: var(--pm-fill);
+  color: var(--pm-text-1);
+  font-size: 11.5px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-ip-use {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 8;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--pm-fill-hover);
+  color: var(--pm-text-3);
+  cursor: default;
+}
+.pm-ip-use.ready {
+  background: var(--pm-accent);
+  color: var(--pm-accent-ink);
+  cursor: pointer;
+}
+.pm-ip-use.ready:hover {
+  background: var(--pm-accent-hover);
+}
+.pm-ip-use:disabled {
+  pointer-events: none;
+}
+
+.pm-ip-error {
+  position: absolute;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  padding: 7px 14px;
+  border-radius: 9px;
+  background: var(--pm-panel-solid);
+  border: 1px solid var(--pm-error-border);
+  color: var(--pm-error);
+  font-size: 12px;
+}
+.pm-ip-hint {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--pm-panel);
+  border: 1px solid var(--pm-line);
+  color: var(--pm-text-3);
+  font-size: 11.5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ── 只读选区查看（IP-15）── */
+.pm-vm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  background: var(--pm-scrim);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.pm-vm-panel {
+  width: min(860px, 94vw);
+  background: var(--pm-panel-solid);
+  border: 1px solid var(--pm-line-2);
+  border-radius: 14px;
+  box-shadow: 0 32px 96px rgba(0, 0, 0, 0.3);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pm-vm-panel header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.pm-vm-panel header b {
+  font-size: 13.5px;
+}
+.pm-vm-panel header span {
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-vm-wrap {
+  align-self: center;
+  max-width: 100%;
+}
+.pm-vm-img {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--pm-line);
+}
+.pm-vm-img img,
+.pm-vm-img canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.pm-vm-img canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pm-vm-img.nomask canvas {
+  visibility: hidden;
+}
+.pm-vm-panel footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pm-vm-panel footer .note {
+  flex: 1;
+  font-size: 11px;
+  color: var(--pm-text-3);
+}
+.pm-vm-panel footer button {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--pm-line-2);
+  color: var(--pm-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.pm-vm-panel footer button:hover {
+  color: var(--pm-text-1);
+  background: var(--pm-fill-hover);
+}
+.pm-vm-panel footer button.primary {
+  background: var(--pm-accent);
+  border-color: transparent;
+  color: var(--pm-accent-ink);
+  font-weight: 600;
+}
+.pm-vm-panel footer button.primary:hover {
+  background: var(--pm-accent-hover);
+}
+
+/* ── 创作条局部重绘增强（IP-08/IP-10）── */
+.pm-bar-thumb.mask > button:first-child {
+  box-shadow:
+    0 0 0 2px var(--pm-panel-solid),
+    0 0 0 4px var(--pm-accent);
+}
+.pm-bar-thumb .sel-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 0 0 8px 8px;
+  text-align: center;
+  line-height: 13px;
+  font-size: 8.5px;
+  color: var(--pm-accent);
+  background: color-mix(in srgb, var(--pm-panel-solid) 85%, transparent);
+  border-top: 1px solid var(--pm-accent-border);
+  z-index: 2;
+  pointer-events: none;
+}
+.pm-bar-thumb .pen.act {
+  cursor: pointer;
+}
+.pm-bar-thumb .pen.act:hover {
+  background: var(--pm-accent-soft);
+  border-color: var(--pm-accent-border);
+}
+.pm-bar-rmmask {
+  align-self: center;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--pm-line-2);
+  color: var(--pm-text-2);
+  font-size: 11.5px;
+  flex: none;
+  cursor: pointer;
+}
+.pm-bar-rmmask:hover {
+  color: var(--pm-text-1);
+  border-color: var(--pm-accent-border);
+  background: var(--pm-accent-soft);
+}
+.pm-bar-rmmask:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pm-bar-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+  border: 1px dashed var(--pm-accent-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.pm-bar-size b {
+  color: var(--pm-text-1);
+  font-variant-numeric: tabular-nums;
+}
+.pm-bar-size .why {
+  color: var(--pm-text-3);
+  font-size: 10.5px;
+}
+.pm-bar-size .ok {
+  margin-left: auto;
+  color: var(--pm-ok);
+  font-size: 11px;
+}
+.pm-bar-size button {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--pm-accent);
+  color: var(--pm-accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pm-bar-size button:hover {
+  background: var(--pm-accent-hover);
+}
+.pm-bar-inp-note {
+  font-size: 10.5px;
+  color: var(--pm-text-3);
+  padding: 0 2px;
+}
+
+@media (max-width: 760px) {
+  .pm-ip-tools {
+    max-width: calc(100% - 24px);
+  }
+  .pm-ip-title .name,
+  .pm-ip-title .norm {
+    display: none;
+  }
+}

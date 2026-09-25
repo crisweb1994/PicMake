@@ -6,6 +6,8 @@ import { Stage } from "./components/Stage";
 import { CreateBar } from "./components/bar/CreateBar";
 import { DetailCard } from "./components/DetailCard";
 import { SketchModal } from "./components/SketchModal";
+import { InpaintModal, MaskViewModal } from "./components/InpaintModal";
+import { useInpaint } from "./hooks/useInpaint";
 import {
   InputPreview,
   Carousel,
@@ -23,7 +25,12 @@ import { db } from "./db/schema";
 import { fmtBytes } from "./lib/format";
 import { formSize } from "./lib/params";
 import { SKETCH_DEFAULT_SIZE, ratioMismatch } from "./lib/sketch";
-import { ERROR_HINTS, MAX_INPUT_IMAGES } from "./lib/types";
+import {
+  ERROR_HINTS,
+  INPAINT_ISSUE_HINTS,
+  MAX_INPUT_IMAGES,
+  type MaskCommand,
+} from "./lib/types";
 import { useSettingsModal } from "./hooks/useSettings";
 import { useTheme } from "./hooks/useTheme";
 import { toast } from "@heroui/react";
@@ -66,6 +73,192 @@ export default function App() {
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+
+  /* ── 局部重绘（PRD_INPAINTING）：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
+  /** draft-input 入口被涂选的原输入 id：确认后重排为图1 并移除原位（IP-02） */
+  const inpaintChosenRef = useRef<string | null>(null);
+  const [viewMask, setViewMask] = useState<{
+    baseUrl: string;
+    name: string;
+    w: number;
+    h: number;
+    commands: MaskCommand[];
+    rowId: string;
+  } | null>(null);
+  const inpaint = useInpaint({
+    onApply: ({ base, mask, original, entry, unchanged }) => {
+      if (entry === "result") {
+        // IP-01：仅带入该结果；确认选区后切到重绘草稿，舞台进入空状态
+        form.initialize(undefined, [
+          { imageId: base.id, name: "底图", upload: base },
+        ]);
+        form.applyInpaint({ base, mask, original, entry, unchanged });
+        history.select(null);
+        pm.clearDone();
+        view.clearViewingState();
+        setPreviewId(null);
+        setBarMode("full");
+        form.focus();
+        toast("选区已应用：填写修改描述后生成");
+        return true;
+      }
+      if (entry === "draft-input") {
+        const chosen = inpaintChosenRef.current;
+        const reorder = !!chosen && form.inputs.length > 1;
+        form.applyInpaint(
+          { base, mask, original, entry, unchanged },
+          chosen ?? undefined,
+        );
+        inpaintChosenRef.current = null;
+        setBarMode("full");
+        form.focus();
+        toast(
+          reorder
+            ? "底图已设为图1，图片编号已更新，请检查描述"
+            : "选区已应用：填写修改描述后生成",
+        );
+        return true;
+      }
+      // reedit（IP-07/§8）：替换已确认选区；无实质修改沿用原资源
+      form.applyInpaint({ base, mask, original, entry, unchanged });
+      toast(unchanged ? "选区未变化：沿用原选区" : "选区已更新");
+      return true;
+    },
+  });
+
+  const canOpenInpaint = () =>
+    pm.phase !== "generating" &&
+    !pm.saving &&
+    !form.reading &&
+    !history.pendingSave &&
+    !pm.confirmState &&
+    !sketch.session &&
+    !inpaint.session &&
+    !inpaint.opening;
+
+  /** IP-01：对展示记录的某一张结果发起；打开编辑器前经放弃确认（草稿/未保存结果） */
+  const startInpaintFromResult = (imageId: string) => {
+    if (!canOpenInpaint()) return;
+    const display = history.display;
+    if (!display || !display.images.some((image) => image.id === imageId))
+      return;
+    pm.confirmPendingLeave(() => {
+      void db.images.get(imageId).then(async (row) => {
+        if (!row) {
+          toast(ERROR_HINTS["source-unavailable"]);
+          return;
+        }
+        const idx = display.row.imageIds.indexOf(imageId);
+        const result = await inpaint.open({
+          blob: row.blob,
+          name: `结果 · ${display.row.prompt.slice(0, 12)}…`,
+          entry: "result",
+          existing: { imageId, generationId: display.row.id },
+        });
+        void idx;
+        if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
+      });
+    });
+  };
+
+  /** IP-02：对草稿中的某张普通图发起；确认后该图重排为图1（草图不作为底图） */
+  const startInpaintFromInput = (imageId: string) => {
+    if (!canOpenInpaint()) return;
+    const input = form.inputs.find((item) => item.imageId === imageId);
+    if (!input || input.upload?.sketch) return;
+    void (async () => {
+      const row = input.upload ?? (await db.images.get(imageId));
+      if (!row) {
+        toast(ERROR_HINTS["source-unavailable"]);
+        return;
+      }
+      inpaintChosenRef.current = imageId;
+      const result = await inpaint.open({
+        blob: row.blob,
+        name: input.name ?? "图片",
+        entry: "draft-input",
+        ...(input.generationId
+          ? { existing: { imageId, generationId: input.generationId } }
+          : { existing: { imageId } }),
+      });
+      if (!result.ok) {
+        inpaintChosenRef.current = null;
+        toast(INPAINT_ISSUE_HINTS[result.issue]);
+      }
+    })();
+  };
+
+  /** 重开已确认选区（IP-08）：底图缩略图 ✎ / 修改选区 */
+  const editMask = () => {
+    if (!canOpenInpaint() || !form.inpaint) return;
+    const baseInput = form.inputs[0];
+    if (!baseInput) return;
+    void (async () => {
+      const base = baseInput.upload ?? (await db.images.get(baseInput.imageId));
+      if (!base || base.id !== form.inpaint!.mask.mask.baseImageId) {
+        toast("底图已变化，请重新选择修改区域");
+        return;
+      }
+      const result = await inpaint.open({
+        blob: base.blob,
+        name: baseInput.name ?? "底图",
+        entry: "reedit",
+        existing: { imageId: base.id },
+        reedit: {
+          base,
+          mask: form.inpaint!.mask,
+          ...(form.inpaint!.original
+            ? { original: form.inpaint!.original }
+            : {}),
+        },
+      });
+      if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
+    })();
+  };
+
+  const requestCloseInpaint = () => {
+    if (inpaint.confirming) return;
+    if (inpaint.changed) {
+      pm.setConfirmState({
+        title: "放弃本次选区修改？",
+        desc: "未确认的涂选不会保存；已确认的选区保持不变。",
+        okLabel: "放弃修改",
+        cancelLabel: "继续编辑",
+        onOk: inpaint.close,
+      });
+      return;
+    }
+    inpaint.close();
+  };
+
+  /** IP-15：查看选区（只读叠加在实际请求底图），可发起「调整上次重绘」 */
+  const openViewMask = () => {
+    const row = history.display?.row;
+    const inp = row?.inpaint;
+    if (!row || !inp) return;
+    void (async () => {
+      const maskRow = await db.images.get(inp.maskImageId);
+      const baseRow = maskRow?.mask
+        ? await db.images.get(maskRow.mask.baseImageId)
+        : null;
+      if (!maskRow?.mask || !baseRow) {
+        toast("选区数据无法读取，请重新选择修改区域");
+        return;
+      }
+      setViewMask({
+        baseUrl: URL.createObjectURL(baseRow.blob),
+        name: row.inputSources?.[0]?.name ?? "底图",
+        w: baseRow.width,
+        h: baseRow.height,
+        commands: maskRow.mask.commands,
+        rowId: row.id,
+      });
+    })();
+  };
+  useEffect(() => {
+    if (!viewMask) return;
+    return () => URL.revokeObjectURL(viewMask.baseUrl);
+  }, [viewMask]);
 
   /* ── 草图画板（SKETCH §6/§8）：画板只产出附件，确认落回创作条，不发请求 ── */
   const sketch = useSketch({
@@ -217,7 +410,7 @@ export default function App() {
   };
 
   // full 态点条外收起：仅在无草稿（未改过任何字段、无输入图、无编辑来源）时；
-  // 画板打开期间点击落在浮层上，不收回（SK13 同源阻断）
+  // 画板 / 选区编辑器打开期间点击落在浮层上，不收回（SK13 同源阻断）
   useEffect(() => {
     if (barMode !== "full") return;
     const onDown = (e: PointerEvent) => {
@@ -227,7 +420,9 @@ export default function App() {
         t.closest(".pm-bar") ||
         t.closest(".pm-detail") ||
         t.closest(".modal__backdrop") ||
-        t.closest(".pm-sk-overlay")
+        t.closest(".pm-sk-overlay") ||
+        t.closest(".pm-ip-overlay") ||
+        t.closest(".pm-vm-backdrop")
       )
         return;
       if (!form.dirty && !form.images.length && !pm.canReturn)
@@ -259,6 +454,9 @@ export default function App() {
       drawerOpen ||
       !!view.lightbox ||
       !!sketch.session ||
+      !!inpaint.session ||
+      !!inpaint.opening ||
+      !!viewMask ||
       view.focusIdx !== null;
     if (blocked) return;
     let last = 0;
@@ -347,6 +545,13 @@ export default function App() {
           }}
           onReuse={() => history.display && pm.reuseParams(history.display.row)}
           onEdit={pm.editImage}
+          onInpaint={startInpaintFromResult}
+          onViewMask={history.display.row.inpaint ? openViewMask : undefined}
+          onAdjustInpaint={
+            history.display.row.inpaint
+              ? () => pm.adjustInpaint(history.display!.row)
+              : undefined
+          }
           onDelete={() => history.display && pm.deleteGen(history.display.row)}
           onToggleStar={() => {
             if (history.display)
@@ -373,6 +578,7 @@ export default function App() {
         uploadError={form.uploadError}
         canReturn={pm.canReturn}
         sketchSize={sketchSize}
+        inpaint={form.inpaintInfo}
         promptRef={form.promptRef}
         onPatch={form.patchForm}
         onGenerate={pm.generate}
@@ -398,6 +604,10 @@ export default function App() {
           setBarMode("full");
           form.focus();
         }}
+        onStartInpaint={startInpaintFromInput}
+        onEditMask={editMask}
+        onRemoveMask={form.removeMask}
+        onAcceptSize={form.acceptSize}
       />
 
       <HistoryDrawer
@@ -505,6 +715,52 @@ export default function App() {
                 : "已达采样点上限，本笔到此为止",
             )
           }
+        />
+      )}
+      {inpaint.session && (
+        <InpaintModal
+          baseUrl={inpaint.session.baseUrl}
+          name={inpaint.session.name}
+          baseW={inpaint.session.base.width}
+          baseH={inpaint.session.base.height}
+          normalized={inpaint.session.normalized}
+          doc={inpaint.session.doc}
+          cursor={inpaint.session.cursor}
+          confirming={inpaint.confirming}
+          error={inpaint.error}
+          onStroke={inpaint.stroke}
+          onClear={inpaint.clearAll}
+          onUndo={inpaint.undo}
+          onRedo={inpaint.redo}
+          onConfirm={inpaint.confirm}
+          onRequestClose={requestCloseInpaint}
+          onLimit={(kind) =>
+            toast(
+              kind === "commands"
+                ? "已达绘制上限（2000 步），请撤销或清空后再继续"
+                : "已达采样点上限，本笔到此为止",
+            )
+          }
+        />
+      )}
+      {inpaint.opening && (
+        <p className="pm-saving" role="status">
+          正在读取底图…
+        </p>
+      )}
+      {viewMask && (
+        <MaskViewModal
+          baseUrl={viewMask.baseUrl}
+          name={viewMask.name}
+          baseW={viewMask.w}
+          baseH={viewMask.h}
+          commands={viewMask.commands}
+          onAdjust={() => {
+            const row = history.rows.find((r) => r.id === viewMask.rowId);
+            setViewMask(null);
+            if (row) pm.adjustInpaint(row);
+          }}
+          onClose={() => setViewMask(null)}
         />
       )}
       {pm.saving && (

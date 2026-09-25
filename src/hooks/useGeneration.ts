@@ -4,8 +4,14 @@ import { db } from "../db/schema";
 import { b64ToBlob } from "../lib/blob";
 import { cloneSketchDocument } from "../lib/sketch";
 import {
+  MASK_MAX_BYTES,
+  cloneMaskDocument,
+  validateMaskDocument,
+} from "../lib/inpaint";
+import {
   ApiError,
   ERROR_HINTS,
+  INPAINT_ISSUE_HINTS,
   MAX_INPUT_BYTES,
   MAX_INPUT_IMAGES,
   type ApiConfig,
@@ -13,6 +19,7 @@ import {
   type EditSubmission,
   type GenParams,
   type ImageRequestResult,
+  type InpaintIssue,
 } from "../lib/types";
 import type { GenPlan } from "../lib/view-models";
 
@@ -30,8 +37,45 @@ interface RequestSnapshot {
   edit?: EditSubmission;
 }
 
+/** 由草稿构建 mask 提交快照；失败抛 InpaintDraftError（IP-11：缺一项则不发送） */
+function buildInpaintSubmission(
+  draft: NonNullable<EditDraft["inpaint"]>,
+  base: {
+    source: { imageId: string };
+    image: { width: number; height: number };
+  },
+): {
+  maskImage: NonNullable<EditSubmission["inpaint"]>["maskImage"];
+  original?: NonNullable<EditSubmission["inpaint"]>["original"];
+} {
+  const { mask, original } = draft;
+  const validated = validateMaskDocument(mask.mask, base.source.imageId, {
+    width: base.image.width,
+    height: base.image.height,
+  });
+  if ("issue" in validated) throw new InpaintDraftError(validated.issue);
+  if (!mask.blob.size || mask.blob.size >= MASK_MAX_BYTES)
+    throw new InpaintDraftError("mask-too-large");
+  return {
+    maskImage: { ...mask, mask: validated.doc },
+    ...(original
+      ? { original: { source: { ...original.source }, image: original.image } }
+      : {}),
+  };
+}
+
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+/** 局部重绘草稿校验（IP-11.3~5）：选区可识别、绑定与尺寸一致、mask 为有效 PNG。
+ *  任一失败不发生成请求，不静默退化为普通编辑。 */
+class InpaintDraftError extends Error {
+  issue: InpaintIssue;
+  constructor(issue: InpaintIssue) {
+    super(INPAINT_ISSUE_HINTS[issue]);
+    this.issue = issue;
+  }
 }
 
 export function useGeneration() {
@@ -92,6 +136,14 @@ export function useGeneration() {
             sources,
             params: snapshot.params,
             inputFidelity: snapshot.draft.inputFidelity,
+            ...(snapshot.draft.inpaint
+              ? {
+                  inpaint: buildInpaintSubmission(
+                    snapshot.draft.inpaint,
+                    sources[0],
+                  ),
+                }
+              : {}),
           };
           snapshot.edit = edit;
         }
@@ -133,7 +185,8 @@ export function useGeneration() {
           size: params.size === "auto" ? "auto" : { ...params.size },
         },
         // 草图附件带嵌套命令文档：快照深拷贝文档，提交后的可恢复笔画不会与
-        // 后续编辑分叉（SKETCH §8.4——文档不可原地修改，修改走新 ImageRow）
+        // 后续编辑分叉（SKETCH §8.4——文档不可原地修改，修改走新 ImageRow）；
+        // 局部重绘同理深拷贝 mask 文档（TECH §3.2），Blob 直接引用不可变对象
         draft: draft
           ? {
               ...draft,
@@ -148,6 +201,17 @@ export function useGeneration() {
                     }
                   : { ...input },
               ),
+              ...(draft.inpaint
+                ? {
+                    inpaint: {
+                      ...draft.inpaint,
+                      mask: {
+                        ...draft.inpaint.mask,
+                        mask: cloneMaskDocument(draft.inpaint.mask.mask),
+                      },
+                    },
+                  }
+                : {}),
             }
           : null,
         config: { ...config },
