@@ -4,7 +4,7 @@ import type {
   GenParams,
   Usage,
   InputSource,
-  InputFidelity,
+  FidelityChoice,
   SketchDocument,
 } from "../lib/types";
 
@@ -27,7 +27,8 @@ export interface HistoryRow {
   imageIds: string[];
   createdAt: number;
   inputSources?: InputSource[];
-  inputFidelity?: InputFidelity;
+  /** 提交时的保真度选择：auto = 未发送 input_fidelity（旧记录为 low/high） */
+  inputFidelity?: FidelityChoice;
   /** 编辑/参考图生成的原始描述（首个输入源记录的 prompt，链路取最初；PRD 2026-09-23） */
   originPrompt?: string;
   /** 用户收藏标记（2026-09-23，市场调研基线维度）：缺省视为未收藏，无索引、内存过滤 */

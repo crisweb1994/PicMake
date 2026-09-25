@@ -181,7 +181,7 @@ export function usePicmake({
             imageId: source.imageId,
             generationId: source.generationId,
           })),
-          inputFidelity: row.inputFidelity ?? "high",
+          inputFidelity: row.inputFidelity ?? "auto",
         }
       : null;
     void startGeneration({ ...row.params }, draft);

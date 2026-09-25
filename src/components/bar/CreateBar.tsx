@@ -24,7 +24,7 @@ import {
 import { ratioMismatch } from "../../lib/sketch";
 import type { DisplayGen, DisplayInput } from "../../lib/view-models";
 import type {
-  InputFidelity,
+  FidelityChoice,
   ModelId,
   OutputFormat,
   Quality,
@@ -85,7 +85,7 @@ function FullBar(props: {
   form: GenForm;
   customValid: boolean;
   images: DisplayInput[];
-  inputFidelity: InputFidelity;
+  inputFidelity: FidelityChoice;
   reading: boolean;
   uploadError: string;
   generating: boolean;
@@ -102,7 +102,7 @@ function FullBar(props: {
   onOpenSketch: () => void;
   /** 点击草图缩略图重新打开画板 */
   onEditSketch: (id: string) => void;
-  onInputFidelity: (value: InputFidelity) => void;
+  onInputFidelity: (value: FidelityChoice) => void;
   onReturn: () => void;
 }) {
   const { form: f, onPatch } = props;
@@ -470,16 +470,21 @@ function FullBar(props: {
           {editing && (
             <>
               <p className="pm-pop-lb">保留原图</p>
-              <Segmented
+              <Segmented<FidelityChoice>
                 full
                 ariaLabel="保留原图"
                 value={props.inputFidelity}
                 onChange={props.onInputFidelity}
                 options={[
+                  { value: "auto", label: "自动" },
                   { value: "low", label: "低" },
                   { value: "high", label: "高" },
                 ]}
               />
+              <p className="pm-pop-hint">
+                自动不发送保真度参数，按服务端默认；部分中转站不支持显式低 /
+                高。
+              </p>
               {hasSketch && (
                 <p className="pm-pop-hint">
                   草图仅作构图参考——「保留原图 · 高」不会精确还原手绘线条。
@@ -607,7 +612,7 @@ export function CreateBar(props: {
   form: GenForm;
   customValid: boolean;
   images: DisplayInput[];
-  inputFidelity: InputFidelity;
+  inputFidelity: FidelityChoice;
   reading: boolean;
   uploadError: string;
   canReturn: boolean;
@@ -621,7 +626,7 @@ export function CreateBar(props: {
   onPreview: (id: string) => void;
   onOpenSketch: () => void;
   onEditSketch: (id: string) => void;
-  onInputFidelity: (value: InputFidelity) => void;
+  onInputFidelity: (value: FidelityChoice) => void;
   onExpand: () => void;
   onReturn: () => void;
   onAgain: () => void;

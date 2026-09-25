@@ -43,15 +43,27 @@ export function DetailCard(props: {
         </button>
       </header>
       <div className="pm-detail-chips">
-        <span className="pm-detail-chip">模型 <b>{MODEL_LABELS[p.model]}</b></span>
-        <span className="pm-detail-chip">尺寸 <b>{sizeText(p.size)}</b></span>
-        <span className="pm-detail-chip">质量 <b>{QUALITY_LABELS[p.quality]}</b></span>
-        <span className="pm-detail-chip">张数 <b>{images.length}</b></span>
-        <span className="pm-detail-chip"><b>{p.outputFormat.toUpperCase()}</b></span>
+        <span className="pm-detail-chip">
+          模型 <b>{MODEL_LABELS[p.model]}</b>
+        </span>
+        <span className="pm-detail-chip">
+          尺寸 <b>{sizeText(p.size)}</b>
+        </span>
+        <span className="pm-detail-chip">
+          质量 <b>{QUALITY_LABELS[p.quality]}</b>
+        </span>
+        <span className="pm-detail-chip">
+          张数 <b>{images.length}</b>
+        </span>
+        <span className="pm-detail-chip">
+          <b>{p.outputFormat.toUpperCase()}</b>
+        </span>
       </div>
       <div className="pm-detail-promptcap">
         <span>画面描述</span>
-        <button type="button" onClick={props.onCopyPrompt}>复制</button>
+        <button type="button" onClick={props.onCopyPrompt}>
+          复制
+        </button>
       </div>
       <p className="pm-detail-prompt">{row.prompt}</p>
       {row.originPrompt && row.originPrompt !== row.prompt && (
@@ -71,19 +83,31 @@ export function DetailCard(props: {
                 aria-label={`预览图${index + 1}`}
                 onClick={() => props.onViewSource(image.id)}
               >
-                {image.url ? <img src={image.url} alt={image.name} /> : <span>不可用</span>}
+                {image.url ? (
+                  <img src={image.url} alt={image.name} />
+                ) : (
+                  <span>不可用</span>
+                )}
               </button>
             ))}
           </div>
           <p className="pm-detail-hint">
             输入来源 {props.sources.length} 张 · 保留原图 ·{" "}
-            {row.inputFidelity === "high" ? "高" : "低"}
+            {row.inputFidelity === "high"
+              ? "高"
+              : row.inputFidelity === "low"
+                ? "低"
+                : "自动"}
           </p>
         </>
       )}
       <div className="pm-detail-acts">
-        <button type="button" onClick={props.onDownload}>下载</button>
-        <button type="button" onClick={props.onReuse}>复用参数</button>
+        <button type="button" onClick={props.onDownload}>
+          下载
+        </button>
+        <button type="button" onClick={props.onReuse}>
+          复用参数
+        </button>
         <button
           type="button"
           disabled={!editImageId || !props.canEdit}

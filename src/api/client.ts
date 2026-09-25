@@ -274,7 +274,9 @@ export function editFormData(submission: EditSubmission): FormData {
   delete fields.moderation;
   for (const [key, value] of Object.entries(fields))
     form.append(key, String(value));
-  form.append("input_fidelity", submission.inputFidelity);
+  // auto 不发送：部分中转对 flare 等模型拒绝 input_fidelity（invalid_input_fidelity_model）
+  if (submission.inputFidelity !== "auto")
+    form.append("input_fidelity", submission.inputFidelity);
   for (const { image } of submission.sources) {
     const ext = image.format === "jpeg" ? "jpg" : image.format;
     // 单图保留已有通道字段；多图使用 OpenAI 的 image[] multipart 数组。

@@ -4,6 +4,9 @@ export type ModelId = "flare" | "sunburst";
 export type Quality = "low" | "medium" | "high" | "xhigh" | "max";
 export type Background = "auto" | "transparent" | "opaque";
 export type InputFidelity = "low" | "high";
+/** 表单与提交的保真度选择：auto = 不发送 input_fidelity，交给服务端默认
+ *  （部分中转对 flare 等模型拒绝该参数，报 invalid_input_fidelity_model） */
+export type FidelityChoice = "auto" | InputFidelity;
 export type OutputFormat = "png" | "jpeg" | "webp";
 
 export interface ApiConfig {
@@ -44,13 +47,13 @@ export interface InputImage extends InputSource {
 
 export interface EditDraft {
   inputs: InputImage[];
-  inputFidelity: InputFidelity;
+  inputFidelity: FidelityChoice;
 }
 
 export interface EditSubmission {
   params: GenParams;
   sources: { source: InputSource; image: import("../db/schema").ImageRow }[];
-  inputFidelity: InputFidelity;
+  inputFidelity: FidelityChoice;
 }
 
 /** ══ 草图（SKETCH_RESEARCH_AND_SPEC §8.1）：可重放的绘制命令文档，随 ImageRow 持久化 ══ */

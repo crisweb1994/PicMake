@@ -13,9 +13,9 @@ import {
   ApiError,
   ERROR_HINTS,
   MAX_INPUT_IMAGES,
+  type FidelityChoice,
   type GenParams,
   type InputImage,
-  type InputFidelity,
 } from "../lib/types";
 import { readInputImage } from "../lib/input-images";
 import type { ImageRow } from "../db/schema";
@@ -24,7 +24,7 @@ import { useImageAssets } from "./useImageAssets";
 export function useForm() {
   const [form, setForm] = useState<GenForm>(DEFAULT_FORM);
   const [inputs, setInputs] = useState<InputImage[]>([]);
-  const [inputFidelity, setFidelity] = useState<InputFidelity>("high");
+  const [inputFidelity, setFidelity] = useState<FidelityChoice>("auto");
   const [dirty, setDirty] = useState(false);
   const [reading, setReading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -65,7 +65,7 @@ export function useForm() {
       params ? paramsToForm(params) : { ...current, prompt: "" },
     );
     setInputs(nextInputs);
-    setFidelity("high");
+    setFidelity("auto");
     setDirty(false);
     setUploadError("");
   };
@@ -203,7 +203,7 @@ export function useForm() {
     removeInput,
     appendExisting,
     applySketch,
-    setInputFidelity: (value: InputFidelity) => {
+    setInputFidelity: (value: FidelityChoice) => {
       setFidelity(value);
       setDirty(true);
     },
