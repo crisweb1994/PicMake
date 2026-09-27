@@ -1,6 +1,4 @@
-/** 草图编辑会话（SKETCH_RESEARCH_AND_SPEC §8.3/§8.4）：工作文档与撤销游标由本 hook
- *  唯一持有，画板组件只接收投影与事件；确认时导出 PNG 并交给接线层落附件，
- *  不生成图片、不写库。文档不可原地修改，每次确认产生新的 ImageRow（§8.2）。 */
+/** 草图编辑会话：工作文档与撤销游标唯一持有；确认导出 PNG 交接线层落附件，不写库 */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@heroui/react";
 import type { ImageRow } from "../db/schema";
@@ -23,7 +21,7 @@ export interface SketchSession {
   /** 编辑已有附件时的原位替换目标；blank/history 为 null */
   replacesImageId: string | null;
   meta: string;
-  /** 打开时的提交前缀快照键：有修改才拦截关闭（§6.5） */
+  /** 打开时的快照键：有修改才拦截关闭 */
   openKey: string;
 }
 
@@ -148,7 +146,7 @@ export function useSketch(props: {
     setConfirming(true);
     void (async () => {
       const frozen = freezeSketch(current.doc, current.cursor);
-      // 附件编辑无实质修改：沿用原附件，不重复分配图片（§8.2）
+      // 无实质修改：沿用原附件，不重复分配图片
       if (
         current.origin === "attachment" &&
         sketchSnapshotKey(frozen) === current.openKey
@@ -188,7 +186,7 @@ export function useSketch(props: {
     })();
   }, [session, confirming, close]);
 
-  /** 打开以来是否有修改（撤销回到打开状态视为无修改；§6.5 关闭拦截用） */
+  /** 打开以来是否有修改（撤销回打开状态视为无修改） */
   const changed =
     !!session &&
     session.cursor > 0 &&

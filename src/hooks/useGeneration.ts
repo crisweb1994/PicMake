@@ -29,7 +29,7 @@ interface RequestSnapshot {
   config: ApiConfig;
 }
 
-/** 由草稿构建 mask 提交快照；校验失败则不发送（IP-11）。 */
+/** 由草稿构建 mask 提交快照；校验失败则不发送 */
 function buildInpaintSubmission(
   draft: NonNullable<EditDraft["inpaint"]>,
   base: {
@@ -67,7 +67,7 @@ export function useGeneration() {
     null,
   );
   const [plan, setPlan] = useState<GenPlan | null>(null);
-  /** 单飞锁：请求进行中阻止再次 start；取消经 AbortController 失效迟到回调 */
+  /** 单飞锁：请求进行中阻止再次 start */
   const activeRef = useRef<AbortController | null>(null);
   const previewUrlRef = useRef<string | null>(null);
 
@@ -160,7 +160,7 @@ export function useGeneration() {
     (params: GenParams, draft: EditDraft | null, config: ApiConfig) =>
       execute({
         params,
-        // 快照隔离（SKETCH §8.4 / TECH §3.2）：提交后草稿再变化不影响本次请求
+        // 快照隔离：提交后草稿再变化不影响本次请求
         draft: draft ? structuredClone(draft) : null,
         config: { ...config },
       }),

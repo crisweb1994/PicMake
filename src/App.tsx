@@ -1,5 +1,4 @@
-/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props。
- *  布局（PRD §5.1，2026-09-23）：全幅舞台 + 底部 CreateBar + 舞台右上 DetailCard。 */
+/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
@@ -55,7 +54,7 @@ export default function App() {
   const history = useHistory();
   const theme = useTheme();
   const [previewId, setPreviewId] = useState<string | null>(null);
-  /** 底栏 UI 状态（PRD §5.2）：mini 收起 / full 展开；generating、complete 由流程态覆盖 */
+  // 底栏：mini 收起 / full 展开
   const [barMode, setBarMode] = useState<"mini" | "full">("mini");
   const pm = usePicmake({
     history,
@@ -74,8 +73,8 @@ export default function App() {
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  /* ── 局部重绘（PRD_INPAINTING）：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
-  /** draft-input 入口被涂选的原输入 id：确认后重排为图1 并移除原位（IP-02） */
+  /* ── 局部重绘：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
+  // draft-input 入口被涂选的原输入 id（确认后重排为图1）
   const inpaintChosenRef = useRef<string | null>(null);
   const [viewMask, setViewMask] = useState<{
     baseUrl: string;
@@ -88,7 +87,7 @@ export default function App() {
   const inpaint = useInpaint({
     onApply: ({ base, mask, original, entry, unchanged }) => {
       if (entry === "result") {
-        // IP-01：仅带入该结果；确认选区后切到重绘草稿，舞台进入空状态
+        // 仅带入该结果；确认后切到重绘草稿
         form.initialize(undefined, [
           { imageId: base.id, name: "底图", upload: base },
         ]);
@@ -117,7 +116,7 @@ export default function App() {
             : "选区已应用：填写修改描述后生成",
         );
       }
-      // reedit（IP-07/§8）：替换已确认选区；无实质修改沿用原资源
+      // reedit：替换已确认选区；无实质修改沿用原资源
       form.applyInpaint({ base, mask, original, entry, unchanged });
       toast(unchanged ? "选区未变化：沿用原选区" : "选区已更新");
     },
@@ -133,7 +132,7 @@ export default function App() {
     !inpaint.session &&
     !inpaint.opening;
 
-  /** IP-01：对展示记录的某一张结果发起；打开编辑器前经放弃确认（草稿/未保存结果） */
+  /** 对展示记录的某一张结果发起；打开前经放弃确认 */
   const startInpaintFromResult = (imageId: string) => {
     if (!canOpenInpaint()) return;
     const display = history.display;
@@ -156,7 +155,7 @@ export default function App() {
     });
   };
 
-  /** IP-02：对草稿中的某张普通图发起；确认后该图重排为图1（草图不作为底图） */
+  /** 对草稿中的普通图发起；确认后重排为图1（草图不作底图） */
   const startInpaintFromInput = (imageId: string) => {
     if (!canOpenInpaint()) return;
     const input = form.inputs.find((item) => item.imageId === imageId);
@@ -183,7 +182,7 @@ export default function App() {
     })();
   };
 
-  /** 重开已确认选区（IP-08）：底图缩略图 ✎ / 修改选区 */
+  /** 重开已确认选区：底图缩略图 ✎ */
   const editMask = () => {
     if (!canOpenInpaint() || !form.inpaint) return;
     const baseInput = form.inputs[0];
@@ -226,7 +225,7 @@ export default function App() {
     inpaint.close();
   };
 
-  /** IP-15：查看选区（只读叠加在实际请求底图），可发起「调整上次重绘」 */
+  /** 查看选区（只读），可发起「调整上次重绘」 */
   const openViewMask = () => {
     const row = history.display?.row;
     const inp = row?.inpaint;
@@ -255,19 +254,19 @@ export default function App() {
     return () => URL.revokeObjectURL(viewMask.baseUrl);
   }, [viewMask]);
 
-  /* ── 草图画板（SKETCH §6/§8）：画板只产出附件，确认落回创作条，不发请求 ── */
+  /* ── 草图画板：只产出附件，确认落回创作条，不发请求 ── */
   const sketch = useSketch({
     onApply: ({ image, replaces }) => {
       const wasEmpty = !replaces && form.inputs.length === 0;
       const sizeBefore = formSize(form.form);
       const promptEmpty = !form.form.prompt.trim();
       if (!form.applySketch(image, replaces)) return false;
-      // §6.4 草图首次成为唯一输入且输出为 auto：确认时显式设置为草图尺寸
+      // 草图首次成为唯一输入且输出为 auto：设为草图尺寸
       if (wasEmpty && sizeBefore === "auto") {
         form.patchForm({ cw: String(image.width), ch: String(image.height) });
         toast(`输出尺寸已设为草图尺寸 ${image.width} × ${image.height}`);
       }
-      // §6.3 首次添加草图且描述为空：填入可见可编辑的起始文字（不覆盖已有文字）
+      // 首次添加草图且描述为空：填入起始文字（不覆盖已有）
       if (!replaces && promptEmpty) {
         form.patchForm({
           prompt: `以图${form.inputs.length + 1}的草图为构图参考，保留主体的相对位置与比例，将粗略线条转成完整画面。`,
@@ -296,7 +295,7 @@ export default function App() {
     !pm.confirmState &&
     !sketch.session;
 
-  /** 菜单「画草图 / 继续画草图」：新画布 = 当前输出尺寸，auto 时 1024×1024（§6.4） */
+  /** 新画布 = 当前输出尺寸，auto 时 1024×1024 */
   const openSketchNew = () => {
     if (!canOpenSketch()) return;
     if (
@@ -322,7 +321,7 @@ export default function App() {
     sketch.openEdit(doc, imageId, idx);
   };
 
-  /** 历史来源草图：以新草稿打开画板，确认产生新 imageId，不改旧记录（§8.2） */
+  /** 历史来源草图：以新草稿打开，不改旧记录 */
   const continueHistorySketch = (imageId: string) => {
     if (!canOpenSketch()) return;
     setPreviewId(null);
@@ -350,7 +349,7 @@ export default function App() {
     sketch.close();
   };
 
-  // 比例不一致 toast（§6.4）：仅在进入不一致状态时提示一次，就地提示见尺寸弹层
+  // 进入比例不一致状态时提示一次（就地提示见尺寸弹层）
   const mismatchRef = useRef(false);
   useEffect(() => {
     const size = formSize(form.form);
@@ -404,8 +403,7 @@ export default function App() {
     form.focus();
   };
 
-  // full 态点条外收起：仅在无草稿（未改过任何字段、无输入图、无编辑来源）时；
-  // 画板 / 选区编辑器打开期间点击落在浮层上，不收回（SK13 同源阻断）
+  // full 态点条外收起：仅在无草稿时；点击落在浮层上不收回
   useEffect(() => {
     if (barMode !== "full") return;
     const onDown = (e: PointerEvent) => {
@@ -433,8 +431,7 @@ export default function App() {
     pm.phase === "idle" &&
     detailClosedFor !== history.display.row.id;
 
-  // 舞台滚轮切换历史（PRD FR-6，2026-09-23）：仅无草稿、无未保存结果、无弹层且非生成中时响应；
-  // 有任何阻断条件时不挂监听（滚轮落到默认行为），避免误触丢草稿。
+  // 舞台滚轮切换历史：仅无草稿、无未保存结果、无弹层且非生成中时挂监听
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;

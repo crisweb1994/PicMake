@@ -1,7 +1,5 @@
-/** 有限范围的容器尺寸 / EXIF 方向读取与底图准备（TECH_INPAINTING §5，D1）。
- *  只实现本任务所需：JPEG/PNG/WebP 的头尺寸与 orientation 标签（覆盖 1–8），
- *  不做通用 EXIF 编辑器；解析失败返回明确结果，禁止以宽高差异推断方向。
- *  无标签按 orientation=1 处理；损坏 / 冲突元数据不让流程静默继续。 */
+/** 容器尺寸 / EXIF 方向读取与底图准备：只覆盖 JPEG/PNG/WebP 的 orientation 1–8。
+ *  损坏元数据返回明确错误，不让流程静默继续 */
 import { imageFormat } from "./input-images";
 import type { InpaintIssue } from "./types";
 
@@ -219,11 +217,8 @@ export function readImageMeta(blob: Blob): Promise<OrientationResult> {
     });
 }
 
-/** D1：进入绘制前准备实际请求底图。
- *  - orientation 无 / =1：复用原文件，不重复保存；
- *  - orientation 2–8：解码应用方向一次，生成无方向标签的请求素材
- *    （JPEG 质量 0.92，PNG/WebP 转 PNG 保留 alpha），编辑器展示该素材；
- *  - 元数据损坏 / 解码或编码失败：明确错误，不静默退回可能错位的请求。 */
+/** 准备实际请求底图：orientation 无/=1 复用原文件；2–8 解码应用方向重编码一次；
+ *  失败返回明确错误，不静默退回 */
 export async function prepareInpaintBase(
   blob: Blob,
   name: string,
@@ -248,7 +243,7 @@ export async function prepareInpaintBase(
   if (!format) return { ok: false, issue: "canvas-failed" };
 
   if (meta.orientation === 1) {
-    // 头尺寸仅供提前拦截；以解码结果为准复核（D2：尽可能先拦截，解码后复核）
+    // 头尺寸仅供提前拦截，以解码结果为准
     let bitmap: ImageBitmap;
     try {
       bitmap = await createImageBitmap(blob);

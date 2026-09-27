@@ -1,4 +1,4 @@
-/** 设置存储：API 地址 + Key + 主题偏好，仅存 localStorage（MVP 文档 §1.4） */
+/** 设置存储：仅存 localStorage */
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DEFAULT_BASE_URL } from "../lib/url";

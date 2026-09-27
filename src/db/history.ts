@@ -2,8 +2,7 @@ import { historySources } from "../lib/input-images";
 import { db, type HistoryRow } from "./schema";
 import type { PreparedGeneration } from "../lib/generation";
 
-/** 一条历史引用的全部资源 id（TECH §10.3）：输出、输入来源、mask 与原文件。
- *  删除回收按剩余历史的并集判定；mask / 原文件不进入输出图片数组或请求参考图列表。 */
+/** 一条历史引用的全部资源 id：删除回收按剩余历史的并集判定 */
 export function historyResourceIds(row: HistoryRow): string[] {
   return [
     ...row.imageIds,
@@ -39,7 +38,7 @@ export async function deleteHistory(id: string): Promise<void> {
   });
 }
 
-/** 收藏开关（2026-09-23）：行不存在时静默忽略（如未保存的 pending 结果） */
+/** 行不存在时静默忽略（如未保存的 pending 结果） */
 export async function toggleStar(id: string): Promise<void> {
   const row = await db.history.get(id);
   if (!row) return;

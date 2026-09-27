@@ -1,6 +1,4 @@
-/** 舞台右上详情浮卡（PRD §5.2，2026-09-23）：承接原右坞「本次生成详情」，纯展示。
- *  局部重绘（IP-01/IP-15）：多图须先在某一张上（未选时不静默取第一张，D8）；
- *  局部重绘记录提供「查看选区」与「调整上次重绘」。 */
+/** 舞台右上详情浮卡，纯展示；局部重绘记录提供「查看选区/调整上次重绘」 */
 import { Star, X } from "lucide-react";
 import { fmtDuration, fmtTime } from "../lib/format";
 import { MODEL_LABELS, QUALITY_LABELS, sizeText } from "../lib/params";
@@ -17,15 +15,15 @@ export function DetailCard(props: {
   onCopyPrompt: () => void;
   onReuse: () => void;
   onEdit: (imageId: string) => void;
-  /** 对选中的一张发起局部重绘（IP-01） */
+  /** 对选中的一张发起局部重绘 */
   onInpaint: (imageId: string) => void;
   onDelete: () => void;
   onToggleStar: () => void;
   onNew: () => void;
   onClose: () => void;
-  /** 局部重绘记录：查看已保存选区（只读） */
+  /** 查看已保存选区（只读） */
   onViewMask?: () => void;
-  /** 局部重绘记录：恢复上次草稿（不生成） */
+  /** 恢复上次草稿（不生成） */
   onAdjustInpaint?: () => void;
 }) {
   const { row, images } = props.display;

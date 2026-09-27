@@ -1,12 +1,6 @@
-/** 草图画板弹层（SKETCH_RESEARCH_AND_SPEC §6/§7/§9，交互对照 docs/demos/sketch-demo.html）：
- *  ChatGPT Sketch 式白色全幅编辑器，控件浮在纸面上——左上关闭 / 顶中工具胶囊 /
- *  右上撤销重做清空 / 左侧大小滑杆 / 底部色板 / 右下「使用草图」。
- *  受控展示组件：文档、撤销游标与确认态由 useSketch 持有；工具、色板、滑杆、
- *  指针绘制为组件内部交互状态；toast 经 onLimit 上报接线层。
- *  背景点击与 Esc 不关闭（FR-9 无应用快捷键）；焦点圈闭并在关闭后还原。
- *
- *  副作用清单：ResizeObserver(zone)、画笔初始焦点 rAF、指针捕获（paper），
- *  均随卸载清理；临时笔迹只画进 Canvas，松手才提交一个完整命令。 */
+/** 草图画板弹层：白纸全幅编辑器，控件浮在纸面。受控展示组件；Esc 不关闭，
+ *  有修改时关闭由接线层确认。
+ *  副作用（随卸载清理）：ResizeObserver / 初始焦点 rAF / 指针捕获 */
 import { FocusScope } from "react-aria";
 import {
   useCallback,
@@ -137,7 +131,7 @@ export function SketchModal(props: {
 
   useEffect(() => {
     replayToCanvas();
-    // 画布与笔迹层是外部系统；hasInk 由栅格结果派生，仅在重放后同步（§6.5 alpha 判空）
+    // hasInk 由栅格结果派生，仅在重放后同步
     setHasInk(sketchHasInk(doc, cursor));
   }, [doc, cursor, box, replayToCanvas]);
 
@@ -253,7 +247,7 @@ export function SketchModal(props: {
     props.onStroke(d.cmd);
   };
 
-  /* ── 大小滑杆：上大下小，原生 slider 键盘语义（非应用快捷键） ── */
+  /* ── 大小滑杆：上大下小 ── */
   const knobY = 8 + (1 - sizeT) * SLIDER_TRACK;
   const curWidth =
     tool === "eraser" ? eraserWidth(sizeT, doc) : penWidth(sizeT, doc);
@@ -418,8 +412,7 @@ export function SketchModal(props: {
           </div>
 
           <div className="pm-sk-colors" role="group" aria-label="画笔颜色">
-            {/* 原生取色输入：保留 1px 布局盒锚在彩虹圈旁，取色窗就近弹出
-              （display:none 会让弹窗回退到视口左上角）；不参与 Tab 与可访问树 */}
+            {/* 原生取色输入保留 1px 布局盒（display:none 会让取色窗弹到视口左上角） */}
             <input
               ref={customColorRef}
               type="color"

@@ -1,4 +1,4 @@
-/** 生成表单 ↔ API 参数映射（纯函数，供编排层与测试使用） */
+/** 生成表单 ↔ API 参数映射（纯函数） */
 import { validateSize } from "./size";
 import type {
   Background,
@@ -41,7 +41,7 @@ export const RATIO_CHIPS: ReadonlyArray<{ id: RatioId; label: string }> = [
   { id: "auto", label: "自动" },
 ];
 
-/** 各比例的基准像素（PRD FR-3） */
+/** 各比例的基准像素 */
 export const RATIO_DIMS: Record<Exclude<RatioId, "auto">, [number, number]> = {
   "1:1": [1024, 1024],
   "4:3": [1360, 1024],

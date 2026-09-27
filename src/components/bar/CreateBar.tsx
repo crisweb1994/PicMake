@@ -1,6 +1,4 @@
-/** 底部值 chip 创作条（PRD §5.2，2026-09-23）：mini / full / generating / complete 四态，纯展示。
- *  定稿对照 docs/demos/redesign/chipbar/final.html；弹层开合为组件内部 UI 状态。
- *  自定义开发：值 chip 与弹层原语见同目录 BarChip.tsx（BarChip / PopRow）。 */
+/** 底部创作条：mini / full / generating / complete 四态，纯展示；弹层开合为内部状态 */
 import { useRef, type RefObject } from "react";
 import {
   ArrowUp,
@@ -93,9 +91,9 @@ interface FullBarProps {
   reading: boolean;
   uploadError: string;
   canReturn: boolean;
-  /** 已确认草图的逻辑尺寸（比例不一致提示用；无草图为 null） */
+  /** 已确认草图的逻辑尺寸；无草图为 null */
   sketchSize: { w: number; h: number } | null;
-  /** 局部重绘投影（无选区为 null；IP-08/IP-10） */
+  /** 局部重绘投影；无选区为 null */
   inpaint: InpaintBarInfo | null;
   promptRef: RefObject<HTMLTextAreaElement | null>;
   onPatch: (patch: Partial<GenForm>) => void;
@@ -103,7 +101,7 @@ interface FullBarProps {
   onFiles: (files: File[]) => void;
   onRemove: (id: string) => void;
   onPreview: (id: string) => void;
-  /** 打开新画板（菜单「画草图 / 继续画草图」入口） */
+  /** 打开新画板 */
   onOpenSketch: () => void;
   /** 点击草图缩略图重新打开画板 */
   onEditSketch: (id: string) => void;
@@ -115,7 +113,7 @@ interface FullBarProps {
   onEditMask: () => void;
   /** 移除选区：保留底图与描述，切换为普通图片编辑 */
   onRemoveMask: () => void;
-  /** 接受建议输出尺寸（IP-10） */
+  /** 接受建议输出尺寸 */
   onAcceptSize: () => void;
 }
 
@@ -580,7 +578,7 @@ function FullBar(props: FullBarProps) {
   );
 }
 
-/** ── generating 态（保存阶段的提示由 App 的 pm-saving 覆盖层承担） ── */
+/** ── generating 态 ── */
 function GenBar(props: {
   model: ModelId;
   partialIndex: number;
@@ -675,8 +673,7 @@ function DoneBar(props: {
   );
 }
 
-/** 底栏总装：状态优先级 generating > complete > (full > mini)；
- *  除 FullBar 子集外只带各状态自己的 props，FullBar 部分整体透传。 */
+/** 底栏总装：状态优先级 generating > complete > (full > mini)；FullBar 子集整体透传 */
 export function CreateBar(
   props: FullBarProps & {
     mode: "mini" | "full";

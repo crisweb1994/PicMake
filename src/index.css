@@ -1,8 +1,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/* Tailwind v4 preflight 移除了 v3 的 button 默认 cursor: pointer，此处补回。
-   放 base 层：下方未分层的 .pm-* 规则（zoom-in / not-allowed 等）优先级更高，可自由覆写。 */
+/* Tailwind v4 preflight 移除了 button 默认 cursor: pointer，此处补回（base 层，可被覆写） */
 @layer base {
   button:not(:disabled),
   [role="button"]:not(:disabled) {
@@ -10,8 +9,7 @@
   }
 }
 
-/* PicMake 设计令牌：浅色为 :root 默认、深色经 <html>.dark 覆盖（对照 docs/prd.md §5.3）。
-   组件样式只引用令牌不写死色值；两套主题共用唯一强调色 --pm-accent。浅色观感对照 docs/demos/theme-preview.html */
+/* 设计令牌：浅色 :root 默认、深色经 .dark 覆盖；两主题共用唯一强调色 --pm-accent */
 :root {
   color-scheme: light;
   --pm-bg: #f7f8f9;
@@ -93,7 +91,7 @@
   --field-border-focus: rgba(255, 154, 98, 0.5);
   --field-focus: rgba(255, 154, 98, 0.16);
 
-  /* 草图画板纸面与控件令牌（SKETCH §7.3）：两主题同值——纸面恒白、绘画内容不随主题 */
+  /* 草图画板令牌：两主题同值——纸面恒白 */
   --pm-sketch-paper: #ffffff;
   --pm-sketch-edge: #ececec;
   --pm-sketch-hint: #d9d9d9;
@@ -108,7 +106,7 @@
   --pm-sketch-meta: #a8a8a8;
 }
 
-/* 深色覆盖（现状视觉，对照 docs/prd.md §5.3 原始定义） */
+/* 深色覆盖 */
 .dark {
   color-scheme: dark;
   --pm-bg: #0e0f11;
@@ -128,7 +126,7 @@
   --pm-error-border: rgba(240, 132, 107, 0.65);
   --pm-ok: #7bd88f;
 
-  /* 深色控件填充（PRD §5.3：控件底 rgba(255,255,255,.045)； */
+  /* 深色控件填充 */
   --pm-fill: rgba(255, 255, 255, 0.045);
   --pm-fill-hover: rgba(255, 255, 255, 0.075);
   --pm-fill-active: rgba(255, 255, 255, 0.09);
@@ -207,7 +205,7 @@ body {
   background: var(--pm-accent-soft);
 }
 
-/* ══ PicMake 组件样式（对照 docs/prd.md §5.3 与原型 V2） ══ */
+/* ══ 组件样式 ══ */
 
 /* 浮岛基底 */
 .pm-island {
@@ -259,7 +257,7 @@ body {
   color: var(--pm-text-1);
 }
 
-/* 舞台（2026-09-23 起全幅，右侧不再让位给右坞；底部让位给创作条） */
+/* 舞台 */
 .pm-stage-col {
   position: fixed;
   inset: 0;
@@ -631,7 +629,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ══ 底部创作条 CreateBar（PRD §5.2，2026-09-23）：mini / full / generating / complete ══ */
+/* ══ 底部创作条 ══ */
 .pm-bar {
   left: 50%;
   bottom: 18px;
@@ -751,7 +749,7 @@ body {
   object-fit: cover;
   display: block;
 }
-/* 草图缩略图：白底 contain，不裁掉构图；右下画笔标识（SKETCH §6.3） */
+/* 草图缩略图：白底 contain */
 .pm-bar-thumb > button.sk {
   background: var(--pm-sketch-paper);
 }
@@ -1396,7 +1394,7 @@ body {
   line-height: 1.5;
 }
 
-/* ══ 舞台右上详情浮卡 DetailCard（承接原右坞「本次生成详情」，PRD §5.2）══ */
+/* ══ 详情浮卡 ══ */
 .pm-detail {
   top: 14px;
   right: 14px;
@@ -1491,7 +1489,7 @@ body {
   overflow-wrap: anywhere;
   margin: 0;
 }
-/* 原始描述（编辑/参考生成链路的源头 prompt，弱化展示；PRD 2026-09-23） */
+/* 原始描述（源头 prompt，弱化展示） */
 .pm-detail-origin {
   font-size: 10.5px;
   color: var(--pm-text-3);
@@ -1598,15 +1596,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 弹层（HeroUI Modal/Drawer 容器样式覆写）。
-   遮罩不加 backdrop-filter：Chromium 下遮罩淡出/卸载后模糊层可能残留
-   不重绘（「阴影残留」的一个来源），统一用纯色压暗 */
+/* HeroUI 弹层覆写：遮罩不加 backdrop-filter（Chromium 模糊残留），用纯色压暗 */
 .modal__backdrop {
   background: var(--pm-scrim);
 }
-/* 确认弹窗退出不挂动画：RAC 要等 animation.finished 才卸载遮罩，动画时钟
-   停摆（标签页被遮挡/渲染节流）时 finished 永不结算，遮罩会留在页面上挡住
-   交互。去掉退出动画后 getAnimations() 为空，RAC 在同一帧内立即卸载 */
+/* 确认弹窗退出不挂动画：动画时钟停摆时 animation.finished 永不结算，遮罩会卡住 */
 .modal__backdrop.pm-confirm[data-exiting="true"],
 .pm-confirm .modal__container[data-exiting="true"] {
   animation: none;
@@ -1701,7 +1695,7 @@ body {
   margin: 0;
 }
 
-/* 轮播（多图点选浮层）：z 低于灯箱，放大时灯箱盖在其上 */
+/* 轮播：z 低于灯箱 */
 .pm-car {
   position: fixed;
   inset: 0;
@@ -1774,7 +1768,7 @@ body {
   z-index: 2;
 }
 
-/* 历史抽屉（HeroUI Drawer 承担定位与滑入动画，这里只定义面板外观） */
+/* 历史抽屉（定位与滑入动画由 HeroUI Drawer 承担） */
 .pm-drawer-hd {
   width: 280px;
   height: 100%;
@@ -1867,7 +1861,7 @@ body {
   gap: 6px;
 }
 
-/* 历史筛选区（2026-09-23：搜索 + 日期预设档 + 只看收藏；对照 docs/demos/history-filter.html） */
+/* 历史筛选区 */
 .pm-dfilter {
   display: flex;
   flex-direction: column;
@@ -1986,7 +1980,7 @@ body {
   color: var(--pm-text-1);
 }
 
-/* 行星标：默认隐藏，行 hover、键盘聚焦或已收藏时常驻；星标写库经 onToggleStar 上报 */
+/* 行星标：hover/聚焦/已收藏时常驻 */
 .pm-drow {
   position: relative;
 }
@@ -2051,7 +2045,7 @@ body {
   /* 确认中的加载指示为功能性反馈，reduced-motion 下保留 */
 }
 
-/* 输入图片预览弹窗（Overlays InputPreview 使用） */
+/* 输入图片预览弹窗 */
 .pm-input-preview {
   padding: 24px;
   width: min(900px, 92vw);
@@ -2093,10 +2087,7 @@ body {
   margin: 12px 0 8px;
 }
 
-/* ══ 草图画板 SketchModal（SKETCH §6/§7，对照 docs/demos/sketch-demo.html）══
-   ChatGPT Sketch 式白色全幅编辑器：整张白纸铺满弹层，控件浮在纸面上——
-   左上 ✕ / 顶中工具胶囊 / 右上撤销重做清空 / 左侧大小滑杆 / 底部色板 / 右下 ✓。
-   z 低于 HeroUI 弹层（100000），放弃修改确认框与 toast 盖在画板之上。 */
+/* ══ 草图画板 ══（z 低于 HeroUI 弹层，确认框与 toast 盖在其上） */
 .pm-sk-overlay {
   position: fixed;
   inset: 0;
@@ -2398,8 +2389,7 @@ body {
     #e53935
   );
 }
-/* 原生取色输入：绝对定位不占 flex 布局，锚在色板行左下（彩虹圈一侧），
-   弹出的取色窗跟随该锚点而非回退到视口左上角 */
+/* 原生取色输入：绝对定位不占 flex 布局，取色窗跟随锚点而非弹到视口左上角 */
 .pm-sk-custom-input {
   position: absolute;
   left: 0;
@@ -2464,7 +2454,7 @@ body {
   pointer-events: none;
 }
 
-/* 画板控件焦点环（FR-9：focus-visible 可见） */
+/* 画板控件焦点环 */
 .pm-sk-close:focus-visible,
 .pm-sk-tool:focus-visible,
 .pm-sk-hist button:focus-visible,
@@ -2511,11 +2501,9 @@ body {
   }
 }
 
-/* ══════════ 局部重绘（PRD_INPAINTING / docs/demos/inpaint-demo.html 对照）══════════
-   选区编辑器：弹层涂选，控件浮在画布上——左上关闭 / 顶中标题 / 右上撤销重做清空+显隐 /
-   左下缩放平移 / 底中工具与粗细 / 右下「使用选区」。缩放倍率相对适应窗口（IP-06）。 */
+/* ══ 局部重绘 ══ */
 
-/* 覆盖层专用令牌（IP-04：两主题与明暗底图均可辨；不把大面积品牌色当装饰） */
+/* 覆盖层专用令牌 */
 :root {
   --pm-inpaint-fill: #e66e28;
 }
@@ -2807,7 +2795,7 @@ body {
   white-space: nowrap;
 }
 
-/* ── 只读选区查看（IP-15）── */
+/* ── 只读选区查看 ── */
 .pm-vm-backdrop {
   position: fixed;
   inset: 0;
@@ -2902,7 +2890,7 @@ body {
   background: var(--pm-accent-hover);
 }
 
-/* ── 创作条局部重绘增强（IP-08/IP-10）── */
+/* ── 创作条局部重绘增强 ── */
 .pm-bar-thumb.mask > button:first-child {
   box-shadow:
     0 0 0 2px var(--pm-panel-solid),

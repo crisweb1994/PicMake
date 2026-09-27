@@ -1,15 +1,10 @@
-/** 局部重绘 Canvas 浏览器侧（TECH_INPAINTING §6）：唯一覆盖率语义的栅格化与导出。
- *  笔触几何统一走 perfect-freehand（tldraw / Excalidraw freedraw 同款）：
- *  getStroke 由输入点列生成平滑的多边形轮廓，恒定宽度（thinning 0，IP-05 无压力变化），
- *  同一轮廓同时用于显示覆盖层、判空重放与 mask 导出——显示与请求不分叉（D5）。
- *  coverage 语义不变：初始透明，画笔 source-over 增加 alpha，擦除 destination-out。
- *  渲染为立即模式全量重绘（clear → 已提交命令 → 进行中笔触），
- *  不做任何增量合成，从根上避免半透明叠加产生的衰减与接缝。 */
+/** 局部重绘 Canvas 侧：覆盖率栅格化与导出。笔触走 perfect-freehand，同一轮廓用于
+ *  显示、判空与导出；立即模式全量重绘，无增量合成。coverage：画笔增 alpha，擦除 destination-out */
 import { getStroke } from "perfect-freehand";
 import { MASK_ALPHA_THRESHOLD, maskOutputAlpha } from "./inpaint";
 import type { MaskCommand, MaskDocument, MaskStroke } from "./types";
 
-/** perfect-freehand 统一参数：恒定宽度圆头笔（IP-05：无羽化、无压力变化） */
+// perfect-freehand 参数：恒定宽度圆头笔
 const STROKE_OPTIONS = {
   size: 16,
   thinning: 0,
@@ -42,12 +37,7 @@ function outlinePath(outline: Array<[number, number]>): Path2D {
   return path;
 }
 
-/**
- * 单条命令的笔触填充。调用方须已设置好指向文档坐标的 transform：
- * - pen：以 fillStyle 填充轮廓（coverage 重放传白色，显示层传覆盖色）
- * - eraser：destination-out 填充同一轮廓（减少覆盖）
- * - clear：清空画布
- */
+/** 单条命令填充；调用方须已设好指向文档坐标的 transform */
 export function drawMaskCommand(
   ctx: CanvasRenderingContext2D,
   cmd: MaskCommand,
@@ -78,12 +68,7 @@ export function replayCoverage(
   ctx.restore();
 }
 
-/**
- * 显示覆盖层重绘：全量重画已提交命令 + 进行中笔触。
- * 画笔以覆盖色 + 半透明呈现（独立视觉参数，不参与请求 alpha 计算——D5）；
- * 擦除以不透明度 1 的 destination-out 完全移除显示——半透明 destination-out
- * 只削掉一半 alpha 留残影，会与 coverage 语义（完全移除）分叉。
- */
+/** 显示覆盖层全量重绘。擦除必须以不透明度 1 完全移除——半透明会留残影 */
 export function paintOverlayLayer(
   ctx: CanvasRenderingContext2D,
   doc: MaskDocument,
@@ -125,8 +110,7 @@ export function paintOverlayLayer(
   ctx.restore();
 }
 
-/** 快速判空（按钮态用）：降采样重放后扫描 selected 像素（alpha ≥ 128）。
- *  确认时的权威判空见 exportMaskPng 的全尺寸检查（IP-05）。 */
+/** 快速判空（按钮态）：降采样扫描；权威判空见 exportMaskPng */
 export function maskHasSelectionQuick(
   doc: MaskDocument,
   cursor = doc.commands.length,
@@ -153,9 +137,7 @@ export interface MaskExport {
   selected: number;
 }
 
-/** 导出（IP-07/TECH §6.4）：底图原始尺寸，全尺寸栅格化后按 D5 二值化——
- *  selected 像素 alpha=0（待编辑），其余 alpha=255；RGB 全图填白。
- *  空选区以 selected 像素数为 0 判定；可检测的 Canvas 失败保留全部工作内容。 */
+/** 导出：底图原始尺寸全尺寸栅格化后二值化；空选区/Canvas 失败保留工作内容 */
 export async function exportMaskPng(
   doc: MaskDocument,
   cursor = doc.commands.length,

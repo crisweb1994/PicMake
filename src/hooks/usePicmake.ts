@@ -30,7 +30,7 @@ import type { ConfirmState } from "../lib/view-models";
 import { useSettings } from "../store/settings";
 import { toast } from "@heroui/react";
 
-/** 错误反馈统一走 toast（PRD FR-8，2026-09-22）：标题 + 建议或原始信息 */
+/** 错误反馈统一走 toast：标题 + 建议或原始信息 */
 function toastError(error: unknown) {
   const kind = error instanceof ApiError ? error.kind : "unknown";
   const detail =
@@ -49,7 +49,7 @@ export function usePicmake({
   history: ReturnType<typeof useHistory>;
   form: ReturnType<typeof useForm>;
   onViewReset: () => void;
-  /** 编辑此图 / 复用参数把草稿落位后回调：页面据此展开创作条并聚焦（PRD §5.1/§5.2） */
+  /** 草稿落位后回调：页面据此展开创作条并聚焦 */
   onDraftReady: () => void;
 }) {
   const settings = useSettings();
@@ -58,12 +58,11 @@ export function usePicmake({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
-  /** 底栏 complete 态的数据源：最近一次保存成功的结果 id（chipbar §5.2） */
+  /** 底栏 complete 态数据源：最近保存成功的结果 id */
   const [lastDoneId, setLastDoneId] = useState<string | null>(null);
   const generation = useGeneration();
   const clearDone = () => setLastDoneId(null);
-  /** 完整工作流锁（TECH §9.1）：从第一个 await 前同步锁住资源准备→请求→解码→保存，
-   *  双击提交与各入口共用同一把锁；取消经 token 失效迟到回调。 */
+  /** 完整工作流锁：第一个 await 前同步锁住资源准备→请求→解码→保存 */
   const workflowBusyRef = useRef(false);
 
   const confirmPendingLeave = (onLeave: () => void) => {
@@ -111,7 +110,7 @@ export function usePicmake({
     run: GenerationRun,
     originPrompt?: string,
   ) => {
-    // 逐张解码实际元信息（TECH §10.1）：格式与宽高以结果字节为准，不用请求参数伪装
+    // 逐张解码：格式与宽高以结果字节为准
     const metas: ResultMeta[] = [];
     for (const image of run.result.images) {
       const meta = await decodeImageMeta(b64ToBlob(image.b64));
@@ -131,8 +130,7 @@ export function usePicmake({
     await savePrepared(prepared);
   };
 
-  /** 编辑/参考生成时取首个输入源记录的原始描述（沿链路取最初那条；PRD 2026-09-23）。
-   *  局部重绘分支 inputs[0] 恒为实际底图（TECH §9.2），不会误取参考图来源。 */
+  /** 取首个输入源的原始描述（沿链路取最初；局部重绘 inputs[0] 恒为底图） */
   const resolveOriginPrompt = async (
     inputs: Array<{ generationId?: string }>,
   ): Promise<string | undefined> => {
@@ -181,7 +179,7 @@ export function usePicmake({
       pendingSave
     )
       return;
-    // 尺寸接受复核（IP-10）：目标尺寸未接受时不发生成请求
+    // 目标尺寸未接受时不发生成请求
     if (
       form.inpaint &&
       form.inpaintInfo?.suggested &&
@@ -205,8 +203,7 @@ export function usePicmake({
       );
   };
 
-  /** 读取局部重绘记录的完整资源（IP-16/A31）：实际底图、参考图、mask；
-   *  原文件缺失可省略并提示，其余缺失则阻断该动作。 */
+  /** 读取局部重绘记录资源：底图、参考图、mask；原文件缺失可省略，其余阻断 */
   const readInpaintDraft = async (
     row: HistoryRow,
   ): Promise<
@@ -248,7 +245,7 @@ export function usePicmake({
       inputFidelity: row.inputFidelity ?? "auto",
       inpaint: { mask: maskRow as MaskImage },
     };
-    // 目标尺寸按当前约束复核：约束变化须重新接受（IP-10/§7）
+    // 目标尺寸按当前约束复核
     const target = inpaintTargetSize(baseRow.width, baseRow.height);
     if (!target) return { ok: false, missing: "底图" };
     const params: GenParams = {
@@ -258,7 +255,7 @@ export function usePicmake({
     return { ok: true, draft, mask: maskRow as MaskImage, params };
   };
 
-  /** 「调整上次重绘」（IP-16）：恢复底图、参考图、选区与描述参数为可编辑草稿，不生成 */
+  /** 调整上次重绘：恢复为可编辑草稿，不生成 */
   const adjustInpaint = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current || pendingSave)
       return;
@@ -288,7 +285,7 @@ export function usePicmake({
     });
   };
 
-  /** 「再来一版」（IP-16）：局部重绘记录复用同一请求底图与 mask 直接提交 */
+  /** 再来一版：局部重绘记录复用同一底图与 mask 直接提交 */
   const regenerateInpaint = async (row: HistoryRow) => {
     const read = await readInpaintDraft(row);
     if (!read.ok) {
@@ -306,7 +303,7 @@ export function usePicmake({
     await startGeneration(read.params, read.draft);
   };
 
-  /** 「再来一版」：用历史记录的参数与输入源直接重发一次（chipbar complete 态） */
+  /** 再来一版：用历史记录的参数与输入源直接重发 */
   const regenerate = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current || pendingSave)
       return;
@@ -327,7 +324,7 @@ export function usePicmake({
     void startGeneration({ ...row.params }, draft);
   };
 
-  /** 各入口共用的清理：清 complete 态、生成态、草稿、返回标记与查看状态（历史选择由各入口自理） */
+  /** 各入口共用的清理：complete 态、生成态、草稿、返回标记与查看状态（历史选择由各入口自理） */
   const resetWorkspace = () => {
     clearDone();
     generation.reset();

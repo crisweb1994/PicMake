@@ -1,7 +1,5 @@
-/** 局部重绘编辑会话（PRD_INPAINTING IP-06/IP-07，TECH_INPAINTING §5/§8）：
- *  工作文档、撤销游标、底图准备（D1 方向归一）与确认导出由本 hook 唯一持有；
- *  编辑器组件只接收投影与事件。会话是进入时创建的独立副本，取消不改已确认草稿。
- *  确认时导出 mask PNG 并校验；失败保留全部工作内容（A15）。 */
+/** 局部重绘编辑会话：工作文档、撤销游标、底图准备与确认导出唯一持有于此；
+ *  会话为独立副本，取消不改已确认草稿；确认失败保留工作内容 */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ImageRow } from "../db/schema";
 import type {
@@ -25,16 +23,16 @@ import { prepareInpaintBase, readImageMeta } from "../lib/image-orientation";
 export type InpaintEntry = "result" | "draft-input" | "reedit";
 
 export interface InpaintSession {
-  /** 实际请求底图（D1 归一后的素材；编辑器只展示它） */
+  /** 实际请求底图（方向归一后） */
   base: ImageRow;
   /** 仅发生方向归一时存在：原文件与其来源身份 */
   original?: { source: InputSource; image: ImageRow };
-  /** 归一化发生时提示「已校正图片方向，原文件保留」（IP-02） */
+  /** 归一化发生时的提示 */
   normalized: boolean;
   doc: MaskDocument;
   cursor: number;
   entry: InpaintEntry;
-  /** 打开时的提交前缀快照键：无实质修改沿用原资源、有修改才拦截关闭（IP-07） */
+  /** 打开时的快照键：无修改沿用原资源、有修改拦截关闭 */
   openKey: string;
   /** 编辑已有选区时传入的原 mask 资源（未修改时沿用，不重复分配） */
   existingMask: MaskImage | null;
@@ -47,7 +45,7 @@ export interface InpaintApplyPayload {
   mask: MaskImage;
   original?: { source: InputSource; image: ImageRow };
   entry: InpaintEntry;
-  /** 编辑既有选区但无实质修改：沿用原资源，不制造重复选区（IP-07） */
+  /** 无实质修改：沿用原资源 */
   unchanged: boolean;
 }
 
@@ -55,7 +53,7 @@ export interface InpaintOpenParams {
   blob: Blob;
   name: string;
   entry: InpaintEntry;
-  /** 该来源已在库中的身份（历史结果/参考图）：归一化时原文件引用它而非新建行 */
+  /** 已在库中的来源身份：归一化时原文件引用它而非新建行 */
   existing?: InputSource;
   /** 重开已确认选区：实际底图与已保存 mask 资源 */
   reedit?: {
@@ -71,7 +69,7 @@ export function useInpaint(props: {
   const [session, setSession] = useState<InpaintSession | null>(null);
   const [opening, setOpening] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  /** 就地错误（D6：非 toast，编辑器内展示并保留工作内容） */
+  /** 就地错误（非 toast） */
   const [error, setError] = useState<InpaintIssue | null>(null);
   const openTokenRef = useRef(0);
   const confirmTokenRef = useRef(0);
@@ -100,8 +98,7 @@ export function useInpaint(props: {
     setError(null);
   }, []);
 
-  /** 打开（异步准备底图）：入口上下文 token 失效即丢弃迟到结果（IP-03）。
-   *  失败返回 issue（底图不可用 / 方向损坏等留在原上下文，由接线层就地提示）。 */
+  /** 打开（异步准备底图）：失败返回 issue，由接线层就地提示 */
   const open = useCallback(
     async (
       params: InpaintOpenParams,
@@ -115,7 +112,7 @@ export function useInpaint(props: {
         setOpening(false);
         return { ok: false, issue } as const;
       };
-      // 头信息先拦截超像素 / 超比例，再准备素材（D2：尽可能先读头拦截）
+      // 先读头拦截超像素/超比例，再准备素材
       let meta;
       try {
         meta = await readImageMeta(params.blob);
@@ -128,7 +125,7 @@ export function useInpaint(props: {
       if (!pre.ok) return fail(pre.issue);
 
       if (params.reedit) {
-        // 重开已确认选区：底图已归一，直接验证文档绑定（不再重编码，D1/§5.3）
+        // 重开：底图已归一，直接验证文档绑定
         const base = params.reedit.base;
         const check = checkInpaintBase(base.width, base.height);
         if (!check.ok) return fail(check.issue);
@@ -219,7 +216,7 @@ export function useInpaint(props: {
     );
   }, []);
 
-  /** 使用选区（IP-07）：导出 + 校验，成功才替换草稿；失败保留工作副本 */
+  /** 使用选区：导出 + 校验，成功才替换草稿 */
   const confirm = useCallback(() => {
     const current = session;
     if (!current || confirming) return;

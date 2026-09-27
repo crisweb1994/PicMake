@@ -1,5 +1,4 @@
-/** 主题接线：偏好（settings store）→ <html>.dark class 与 theme-color meta 同步。
- *  副作用（随 App 挂载、卸载清理）：matchMedia 监听，system 模式下实时跟随系统外观。 */
+/** 主题接线：偏好 → <html>.dark 与 theme-color meta 同步；matchMedia 跟随系统外观 */
 import { useCallback, useEffect, useState } from "react";
 import { useSettings } from "../store/settings";
 import { resolveTheme, type ResolvedTheme } from "../lib/theme";

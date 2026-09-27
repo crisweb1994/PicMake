@@ -1,5 +1,4 @@
-/** 历史抽屉筛选（PRD FR-6，2026-09-23）：纯函数，行集合 + 筛选条件 → 行集合。
- *  维度为描述搜索（prompt / originPrompt）+ 日期预设档 + 只看收藏；不做模型筛选（用户决策 2026-09-23）。 */
+/** 历史抽屉筛选：描述搜索 + 日期预设档 + 只看收藏，纯函数 */
 import type { HistoryRow } from "../db/schema";
 
 export type HistoryRange = "all" | "today" | "7d" | "30d";
@@ -21,9 +20,7 @@ const DAY = 86_400_000;
 
 export function isHistoryFilterActive(filter: HistoryFilter): boolean {
   return (
-    filter.query.trim() !== "" ||
-    filter.range !== "all" ||
-    filter.starredOnly
+    filter.query.trim() !== "" || filter.range !== "all" || filter.starredOnly
   );
 }
 

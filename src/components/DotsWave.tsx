@@ -1,13 +1,5 @@
-/**
- * 生成中点阵波动效（对角顺序波）：canvas 绘制整齐点阵，波峰沿左上→右下方向流动，
- * 波峰色随 --pm-accent、基色随 --pm-text-1（从 CSS 令牌读取，不写死色值）。
- *
- * 副作用（均随组件挂载启动、卸载清理）：
- * - requestAnimationFrame 动画循环
- * - ResizeObserver（容器尺寸 / DPR 变化时重建画布）
- * - MutationObserver（<html> class 变化即主题切换时，重读令牌颜色）
- * - prefers-reduced-motion: reduce 时不启动循环，仅静态绘制一帧
- */
+/** 生成中点阵波动（对角波），颜色取 CSS 令牌。副作用（随卸载清理）：rAF 循环、
+ *  ResizeObserver、MutationObserver（主题切换重读令牌）；reduced-motion 只画一帧 */
 import { useEffect, useRef } from "react";
 
 const SPACING = 23;

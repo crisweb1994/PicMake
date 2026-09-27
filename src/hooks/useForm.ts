@@ -1,6 +1,4 @@
-/** 同一次提交的草稿：文字、参数与图片；读取离开即失效，图片 URL 交给资源 hook。
- *  局部重绘附件（TECH §3.3）由本 hook 唯一拥有：输入列表与可选 inpaint 在一次
- *  状态更新中原子落位——底图恒为 inputs[0]，移除底图同时清除选区。 */
+/** 一次提交的草稿：文字、参数与图片。局部重绘附件由本 hook 唯一拥有：底图恒为 inputs[0] */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@heroui/react";
 import {
@@ -30,7 +28,7 @@ export function useForm() {
   const [form, setForm] = useState<GenForm>(DEFAULT_FORM);
   const [inputs, setInputs] = useState<InputImage[]>([]);
   const [inpaint, setInpaint] = useState<InpaintDraft | null>(null);
-  /** 尺寸接受状态（IP-10）：页面 UI 状态，仅对当前底图与目标尺寸有效 */
+  /** 尺寸接受状态：仅对当前底图与目标尺寸有效 */
   const [sizeAccepted, setSizeAccepted] = useState(false);
   const [inputFidelity, setFidelity] = useState<FidelityChoice>("auto");
   const [dirty, setDirty] = useState(false);
@@ -54,14 +52,14 @@ export function useForm() {
     label: `图${index + 1} · ${input.name ?? "已有作品"}`,
     url: assets[input.imageId]?.url,
     isSketch: !!input.upload?.sketch,
-    /** ✎ 入口角色（IP-08）：底图=修改选区；重绘中参考图停用；普通图可发起 */
+    /** ✎ 入口角色：底图=修改选区；重绘中参考图停用；普通图可发起 */
     inpaintRole: inpaint
       ? index === 0
         ? ("mask" as const)
         : ("ref" as const)
       : ("candidate" as const),
   }));
-  /** 输出目标与接受状态投影（IP-10） */
+  /** 输出目标与接受状态投影 */
   const inpaintInfo = useMemo(() => {
     if (!inpaint) return null;
     const target = inpaintTargetSize(inpaint.mask.width, inpaint.mask.height);
@@ -108,7 +106,7 @@ export function useForm() {
   const removeInput = (id: string) => {
     stopReading();
     setInputs((current) => current.filter((input) => input.imageId !== id));
-    // 移除底图同时移除与它绑定的选区；不允许留下无底图的重绘状态（IP-08）
+    // 移除底图同时移除绑定的选区，不留无底图的重绘状态
     if (inpaint && inputs[0]?.imageId === id) {
       setInpaint(null);
       setSizeAccepted(false);
@@ -119,15 +117,14 @@ export function useForm() {
     setDirty(true);
     setUploadError("");
   };
-  /** 「移除选区」：保留底图、描述与参数，切换为普通图片编辑（IP-08） */
+  /** 移除选区：保留底图与描述，切换为普通图片编辑 */
   const removeMask = () => {
     setInpaint(null);
     setSizeAccepted(false);
     setDirty(true);
     toast("已移除选区：保留底图与描述，切换为普通图片编辑");
   };
-  /** 选区确认（IP-07）：一次状态更新里重排底图为图1、保留其余参考图相对顺序、
-   *  设置 mask 与原文件引用；接受状态仅对未接受的新目标重置。 */
+  /** 选区确认：重排底图为图1、保留参考图顺序、设置 mask；接受状态仅对新目标重置 */
   const applyInpaint = (
     payload: {
       base: ImageRow;
@@ -164,7 +161,7 @@ export function useForm() {
     });
     setDirty(true);
   };
-  /** 「设为参考图」：把一条已有结果追加为输入源，不打断当前草稿（chipbar complete 态） */
+  /** 设为参考图：追加已有结果为输入源，不打断当前草稿 */
   const appendExisting = (
     imageId: string,
     generationId: string | undefined,
@@ -180,8 +177,7 @@ export function useForm() {
     if (!inputs.length)
       setForm((current) => ({ ...current, ratio: "auto", cw: "", ch: "" }));
   };
-  /** 画板确认的草图落附件（SKETCH §6.2/§8.4）：原位替换或追加；首版仅一个活动草图。
-   *  最终数量与替换目标校验在此完成，失败返回 false 由画板保留。 */
+  /** 草图落附件：原位替换或追加；校验失败返回 false 由画板保留 */
   const applySketch = (image: ImageRow, replaces: string | null): boolean => {
     const target =
       replaces ?? inputs.find((input) => input.upload?.sketch)?.imageId ?? null;
@@ -261,7 +257,7 @@ export function useForm() {
       return null;
     }
     const params = formToParams(form);
-    // 局部重绘：输出尺寸按 IP-10 目标（原尺寸或建议尺寸），不开放任意比例
+    // 局部重绘：输出尺寸按目标尺寸，不开放任意比例
     if (inpaint && inpaintInfo)
       params.size = { w: inpaintInfo.tw, h: inpaintInfo.th };
     const validation = validateParams(params);

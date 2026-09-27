@@ -2,14 +2,13 @@ import { b64ToBlob } from "./blob";
 import type { EditSubmission, GenParams, ImageRequestResult } from "./types";
 import type { HistoryRow, ImageRow } from "../db/schema";
 
-/** 结果图片的解码元信息（TECH §10.1：由实际字节识别，非请求参数回填） */
+/** 结果图片的解码元信息（以实际字节为准） */
 export type ResultMeta = { width: number; height: number; format: string };
 
 export interface PreparedGeneration {
   row: HistoryRow;
   images: ImageRow[];
-  /** 保存所需资源集合（实际底图、参考图、mask、可选原文件，按 id 去重）。
-   *  与 history.inputSources（实际请求图片列表）区分：mask/原文件不发送、不显示为图N。 */
+  /** 保存所需资源（底图、参考图、mask、原文件，去重）；mask/原文件不显示为图N */
   sources: ImageRow[];
 }
 
@@ -19,9 +18,9 @@ export function prepareGeneration(
   edit: EditSubmission | undefined,
   startedAt: number,
   id: () => string = () => crypto.randomUUID(),
-  /** 编辑/参考生成时首个输入源记录的原始描述（PRD 2026-09-23） */
+  /** 编辑/参考生成时的原始描述 */
   originPrompt?: string,
-  /** 逐张结果的实际解码元信息；缺省回退请求参数（未知格式按 0 宽高处理） */
+  /** 逐张实际解码元信息；缺省回退请求参数 */
   resultMetas?: ResultMeta[],
 ): PreparedGeneration {
   const fallbackMime =
@@ -70,7 +69,7 @@ export function prepareGeneration(
   const sources: ImageRow[] = [];
   for (const image of [
     ...(edit?.sources.map(({ image }) => image) ?? []),
-    // mask 与原文件属于「保存所需资源」，不进入 inputSources（TECH §10.2）
+    // mask 与原文件不进入 inputSources
     ...(edit?.inpaint
       ? [
           edit.inpaint.maskImage,

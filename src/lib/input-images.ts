@@ -7,7 +7,7 @@ import {
   type OutputFormat,
 } from "./types";
 
-/** 唯一的新旧来源投影，展示和删除必须使用相同规则。 */
+/** 新旧来源投影的唯一规则 */
 export function historySources(row: HistoryRow): InputSource[] {
   return row.inputSources ?? [];
 }

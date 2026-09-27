@@ -1,5 +1,4 @@
-/** 草图纯规则（SKETCH_RESEARCH_AND_SPEC §8/§9）：坐标换算、命令提交、撤销游标、
- *  文档校验与变更检测。只放纯函数，Canvas 重放与导出见 sketch-canvas.ts。 */
+/** 草图纯规则：坐标换算、命令提交、撤销游标、文档校验；Canvas 见 sketch-canvas.ts */
 import type { SketchDocument, SketchPoint, SketchStroke } from "./types";
 
 /** 固定色板（名称用于无障碍；值为实际绘画颜色，不随主题） */
@@ -22,10 +21,10 @@ export const SKETCH_PALETTE: ReadonlyArray<{
   { name: "品红", hex: "#D6247A" },
 ];
 
-/** 内存保护阈值（§9：待实测的建议值，不是性能承诺） */
+/** 内存保护阈值（建议值） */
 export const SKETCH_MAX_COMMANDS = 2000;
 export const SKETCH_MAX_POINTS = 100000;
-/** 输出为 auto 时的新画布尺寸（§6.4） */
+/** 输出为 auto 时的新画布尺寸 */
 export const SKETCH_DEFAULT_SIZE = 1024;
 
 export function blankSketch(width: number, height: number): SketchDocument {
@@ -70,8 +69,7 @@ export function makeStroke(
     : { type: "stroke", tool, width, points: [] };
 }
 
-/** 提交一个完整命令：丢弃撤销后的重做分支；超上限拒绝（保留已完成内容）。
- *  草图与选区共用（MaskDocument 结构兼容 SketchDocument，泛型保留原类型）。 */
+/** 提交命令：丢弃重做分支；超上限拒绝。草图与选区共用 */
 export function commitCommand<D extends SketchDocument>(
   doc: D,
   cursor: number,
@@ -96,7 +94,7 @@ export function totalPoints(
   return n;
 }
 
-/** 变更检测：提交前缀的稳定序列化（§6.5 有修改才拦截关闭、§8.2 无修改沿用原附件） */
+/** 变更检测：提交前缀的稳定序列化 */
 export function sketchSnapshotKey(
   doc: Pick<SketchDocument, "commands">,
   cursor = doc.commands.length,
@@ -104,7 +102,7 @@ export function sketchSnapshotKey(
   return JSON.stringify(doc.commands.slice(0, cursor));
 }
 
-/** 确认快照：只保留提交前缀，重做分支不落库；此后文档不可原地修改（§8.4） */
+/** 确认快照：只保留提交前缀，此后不可原地修改 */
 export function freezeSketch<D extends SketchDocument>(
   doc: D,
   cursor: number,
@@ -114,7 +112,7 @@ export function freezeSketch<D extends SketchDocument>(
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
-/** 读取校验（§9）：拒绝异常尺寸、非有限坐标、越界笔宽、坏颜色与不支持的版本 */
+/** 读取校验：拒绝异常尺寸、非有限坐标、越界笔宽与坏颜色 */
 export function validateSketchDocument(value: unknown): SketchDocument | null {
   if (!value || typeof value !== "object") return null;
   const doc = value as Partial<SketchDocument>;
@@ -162,7 +160,7 @@ export function validateSketchDocument(value: unknown): SketchDocument | null {
   return doc as SketchDocument;
 }
 
-/** 输出比例与草图比例是否不一致（§6.4 就地提示；容差 1%） */
+/** 比例是否不一致（容差 1%） */
 export function ratioMismatch(
   a: { w: number; h: number },
   b: { w: number; h: number },

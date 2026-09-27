@@ -1,11 +1,10 @@
-/** 核心类型定义（对照 docs/gpt-image-2.5-api.md） */
+/** 核心类型定义 */
 
 export type ModelId = "flare" | "sunburst";
 export type Quality = "low" | "medium" | "high" | "xhigh" | "max";
 export type Background = "auto" | "transparent" | "opaque";
 export type InputFidelity = "low" | "high";
-/** 表单与提交的保真度选择：auto = 不发送 input_fidelity，交给服务端默认
- *  （部分中转对 flare 等模型拒绝该参数，报 invalid_input_fidelity_model） */
+/** 保真度选择：auto = 不发送 input_fidelity（部分中转拒绝该参数） */
 export type FidelityChoice = "auto" | InputFidelity;
 export type OutputFormat = "png" | "jpeg" | "webp";
 
@@ -19,7 +18,7 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   sunburst: "gpt-image-2.5-sunburst",
 };
 
-/** 尺寸：'auto' 或具体宽高（宽高均须被 16 整除） */
+/** 尺寸：'auto' 或具体宽高 */
 export type SizeSpec = { w: number; h: number } | "auto";
 
 export interface GenParams {
@@ -27,7 +26,7 @@ export interface GenParams {
   prompt: string;
   size: SizeSpec;
   quality: Quality;
-  /** 1–10，产品上限 4 */
+  /** 产品上限 4 */
   n: number;
   background: Background;
   outputFormat: OutputFormat;
@@ -48,7 +47,7 @@ export interface InputImage extends InputSource {
 export interface EditDraft {
   inputs: InputImage[];
   inputFidelity: FidelityChoice;
-  /** 已确认的局部重绘附件（PRD_INPAINTING §8）：底图恒为 inputs[0] */
+  /** 已确认的局部重绘附件：底图恒为 inputs[0] */
   inpaint?: InpaintDraft;
 }
 
@@ -56,7 +55,7 @@ export interface EditSubmission {
   params: GenParams;
   sources: { source: InputSource; image: import("../db/schema").ImageRow }[];
   inputFidelity: FidelityChoice;
-  /** 提交快照中的 mask 资源（D7）：仅 multipart 追加 mask 部件，不进入 sources */
+  /** 提交快照中的 mask：仅 multipart 追加 mask 部件，不进入 sources */
   inpaint?: {
     maskImage: MaskImage;
     original?: {
@@ -66,7 +65,7 @@ export interface EditSubmission {
   };
 }
 
-/** ══ 草图（SKETCH_RESEARCH_AND_SPEC §8.1）：可重放的绘制命令文档，随 ImageRow 持久化 ══ */
+/** 草图：可重放的绘制命令文档，随 ImageRow 持久化 */
 
 export interface SketchPoint {
   x: number;
@@ -98,7 +97,7 @@ export interface SketchDocument {
 export const MAX_INPUT_IMAGES = 16;
 export const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 
-/** ══ 局部重绘（PRD_INPAINTING §5/§12，TECH_INPAINTING §3）══ */
+/** 局部重绘 */
 
 /** 一笔 = 一次完整拖动或一次单击（圆点）；画笔扩大覆盖，擦除减少覆盖 */
 export interface MaskStroke {
@@ -124,7 +123,7 @@ export interface MaskDocument {
   commands: MaskCommand[];
 }
 
-/** mask 资源行：PNG Blob + 可重放文档（TECH §3.1：format='png'，宽高取底图尺寸） */
+/** mask 资源行：PNG Blob + 可重放文档，宽高取底图尺寸 */
 export type MaskImage = import("../db/schema").ImageRow & {
   mask: MaskDocument;
 };
@@ -132,20 +131,20 @@ export type MaskImage = import("../db/schema").ImageRow & {
 /** 创作草稿 / 提交快照共用的局部重绘附件 */
 export interface InpaintDraft {
   mask: MaskImage;
-  /** 仅发生 EXIF 方向归一化时存在：原文件与其来源身份（D1） */
+  /** 仅发生 EXIF 方向归一化时存在 */
   original?: {
     source: InputSource;
     image: import("../db/schema").ImageRow;
   };
 }
 
-/** 历史行的局部重绘信息（HistoryRow.inpaint；存在即表示局部重绘） */
+/** 存在即表示该记录是局部重绘 */
 export interface InpaintHistory {
   maskImageId: string;
   originalSource?: InputSource;
 }
 
-/** 草稿校验错误码（D6 独立文案表：非异常、不并入 ApiErrorKind，就地展示） */
+/** 草稿校验错误码（非异常，就地展示文案） */
 export type InpaintIssue =
   | "empty-mask"
   | "invalid-mask"
@@ -177,7 +176,7 @@ export interface ImageGenResult {
 
 export interface ImageRequestResult {
   images: ImageGenResult[];
-  /** 请求级原始 usage（PRD：不做费用展示，按响应原样保存） */
+  /** 请求级原始 usage（原样保存，不做费用展示） */
   usage: Record<string, unknown> | null;
 }
 
@@ -224,7 +223,7 @@ export const ERROR_HINTS: Record<ApiErrorKind, string> = {
   unknown: "生成失败，请重试。",
 };
 
-/** 错误提示标题（FR-8，toast 反馈） */
+/** 错误提示标题 */
 export const ERROR_TITLES: Record<ApiErrorKind, string> = {
   "invalid-image": "图片无法读取",
   "image-too-large": "图片大小不符合要求",

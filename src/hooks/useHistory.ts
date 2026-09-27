@@ -84,7 +84,7 @@ export function useHistory() {
     name: source.name ?? "已有作品",
     label: `图${index + 1} · ${source.name ?? "已有作品"}`,
     url: assets[source.imageId]?.url,
-    /** 来源是草图：预览时提供「继续画这张草图」（SKETCH §6.3/§8.2，不改旧记录） */
+    /** 来源是草图：预览提供「继续画这张草图」 */
     isSketch: !!assets[source.imageId]?.row.sketch,
   }));
 

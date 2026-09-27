@@ -1,6 +1,4 @@
-/** 弹层组：引导 / 设置 / 确认 / 灯箱 / 错误岛 / Toast / 历史抽屉，纯展示
- *  Modal/Drawer 使用 HeroUI 复合组件（React Aria 提供焦点圈禁与滚动锁）；
- *  灯箱与 Toast 为沉浸/轻反馈场景，保持自绘（迁移决策见 AGENTS 讨论记录）。 */
+/** 弹层组：设置 / 确认 / 灯箱 / 轮播 / 历史抽屉 / 输入预览，纯展示 */
 import { useState } from "react";
 import {
   Button,
@@ -76,7 +74,7 @@ function TestButton(props: { testing: boolean; onTest: () => void }) {
   );
 }
 
-/* ── 设置弹窗（PRD FR-1） ── */
+/* ── 设置弹窗 ── */
 export function SettingsModal(props: {
   open: boolean;
   baseUrl: string;
@@ -217,7 +215,7 @@ export function ConfirmDialog(props: {
   );
 }
 
-/* ── 灯箱：全屏沉浸查看器，保持自绘 ── */
+/* ── 灯箱 ── */
 export function Lightbox(props: {
   img: DisplayImage | null;
   prompt: string;
@@ -268,7 +266,7 @@ export function Lightbox(props: {
   );
 }
 
-/* ── 轮播：多图网格点选浮层，左右切换，底部工具条与单张一致（PRD §5） ── */
+/* ── 轮播：多图点选浮层 ── */
 export function Carousel(props: {
   img: DisplayImage;
   prompt: string;
@@ -331,9 +329,7 @@ export function Carousel(props: {
   );
 }
 
-/* ── 历史抽屉（PRD FR-6）：HeroUI Drawer，左侧滑出 ──
-   筛选（2026-09-23）为抽屉内部视角：条件 state 属 UI 语义，关闭时丢弃、重开回到未筛选；
-   星标是外部副作用，经 onToggleStar(id) 上报，由接线层写库。 */
+/* ── 历史抽屉：筛选为内部视角，关闭时丢弃；星标经 onToggleStar 写库 ── */
 export function HistoryDrawer(props: {
   open: boolean;
   rows: HistoryRow[];
@@ -513,8 +509,7 @@ export function HistoryDrawer(props: {
   );
 }
 
-/** 输入预览由 Modal 限制焦点和锁滚动；图片尺寸仅为加载后的 UI 测量。
- *  历史来源的草图额外提供「继续画这张草图」——以新草稿打开画板，不改旧记录（SKETCH §6.3）。 */
+/** 输入预览；草图额外提供「继续画这张草图」 */
 export function InputPreview(props: {
   image: DisplayInput | null;
   onContinueSketch?: () => void;

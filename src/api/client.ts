@@ -1,8 +1,4 @@
-/**
- * OpenAI 兼容 API 客户端（官方或中转站）。
- * 约定见 docs/gpt-image-2.5-api.md：响应恒为 b64_json；流式走 SSE。
- * 生成是单次请求事务：无自动降级、无重试、无会话级记忆（PRD FR-4，2026-09-22）。
- */
+/** OpenAI 兼容 API 客户端：响应恒为 b64_json，流式走 SSE；单次请求事务，无降级无重试 */
 import { createParser } from "eventsource-parser";
 import { apiUrl } from "../lib/url";
 import {
@@ -122,10 +118,7 @@ export function parseGenResponse(j: any): ImageRequestResult {
   return { images: results, usage: j.usage ?? null };
 }
 
-/* ── 异步任务型中转（如 apimart）：
-      POST /images/generations 恒回 {data:[{status:"submitted",task_id}]}
-      （与 stream 无关），需轮询 GET /tasks/{task_id} 到 completed，
-      结果是 data.result.images[].url[] 的图片 URL（CORS *），非 b64 ── */
+/* ── 异步任务型中转（如 apimart）：恒回任务单，轮询 GET /tasks/{id} 到 completed 取图片 URL ── */
 
 const TASK_POLL_INTERVAL_MS = 3000;
 const TASK_POLL_TIMEOUT_MS = 300_000;
@@ -231,9 +224,7 @@ export interface StreamHandlers {
   signal?: AbortSignal;
 }
 
-/** 浏览器负责 multipart boundary；文件扩展名来自已存的来源格式。
- *  局部重绘追加一个 mask 部件（D7）：字段名 mask、文件名 mask.png、image/png Blob；
- *  不手工设置 Content-Type/boundary，与 image 部件同一处理方式。 */
+/** multipart 构造；局部重绘追加 mask 部件，不手工设置 boundary */
 export function editFormData(submission: EditSubmission): FormData {
   const form = new FormData();
   const fields = JSON.parse(toBody(submission.params));

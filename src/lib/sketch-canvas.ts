@@ -1,5 +1,4 @@
-/** 草图 Canvas 浏览器侧（SKETCH_RESEARCH_AND_SPEC §9）：统一顺序重放、alpha 判空、
- *  白底合成导出。预览与导出共用同一绘制规则；不含任何 React 状态。 */
+/** 草图 Canvas 侧：顺序重放、alpha 判空、白底合成导出；无 React 状态 */
 import type { SketchCommand, SketchDocument } from "./types";
 
 /** 单条命令绘制；调用方须已设置好指向逻辑坐标的 transform */
@@ -47,8 +46,7 @@ export function replaySketch(
   for (let i = 0; i < cursor; i++) drawSketchCommand(ctx, doc.commands[i], doc);
 }
 
-/** 空白判定：渲染后的笔迹层是否存在有效 alpha 像素（§6.5）。
- *  降采样到最长边 ≤512 扫描，供每次重放后的按钮态使用。 */
+/** 空白判定：降采样到最长边 ≤512 扫描 alpha */
 export function sketchHasInk(
   doc: SketchDocument,
   cursor = doc.commands.length,
@@ -67,7 +65,7 @@ export function sketchHasInk(
 
 export type SketchExport = { ink: false } | { ink: true; blob: Blob | null };
 
-/** 导出（§6.2/§9）：文档原始尺寸、先笔迹层判空、再合成白底；不乘 DPR、不含任何浮层 */
+/** 导出：文档原始尺寸，先判空再合成白底 */
 export async function exportSketchPng(
   doc: SketchDocument,
 ): Promise<SketchExport> {

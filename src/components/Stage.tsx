@@ -1,4 +1,4 @@
-/** 结果舞台（PRD FR-5）：空 / 生成中 / 单张 / 多张网格 四形态，纯展示 */
+/** 结果舞台：空 / 生成中 / 单张 / 网格 四形态，纯展示 */
 import type { ReactNode } from "react";
 import { Button } from "@heroui/react";
 import {
