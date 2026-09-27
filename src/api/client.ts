@@ -131,10 +131,6 @@ export function mapUsage(u: any): Usage | null {
 export function parseGenResponse(j: any): ImageRequestResult {
   const results: ImageGenResult[] = (j.data ?? []).map((d: any) => ({
     b64: d.b64_json,
-    size: j.size,
-    quality: j.quality,
-    background: j.background,
-    outputFormat: j.output_format,
   }));
   if (
     !results.length ||
@@ -267,7 +263,9 @@ export function generateImageEditStream(
   return requestImages(submission.params, handlers, config, submission);
 }
 
-/** 浏览器负责 multipart boundary；文件扩展名来自已存的来源格式。 */
+/** 浏览器负责 multipart boundary；文件扩展名来自已存的来源格式。
+ *  局部重绘追加一个 mask 部件（D7）：字段名 mask、文件名 mask.png、image/png Blob；
+ *  不手工设置 Content-Type/boundary，与 image 部件同一处理方式。 */
 export function editFormData(submission: EditSubmission): FormData {
   const form = new FormData();
   const fields = JSON.parse(toBody(submission.params));
@@ -286,6 +284,8 @@ export function editFormData(submission: EditSubmission): FormData {
       `source.${ext}`,
     );
   }
+  if (submission.inpaint)
+    form.append("mask", submission.inpaint.maskImage.blob, "mask.png");
   return form;
 }
 
@@ -320,10 +320,6 @@ export function createImageParser(
       ) {
         const image: ImageGenResult = {
           b64: d.b64_json,
-          size: d.size,
-          quality: d.quality,
-          background: d.background,
-          outputFormat: d.output_format,
         };
         result.images.push(image);
         // usage 是请求级总量，后续完成事件的总量回显覆盖，绝不按图相加。

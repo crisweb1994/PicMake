@@ -22,7 +22,11 @@ import {
   type GenForm,
 } from "../../lib/params";
 import { ratioMismatch } from "../../lib/sketch";
-import type { DisplayGen, DisplayInput } from "../../lib/view-models";
+import type {
+  DisplayGen,
+  DisplayInput,
+  InpaintBarInfo,
+} from "../../lib/view-models";
 import type {
   FidelityChoice,
   ModelId,
@@ -92,6 +96,8 @@ function FullBar(props: {
   canReturn: boolean;
   /** 已确认草图的逻辑尺寸（比例不一致提示用；无草图为 null） */
   sketchSize: { w: number; h: number } | null;
+  /** 局部重绘投影（无选区为 null；IP-08/IP-10） */
+  inpaint: InpaintBarInfo | null;
   promptRef: RefObject<HTMLTextAreaElement | null>;
   onPatch: (patch: Partial<GenForm>) => void;
   onGenerate: () => void;
@@ -104,6 +110,14 @@ function FullBar(props: {
   onEditSketch: (id: string) => void;
   onInputFidelity: (value: FidelityChoice) => void;
   onReturn: () => void;
+  /** 发起局部重绘（普通图片 ✎） */
+  onStartInpaint: (id: string) => void;
+  /** 修改已确认选区（底图 ✎） */
+  onEditMask: () => void;
+  /** 移除选区：保留底图与描述，切换为普通图片编辑 */
+  onRemoveMask: () => void;
+  /** 接受建议输出尺寸（IP-10） */
+  onAcceptSize: () => void;
 }) {
   const { form: f, onPatch } = props;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -112,8 +126,13 @@ function FullBar(props: {
   const sketchIdx = props.images.findIndex((image) => image.isSketch);
   const hasSketch = sketchIdx >= 0;
   const atMax = props.images.length >= MAX_INPUT_IMAGES;
+  const inpaint = props.inpaint;
+  const sizeBlocked = !!inpaint?.suggested && !inpaint.accepted;
   const ready =
-    !props.generating && !props.reading && f.prompt.trim().length > 0;
+    !props.generating &&
+    !props.reading &&
+    !sizeBlocked &&
+    f.prompt.trim().length > 0;
   const explicitSize = formSize(f);
   const sizeMismatch =
     !!props.sketchSize &&
@@ -136,49 +155,107 @@ function FullBar(props: {
       />
       {!!editing && (
         <div className="pm-bar-thumbs">
-          {props.images.map((image, index) => (
-            <div className="pm-bar-thumb" key={image.id}>
-              <button
-                type="button"
-                className={image.isSketch ? "sk" : ""}
-                aria-label={
-                  image.isSketch
-                    ? `编辑图${index + 1}草图`
-                    : `预览图${index + 1}`
-                }
-                disabled={!image.url}
-                onClick={() =>
-                  image.isSketch
-                    ? props.onEditSketch(image.id)
-                    : props.onPreview(image.id)
-                }
+          {props.images.map((image, index) => {
+            const role = image.inpaintRole ?? (inpaint ? "ref" : "candidate");
+            return (
+              <div
+                className={"pm-bar-thumb" + (role === "mask" ? " mask" : "")}
+                key={image.id}
               >
-                {image.url ? (
-                  <img
-                    src={image.url}
-                    alt={image.isSketch ? `图${index + 1} 草图` : image.name}
-                  />
-                ) : (
-                  <span>不可用</span>
+                <button
+                  type="button"
+                  className={image.isSketch ? "sk" : ""}
+                  aria-label={
+                    image.isSketch
+                      ? `编辑图${index + 1}草图`
+                      : `预览图${index + 1}`
+                  }
+                  disabled={!image.url}
+                  onClick={() =>
+                    image.isSketch
+                      ? props.onEditSketch(image.id)
+                      : props.onPreview(image.id)
+                  }
+                >
+                  {image.url ? (
+                    <img
+                      src={image.url}
+                      alt={image.isSketch ? `图${index + 1} 草图` : image.name}
+                    />
+                  ) : (
+                    <span>不可用</span>
+                  )}
+                </button>
+                <span className="no">{index + 1}</span>
+                {role === "mask" && <span className="sel-badge">已选区域</span>}
+                {(image.isSketch || role !== "ref") && (
+                  <button
+                    type="button"
+                    className="pen act"
+                    aria-label={
+                      image.isSketch
+                        ? `继续画图${index + 1}草图`
+                        : role === "mask"
+                          ? "修改选区"
+                          : `对图${index + 1}发起局部重绘`
+                    }
+                    title={
+                      image.isSketch
+                        ? "继续画这张草图"
+                        : role === "mask"
+                          ? "修改选区"
+                          : "局部重绘：涂选这张图的修改区域"
+                    }
+                    disabled={props.generating || props.reading}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (image.isSketch) props.onEditSketch(image.id);
+                      else if (role === "mask") props.onEditMask();
+                      else props.onStartInpaint(image.id);
+                    }}
+                  >
+                    <Pencil size={9} />
+                  </button>
                 )}
-              </button>
-              <span className="no">{index + 1}</span>
-              {image.isSketch && (
-                <span className="pen" aria-hidden>
-                  <Pencil size={9} />
-                </span>
-              )}
-              <button
-                type="button"
-                className="rm"
-                aria-label={`移除图${index + 1}`}
-                disabled={props.generating}
-                onClick={() => props.onRemove(image.id)}
-              >
-                ×
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  className="rm"
+                  aria-label={`移除图${index + 1}`}
+                  disabled={props.generating}
+                  onClick={() => props.onRemove(image.id)}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+          {inpaint && (
+            <button
+              type="button"
+              className="pm-bar-rmmask"
+              disabled={props.generating}
+              title="保留底图、描述与参数，切换为普通图片编辑"
+              onClick={props.onRemoveMask}
+            >
+              移除选区
+            </button>
+          )}
+        </div>
+      )}
+      {inpaint?.suggested && (
+        <div className="pm-bar-size" role="status">
+          <span>输出尺寸与原图不同</span>
+          <b>
+            {inpaint.tw} × {inpaint.th}
+          </b>
+          <span className="why">{inpaint.reason}</span>
+          {inpaint.accepted ? (
+            <span className="ok">已接受</span>
+          ) : (
+            <button type="button" onClick={props.onAcceptSize}>
+              接受并使用
+            </button>
+          )}
         </div>
       )}
       {props.uploadError && (
@@ -190,15 +267,17 @@ function FullBar(props: {
         <textarea
           ref={props.promptRef}
           className="pm-bar-ta"
-          aria-label={editing ? "修改描述" : "画面描述"}
+          aria-label={inpaint ? "修改描述" : editing ? "修改描述" : "画面描述"}
           maxLength={32000}
           value={f.prompt}
           placeholder={
-            hasSketch
-              ? `根据图${sketchIdx + 1}的草图描述你想要的画面，例如材质、光线和风格。`
-              : editing
-                ? "例如：保留图1的商品，使用图2的背景"
-                : "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
+            inpaint
+              ? "描述选中区域要怎么改，例如：把杯子换成白色陶瓷杯"
+              : hasSketch
+                ? `根据图${sketchIdx + 1}的草图描述你想要的画面，例如材质、光线和风格。`
+                : editing
+                  ? "例如：保留图1的商品，使用图2的背景"
+                  : "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
           }
           disabled={props.generating || props.reading}
           rows={1}
@@ -208,14 +287,27 @@ function FullBar(props: {
           type="button"
           className={"pm-bar-send" + (ready ? " ready" : "")}
           aria-label={
-            hasSketch ? "根据草图生成" : editing ? "生成编辑结果" : "生成图片"
+            inpaint
+              ? "生成重绘结果"
+              : hasSketch
+                ? "根据草图生成"
+                : editing
+                  ? "生成编辑结果"
+                  : "生成图片"
           }
+          title={sizeBlocked ? "请先接受建议输出尺寸" : undefined}
           disabled={!ready}
           onClick={props.onGenerate}
         >
           <ArrowUp size={16} strokeWidth={2.4} />
         </button>
       </div>
+      {inpaint && (
+        <p className="pm-bar-inp-note">
+          选区用于引导修改，结果中的其他区域也可能发生变化 ·
+          未提交的选区仅保留在当前页面
+        </p>
+      )}
       <div className="pm-bar-row2">
         {props.canReturn && (
           <button
@@ -617,6 +709,7 @@ export function CreateBar(props: {
   uploadError: string;
   canReturn: boolean;
   sketchSize: { w: number; h: number } | null;
+  inpaint: InpaintBarInfo | null;
   promptRef: RefObject<HTMLTextAreaElement | null>;
   onPatch: (patch: Partial<GenForm>) => void;
   onGenerate: () => void;
@@ -634,6 +727,10 @@ export function CreateBar(props: {
   onDownloadAll: () => void;
   onUseAsRef: () => void;
   onDismissDone: () => void;
+  onStartInpaint: (id: string) => void;
+  onEditMask: () => void;
+  onRemoveMask: () => void;
+  onAcceptSize: () => void;
 }) {
   const state = props.generating
     ? "generating"
@@ -664,6 +761,7 @@ export function CreateBar(props: {
           generating={false}
           canReturn={props.canReturn}
           sketchSize={props.sketchSize}
+          inpaint={props.inpaint}
           promptRef={props.promptRef}
           onPatch={props.onPatch}
           onGenerate={props.onGenerate}
@@ -674,6 +772,10 @@ export function CreateBar(props: {
           onEditSketch={props.onEditSketch}
           onInputFidelity={props.onInputFidelity}
           onReturn={props.onReturn}
+          onStartInpaint={props.onStartInpaint}
+          onEditMask={props.onEditMask}
+          onRemoveMask={props.onRemoveMask}
+          onAcceptSize={props.onAcceptSize}
         />
       )}
       {state === "generating" && (

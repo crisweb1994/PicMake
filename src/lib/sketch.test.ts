@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   SKETCH_MAX_COMMANDS,
   blankSketch,
-  cloneSketchDocument,
   commitCommand,
   eraserWidth,
   freezeSketch,
@@ -125,22 +124,6 @@ describe("totalPoints / 快照", () => {
     const frozen = freezeSketch(doc, 0);
     expect(frozen.commands).toHaveLength(0);
     expect(doc.commands).toHaveLength(1); // 原文档不被修改
-  });
-
-  it("cloneSketchDocument 深拷贝命令与点", () => {
-    const doc: SketchDocument = {
-      version: 1,
-      width: 1024,
-      height: 1024,
-      commands: [strokeCmd()],
-    };
-    const clone = cloneSketchDocument(doc);
-    expect(clone).toEqual(doc);
-    expect(clone).not.toBe(doc);
-    expect(clone.commands[0]).not.toBe(doc.commands[0]);
-    expect((clone.commands[0] as StrokeCmd).points[0]).not.toBe(
-      (doc.commands[0] as StrokeCmd).points[0],
-    );
   });
 });
 

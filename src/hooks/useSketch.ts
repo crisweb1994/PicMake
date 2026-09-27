@@ -142,18 +142,6 @@ export function useSketch(props: {
     );
   }, []);
 
-  const clearAll = useCallback(() => {
-    setSession((current) => {
-      if (!current) return current;
-      const next = commitCommand(current.doc, current.cursor, {
-        type: "clear",
-      });
-      return next
-        ? { ...current, doc: next.doc, cursor: next.cursor }
-        : current;
-    });
-  }, []);
-
   const confirm = useCallback(() => {
     const current = session;
     if (!current || confirming) return;
@@ -218,7 +206,7 @@ export function useSketch(props: {
     stroke,
     undo,
     redo,
-    clearAll,
+    clearAll: () => stroke({ type: "clear" }),
     confirm,
     close,
   };

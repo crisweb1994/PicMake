@@ -1,4 +1,6 @@
-/** 舞台右上详情浮卡（PRD §5.2，2026-09-23）：承接原右坞「本次生成详情」，纯展示。 */
+/** 舞台右上详情浮卡（PRD §5.2，2026-09-23）：承接原右坞「本次生成详情」，纯展示。
+ *  局部重绘（IP-01/IP-15）：多图须先在某一张上（未选时不静默取第一张，D8）；
+ *  局部重绘记录提供「查看选区」与「调整上次重绘」。 */
 import { Star, X } from "lucide-react";
 import { fmtDuration, fmtTime } from "../lib/format";
 import { MODEL_LABELS, QUALITY_LABELS, sizeText } from "../lib/params";
@@ -15,14 +17,21 @@ export function DetailCard(props: {
   onCopyPrompt: () => void;
   onReuse: () => void;
   onEdit: (imageId: string) => void;
+  /** 对选中的一张发起局部重绘（IP-01） */
+  onInpaint: (imageId: string) => void;
   onDelete: () => void;
   onToggleStar: () => void;
   onNew: () => void;
   onClose: () => void;
+  /** 局部重绘记录：查看已保存选区（只读） */
+  onViewMask?: () => void;
+  /** 局部重绘记录：恢复上次草稿（不生成） */
+  onAdjustInpaint?: () => void;
 }) {
   const { row, images } = props.display;
   const p = row.params;
   const editImageId = props.selectedImageId ?? images[0]?.id ?? null;
+  const inpaintRow = !!row.inpaint;
   return (
     <aside className="pm-island pm-detail" aria-label="本次生成详情">
       <header className="pm-detail-cap">
@@ -116,6 +125,50 @@ export function DetailCard(props: {
           编辑此图
         </button>
       </div>
+      <div className="pm-detail-acts">
+        {inpaintRow ? (
+          <>
+            {props.onViewMask && (
+              <button type="button" onClick={props.onViewMask}>
+                查看选区
+              </button>
+            )}
+            {props.onAdjustInpaint && (
+              <button
+                type="button"
+                disabled={!props.canEdit}
+                onClick={props.onAdjustInpaint}
+              >
+                调整上次重绘
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            disabled={!editImageId || !props.canEdit}
+            onClick={() => editImageId && props.onInpaint(editImageId)}
+          >
+            局部重绘
+          </button>
+        )}
+      </div>
+      {!inpaintRow && !props.selectedImageId && images.length > 1 && (
+        <p className="pm-detail-hint">
+          多张结果先在轮播中选一张，再对这一张局部重绘。
+        </p>
+      )}
+      {!inpaintRow && props.selectedImageId && (
+        <p className="pm-detail-hint">
+          将对第 {images.findIndex((i) => i.id === props.selectedImageId) + 1}{" "}
+          张发起局部重绘。
+        </p>
+      )}
+      {inpaintRow && row.inpaint && (
+        <p className="pm-detail-hint">
+          选区叠加在实际请求底图上；「再来一版」复用同一份选区。
+        </p>
+      )}
       {!props.selectedImageId && images.length > 1 && (
         <p className="pm-detail-hint">多张结果可在轮播中选一张，再编辑此图。</p>
       )}
