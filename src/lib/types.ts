@@ -171,22 +171,14 @@ export const INPAINT_ISSUE_HINTS: Record<InpaintIssue, string> = {
   "size-unaccepted": "输出尺寸与原图不同，请先接受建议尺寸",
 };
 
-export interface Usage {
-  totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  textTokens: number;
-  imageTokens: number;
-  inputDetailsAvailable: boolean;
-}
-
 export interface ImageGenResult {
   b64: string;
 }
 
 export interface ImageRequestResult {
   images: ImageGenResult[];
-  usage: Usage | null;
+  /** 请求级原始 usage（PRD：不做费用展示，按响应原样保存） */
+  usage: Record<string, unknown> | null;
 }
 
 export type ApiErrorKind =

@@ -31,7 +31,6 @@ export interface DisplayInput {
   name: string;
   label: string;
   url?: string;
-  origin?: string;
   /** 草图附件：点击重新打开画板而非普通预览（SKETCH §6.3） */
   isSketch?: boolean;
   /** 局部重绘 ✎ 入口角色（IP-08）：mask=底图（修改选区）；ref=重绘中参考图（停用）；

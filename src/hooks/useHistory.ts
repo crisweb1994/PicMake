@@ -83,11 +83,6 @@ export function useHistory() {
     id: source.imageId,
     name: source.name ?? "已有作品",
     label: `图${index + 1} · ${source.name ?? "已有作品"}`,
-    origin: !source.generationId
-      ? "上传的图片"
-      : rows.some((row) => row.id === source.generationId)
-        ? "来自已有作品"
-        : "来源作品已删除",
     url: assets[source.imageId]?.url,
     /** 来源是草图：预览时提供「继续画这张草图」（SKETCH §6.3/§8.2，不改旧记录） */
     isSketch: !!assets[source.imageId]?.row.sketch,

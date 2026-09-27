@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { generateImageEditStream, generateImageStream } from "../api/client";
+import { requestImages } from "../api/client";
 import { db } from "../db/schema";
 import { b64ToBlob } from "../lib/blob";
 import { MASK_MAX_BYTES, validateMaskDocument } from "../lib/inpaint";
@@ -19,7 +19,6 @@ import type { GenPlan } from "../lib/view-models";
 
 export interface GenerationRun {
   result: ImageRequestResult;
-  params: GenParams;
   edit?: EditSubmission;
   startedAt: number;
 }
@@ -28,7 +27,6 @@ interface RequestSnapshot {
   params: GenParams;
   draft: EditDraft | null;
   config: ApiConfig;
-  edit?: EditSubmission;
 }
 
 /** 由草稿构建 mask 提交快照；校验失败则不发送（IP-11）。 */
@@ -69,8 +67,8 @@ export function useGeneration() {
     null,
   );
   const [plan, setPlan] = useState<GenPlan | null>(null);
-  const activeRef = useRef<{ id: number; abort: AbortController } | null>(null);
-  const nextIdRef = useRef(0);
+  /** 单飞锁：请求进行中阻止再次 start；取消经 AbortController 失效迟到回调 */
+  const activeRef = useRef<AbortController | null>(null);
   const previewUrlRef = useRef<string | null>(null);
 
   const clearPreview = useCallback(() => {
@@ -82,17 +80,16 @@ export function useGeneration() {
   const execute = useCallback(
     async (snapshot: RequestSnapshot): Promise<GenerationRun> => {
       if (activeRef.current) throw new Error("generation already running");
-      const id = ++nextIdRef.current;
       const abort = new AbortController();
-      activeRef.current = { id, abort };
+      activeRef.current = abort;
       setPhase("generating");
       setPlan({ n: snapshot.params.n, size: snapshot.params.size });
       clearPreview();
       const startedAt = Date.now();
 
       try {
-        let edit = snapshot.edit;
-        if (snapshot.draft && !edit) {
+        let edit: EditSubmission | undefined;
+        if (snapshot.draft) {
           if (snapshot.draft.inputs.length > MAX_INPUT_IMAGES)
             throw new ApiError(
               "too-many-images",
@@ -130,13 +127,11 @@ export function useGeneration() {
                 }
               : {}),
           };
-          snapshot.edit = edit;
         }
 
         const handlers = {
           signal: abort.signal,
           onPartial: (b64: string, index: number) => {
-            if (activeRef.current?.id !== id) return;
             if (previewUrlRef.current)
               URL.revokeObjectURL(previewUrlRef.current);
             const url = URL.createObjectURL(b64ToBlob(b64));
@@ -144,17 +139,16 @@ export function useGeneration() {
             setPartial({ url, index });
           },
         };
-        const result = edit
-          ? await generateImageEditStream(edit, snapshot.config, handlers)
-          : await generateImageStream(
-              snapshot.params,
-              snapshot.config,
-              handlers,
-            );
+        const result = await requestImages(
+          snapshot.params,
+          snapshot.config,
+          handlers,
+          edit,
+        );
         abort.signal.throwIfAborted();
-        return { result, params: snapshot.params, edit, startedAt };
+        return { result, edit, startedAt };
       } finally {
-        if (activeRef.current?.id === id) activeRef.current = null;
+        activeRef.current = null;
         clearPreview();
         setPhase("idle");
       }
@@ -163,62 +157,29 @@ export function useGeneration() {
   );
 
   const start = useCallback(
-    (params: GenParams, draft: EditDraft | null, config: ApiConfig) => {
-      const snapshot: RequestSnapshot = {
-        params: {
-          ...params,
-          size: params.size === "auto" ? "auto" : { ...params.size },
-        },
-        // 草图附件带嵌套命令文档：快照深拷贝文档，提交后的可恢复笔画不会与
-        // 后续编辑分叉（SKETCH §8.4——文档不可原地修改，修改走新 ImageRow）；
-        // 局部重绘同理深拷贝 mask 文档（TECH §3.2），Blob 直接引用不可变对象
-        draft: draft
-          ? {
-              ...draft,
-              inputs: draft.inputs.map((input) =>
-                input.upload?.sketch
-                  ? {
-                      ...input,
-                      upload: {
-                        ...input.upload,
-                        sketch: structuredClone(input.upload.sketch),
-                      },
-                    }
-                  : { ...input },
-              ),
-              ...(draft.inpaint
-                ? {
-                    inpaint: {
-                      ...draft.inpaint,
-                      mask: {
-                        ...draft.inpaint.mask,
-                        mask: structuredClone(draft.inpaint.mask.mask),
-                      },
-                    },
-                  }
-                : {}),
-            }
-          : null,
+    (params: GenParams, draft: EditDraft | null, config: ApiConfig) =>
+      execute({
+        params,
+        // 快照隔离（SKETCH §8.4 / TECH §3.2）：提交后草稿再变化不影响本次请求
+        draft: draft ? structuredClone(draft) : null,
         config: { ...config },
-      };
-      return execute(snapshot);
-    },
+      }),
     [execute],
   );
 
   const cancel = useCallback(() => {
-    activeRef.current?.abort.abort();
+    activeRef.current?.abort();
   }, []);
 
   const reset = useCallback(() => {
-    activeRef.current?.abort.abort();
+    activeRef.current?.abort();
     setPlan(null);
     clearPreview();
   }, [clearPreview]);
 
   useEffect(
     () => () => {
-      activeRef.current?.abort.abort();
+      activeRef.current?.abort();
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     },
     [],

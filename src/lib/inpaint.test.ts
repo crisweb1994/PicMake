@@ -5,7 +5,6 @@ import {
   checkInpaintBase,
   commitMaskCommand,
   inpaintTargetSize,
-  isFullyCovered,
   maskBrushRange,
   maskOutputAlpha,
   sizeReason,
@@ -181,12 +180,6 @@ describe("coverage 二值语义（D5 / A52）", () => {
     expect(maskOutputAlpha(128)).toBe(0);
     expect(maskOutputAlpha(255)).toBe(0);
     expect(MASK_ALPHA_THRESHOLD).toBe(128);
-  });
-
-  it("全选覆盖判定（IP-05）", () => {
-    expect(isFullyCovered(1024 * 768, 1024, 768)).toBe(true);
-    expect(isFullyCovered(1024 * 768 - 10, 1024, 768)).toBe(true);
-    expect(isFullyCovered(1000, 1024, 768)).toBe(false);
   });
 });
 

@@ -85,14 +85,13 @@ function MiniBar(props: {
 }
 
 /** ── full 态：附件 + 输入 + 参数 chips ── */
-function FullBar(props: {
+interface FullBarProps {
   form: GenForm;
   customValid: boolean;
   images: DisplayInput[];
   inputFidelity: FidelityChoice;
   reading: boolean;
   uploadError: string;
-  generating: boolean;
   canReturn: boolean;
   /** 已确认草图的逻辑尺寸（比例不一致提示用；无草图为 null） */
   sketchSize: { w: number; h: number } | null;
@@ -118,7 +117,9 @@ function FullBar(props: {
   onRemoveMask: () => void;
   /** 接受建议输出尺寸（IP-10） */
   onAcceptSize: () => void;
-}) {
+}
+
+function FullBar(props: FullBarProps) {
   const { form: f, onPatch } = props;
   const fileRef = useRef<HTMLInputElement>(null);
   const usingCustom = isCustomActive(f);
@@ -128,11 +129,7 @@ function FullBar(props: {
   const atMax = props.images.length >= MAX_INPUT_IMAGES;
   const inpaint = props.inpaint;
   const sizeBlocked = !!inpaint?.suggested && !inpaint.accepted;
-  const ready =
-    !props.generating &&
-    !props.reading &&
-    !sizeBlocked &&
-    f.prompt.trim().length > 0;
+  const ready = !props.reading && !sizeBlocked && f.prompt.trim().length > 0;
   const explicitSize = formSize(f);
   const sizeMismatch =
     !!props.sketchSize &&
@@ -146,7 +143,7 @@ function FullBar(props: {
         multiple
         accept="image/png,image/jpeg,image/webp"
         hidden
-        disabled={props.generating || props.reading}
+        disabled={props.reading}
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
           event.target.value = "";
@@ -206,7 +203,7 @@ function FullBar(props: {
                           ? "修改选区"
                           : "局部重绘：涂选这张图的修改区域"
                     }
-                    disabled={props.generating || props.reading}
+                    disabled={props.reading}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (image.isSketch) props.onEditSketch(image.id);
@@ -221,7 +218,6 @@ function FullBar(props: {
                   type="button"
                   className="rm"
                   aria-label={`移除图${index + 1}`}
-                  disabled={props.generating}
                   onClick={() => props.onRemove(image.id)}
                 >
                   ×
@@ -233,7 +229,6 @@ function FullBar(props: {
             <button
               type="button"
               className="pm-bar-rmmask"
-              disabled={props.generating}
               title="保留底图、描述与参数，切换为普通图片编辑"
               onClick={props.onRemoveMask}
             >
@@ -279,7 +274,7 @@ function FullBar(props: {
                   ? "例如：保留图1的商品，使用图2的背景"
                   : "描述你想要的画面，比如：雪夜的山顶小屋，一盏暖灯"
           }
-          disabled={props.generating || props.reading}
+          disabled={props.reading}
           rows={1}
           onChange={(e) => onPatch({ prompt: e.target.value })}
         />
@@ -322,7 +317,7 @@ function FullBar(props: {
         <BarChip
           ariaLabel="添加输入"
           icon={<Plus size={13} />}
-          disabled={props.generating || props.reading}
+          disabled={props.reading}
           popWidth={252}
           closeOnSelect
         >
@@ -367,7 +362,6 @@ function FullBar(props: {
           value={MODEL_LABELS[f.model]}
           suffix={f.model === "flare" ? "快速" : "精细"}
           dirty={f.model !== DEFAULT_FORM.model}
-          disabled={props.generating}
           closeOnSelect
         >
           <PopRow
@@ -398,7 +392,6 @@ function FullBar(props: {
             f.base !== DEFAULT_FORM.base ||
             usingCustom
           }
-          disabled={props.generating}
           popWidth={252}
         >
           <p className="pm-pop-lb">比例</p>
@@ -468,7 +461,6 @@ function FullBar(props: {
           value={QUALITY_LABELS[f.quality]}
           suffix="质量"
           dirty={f.quality !== DEFAULT_FORM.quality}
-          disabled={props.generating}
           closeOnSelect
         >
           {(
@@ -494,7 +486,6 @@ function FullBar(props: {
           ariaLabel="生成张数"
           value={`×${f.n}`}
           dirty={f.n !== DEFAULT_FORM.n}
-          disabled={props.generating}
           popWidth={196}
           closeOnSelect
         >
@@ -518,7 +509,6 @@ function FullBar(props: {
         <BarChip
           ariaLabel="更多设置"
           icon={<span className="pm-chip-icon-txt">⋯</span>}
-          disabled={props.generating}
           right
           popWidth={252}
         >
@@ -590,11 +580,10 @@ function FullBar(props: {
   );
 }
 
-/** ── generating 态 ── */
+/** ── generating 态（保存阶段的提示由 App 的 pm-saving 覆盖层承担） ── */
 function GenBar(props: {
   model: ModelId;
   partialIndex: number;
-  saving: boolean;
   onCancel: () => void;
 }) {
   const step = Math.min(3, props.partialIndex + 1);
@@ -608,23 +597,15 @@ function GenBar(props: {
           <i />
         </span>
         <span className="pm-bar-genst">
-          {props.saving ? (
-            <>生成完成，正在保存到本地…</>
-          ) : (
-            <>
-              正在生成 · 渐进预览 <b>{step}/3</b>
-            </>
-          )}
+          正在生成 · 渐进预览 <b>{step}/3</b>
         </span>
-        {!props.saving && (
-          <button
-            type="button"
-            className="pm-bar-cancel"
-            onClick={props.onCancel}
-          >
-            ✕ 取消
-          </button>
-        )}
+        <button
+          type="button"
+          className="pm-bar-cancel"
+          onClick={props.onCancel}
+        >
+          ✕ 取消
+        </button>
       </div>
       <div className="pm-shimmer" aria-hidden />
       <p className="pm-bar-gennote">
@@ -694,49 +675,38 @@ function DoneBar(props: {
   );
 }
 
-/** 底栏总装：状态优先级 generating > complete > (full > mini) */
-export function CreateBar(props: {
-  mode: "mini" | "full";
-  generating: boolean;
-  saving: boolean;
-  done: DisplayGen | null;
-  partialIndex: number;
-  form: GenForm;
-  customValid: boolean;
-  images: DisplayInput[];
-  inputFidelity: FidelityChoice;
-  reading: boolean;
-  uploadError: string;
-  canReturn: boolean;
-  sketchSize: { w: number; h: number } | null;
-  inpaint: InpaintBarInfo | null;
-  promptRef: RefObject<HTMLTextAreaElement | null>;
-  onPatch: (patch: Partial<GenForm>) => void;
-  onGenerate: () => void;
-  onCancel: () => void;
-  onFiles: (files: File[]) => void;
-  onRemove: (id: string) => void;
-  onPreview: (id: string) => void;
-  onOpenSketch: () => void;
-  onEditSketch: (id: string) => void;
-  onInputFidelity: (value: FidelityChoice) => void;
-  onExpand: () => void;
-  onReturn: () => void;
-  onAgain: () => void;
-  onTweak: () => void;
-  onDownloadAll: () => void;
-  onUseAsRef: () => void;
-  onDismissDone: () => void;
-  onStartInpaint: (id: string) => void;
-  onEditMask: () => void;
-  onRemoveMask: () => void;
-  onAcceptSize: () => void;
-}) {
-  const state = props.generating
-    ? "generating"
-    : props.done
-      ? "complete"
-      : props.mode;
+/** 底栏总装：状态优先级 generating > complete > (full > mini)；
+ *  除 FullBar 子集外只带各状态自己的 props，FullBar 部分整体透传。 */
+export function CreateBar(
+  props: FullBarProps & {
+    mode: "mini" | "full";
+    generating: boolean;
+    done: DisplayGen | null;
+    partialIndex: number;
+    onCancel: () => void;
+    onExpand: () => void;
+    onAgain: () => void;
+    onTweak: () => void;
+    onDownloadAll: () => void;
+    onUseAsRef: () => void;
+    onDismissDone: () => void;
+  },
+) {
+  const {
+    mode,
+    generating,
+    done,
+    partialIndex,
+    onCancel,
+    onExpand,
+    onAgain,
+    onTweak,
+    onDownloadAll,
+    onUseAsRef,
+    onDismissDone,
+    ...full
+  } = props;
+  const state = generating ? "generating" : done ? "complete" : mode;
   return (
     <section
       className="pm-island pm-bar"
@@ -744,56 +714,24 @@ export function CreateBar(props: {
       data-state={state}
     >
       {state === "mini" && (
-        <MiniBar
-          form={props.form}
-          disabled={props.reading}
-          onExpand={props.onExpand}
-        />
+        <MiniBar form={full.form} disabled={full.reading} onExpand={onExpand} />
       )}
-      {state === "full" && (
-        <FullBar
-          form={props.form}
-          customValid={props.customValid}
-          images={props.images}
-          inputFidelity={props.inputFidelity}
-          reading={props.reading}
-          uploadError={props.uploadError}
-          generating={false}
-          canReturn={props.canReturn}
-          sketchSize={props.sketchSize}
-          inpaint={props.inpaint}
-          promptRef={props.promptRef}
-          onPatch={props.onPatch}
-          onGenerate={props.onGenerate}
-          onFiles={props.onFiles}
-          onRemove={props.onRemove}
-          onPreview={props.onPreview}
-          onOpenSketch={props.onOpenSketch}
-          onEditSketch={props.onEditSketch}
-          onInputFidelity={props.onInputFidelity}
-          onReturn={props.onReturn}
-          onStartInpaint={props.onStartInpaint}
-          onEditMask={props.onEditMask}
-          onRemoveMask={props.onRemoveMask}
-          onAcceptSize={props.onAcceptSize}
-        />
-      )}
+      {state === "full" && <FullBar {...full} />}
       {state === "generating" && (
         <GenBar
-          model={props.form.model}
-          partialIndex={props.partialIndex}
-          saving={props.saving}
-          onCancel={props.onCancel}
+          model={full.form.model}
+          partialIndex={partialIndex}
+          onCancel={onCancel}
         />
       )}
-      {state === "complete" && props.done && (
+      {state === "complete" && done && (
         <DoneBar
-          done={props.done}
-          onAgain={props.onAgain}
-          onTweak={props.onTweak}
-          onDownloadAll={props.onDownloadAll}
-          onUseAsRef={props.onUseAsRef}
-          onDismiss={props.onDismissDone}
+          done={done}
+          onAgain={onAgain}
+          onTweak={onTweak}
+          onDownloadAll={onDownloadAll}
+          onUseAsRef={onUseAsRef}
+          onDismiss={onDismissDone}
         />
       )}
     </section>

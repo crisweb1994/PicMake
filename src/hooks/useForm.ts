@@ -105,13 +105,11 @@ export function useForm() {
     setForm((current) => ({ ...current, ...patch }));
     setDirty(true);
   };
-  const removeInput = (id?: string) => {
+  const removeInput = (id: string) => {
     stopReading();
-    setInputs((current) =>
-      id ? current.filter((input) => input.imageId !== id) : [],
-    );
+    setInputs((current) => current.filter((input) => input.imageId !== id));
     // 移除底图同时移除与它绑定的选区；不允许留下无底图的重绘状态（IP-08）
-    if (id && inpaint && inputs[0]?.imageId === id) {
+    if (inpaint && inputs[0]?.imageId === id) {
       setInpaint(null);
       setSizeAccepted(false);
       toast("已移除底图与选区，剩余图片重新编号，请检查描述");
@@ -140,9 +138,7 @@ export function useForm() {
     },
     /** draft-input 入口被选中的原输入（重排后移除） */
     chosenInputId?: string,
-  ): boolean => {
-    if (inputs.length >= MAX_INPUT_IMAGES && payload.entry === "result")
-      return false;
+  ): void => {
     setInputs((current) => {
       if (payload.entry === "reedit") return current; // 底图已在位
       // 排除被涂选的原输入与任何同底图旧输入（result 入口可能已由 initialize 放入）
@@ -167,7 +163,6 @@ export function useForm() {
       return { mask: payload.mask, original: payload.original };
     });
     setDirty(true);
-    return true;
   };
   /** 「设为参考图」：把一条已有结果追加为输入源，不打断当前草稿（chipbar complete 态） */
   const appendExisting = (

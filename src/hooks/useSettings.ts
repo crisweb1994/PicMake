@@ -40,7 +40,6 @@ export const useSettingsModal = () => {
     runTestConnection,
     openSettings,
     closeSettings,
-    setSettingsOpen,
     saveSettings,
   };
 };

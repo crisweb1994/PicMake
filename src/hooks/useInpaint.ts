@@ -66,7 +66,7 @@ export interface InpaintOpenParams {
 }
 
 export function useInpaint(props: {
-  onApply: (payload: InpaintApplyPayload) => boolean;
+  onApply: (payload: InpaintApplyPayload) => void;
 }) {
   const [session, setSession] = useState<InpaintSession | null>(null);
   const [opening, setOpening] = useState(false);
@@ -232,15 +232,14 @@ export function useInpaint(props: {
         !!current.existingMask &&
         maskSnapshotKey(frozen) === current.openKey;
       if (unchanged && current.existingMask) {
-        const applied = applyRef.current({
+        applyRef.current({
           base: current.base,
           mask: current.existingMask,
           original: current.original,
           entry: current.entry,
           unchanged: true,
         });
-        if (applied) close();
-        else setConfirming(false);
+        close();
         return;
       }
       const result = await exportMaskPng(frozen);
@@ -268,15 +267,14 @@ export function useInpaint(props: {
         format: "png",
         mask: frozen,
       };
-      const applied = applyRef.current({
+      applyRef.current({
         base: current.base,
         mask,
         original: current.original,
         entry: current.entry,
         unchanged: false,
       });
-      if (applied) close();
-      else setConfirming(false);
+      close();
     })();
   }, [session, confirming, close]);
 
@@ -299,6 +297,5 @@ export function useInpaint(props: {
     redo,
     clearAll: () => stroke({ type: "clear" }),
     confirm,
-    clearError: () => setError(null),
   };
 }

@@ -1,11 +1,6 @@
 /** 只测试参数映射与 SSE 解析，不发网络请求。 */
 import { describe, expect, it } from "vitest";
-import {
-  createImageParser,
-  editFormData,
-  mapUsage,
-  parseGenResponse,
-} from "./client";
+import { createImageParser, editFormData, parseGenResponse } from "./client";
 import {
   ApiError,
   type EditSubmission,
@@ -109,27 +104,8 @@ describe("请求级 usage", () => {
       usage,
     });
     expect(result.images).toHaveLength(2);
-    expect(result.usage?.outputTokens).toBe(300);
+    expect(result.usage).toEqual(usage);
     expect(result.images.every((image) => !("usage" in image))).toBe(true);
-  });
-  it("缺少输入明细不猜测 token 构成", () => {
-    expect(mapUsage({ input_tokens: 300, output_tokens: 100 })).toMatchObject({
-      inputTokens: 300,
-      textTokens: 0,
-      imageTokens: 0,
-      inputDetailsAvailable: false,
-    });
-    expect(mapUsage(null)).toBeNull();
-    expect(
-      mapUsage({
-        output_tokens: 100,
-        input_tokens_details: { text_tokens: 50 },
-      }),
-    ).toMatchObject({
-      textTokens: 0,
-      imageTokens: 0,
-      inputDetailsAvailable: false,
-    });
   });
   it("拒绝空结果及没有图片的响应", () => {
     expect(() => parseGenResponse({ data: [] })).toThrow();
@@ -159,7 +135,7 @@ describe("生成和编辑 SSE", () => {
         "first",
         "second",
       ]);
-      expect(result.usage).toEqual(mapUsage(usage));
+      expect(result.usage).toEqual(usage);
     });
   }
   it("保留流内内容政策错误的类别", () => {

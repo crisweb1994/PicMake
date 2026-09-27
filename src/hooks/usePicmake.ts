@@ -58,10 +58,10 @@ export function usePicmake({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
-  /** 底栏 complete 态的数据源：最近一次保存成功的结果（chipbar §5.2） */
-  const [lastDone, setLastDone] = useState<HistoryRow | null>(null);
+  /** 底栏 complete 态的数据源：最近一次保存成功的结果 id（chipbar §5.2） */
+  const [lastDoneId, setLastDoneId] = useState<string | null>(null);
   const generation = useGeneration();
-  const clearDone = () => setLastDone(null);
+  const clearDone = () => setLastDoneId(null);
   /** 完整工作流锁（TECH §9.1）：从第一个 await 前同步锁住资源准备→请求→解码→保存，
    *  双击提交与各入口共用同一把锁；取消经 token 失效迟到回调。 */
   const workflowBusyRef = useRef(false);
@@ -87,10 +87,8 @@ export function usePicmake({
     });
   };
 
-  const savePrepared = async (
-    prepared: PreparedGeneration,
-  ): Promise<boolean> => {
-    if (savingRef.current) return false;
+  const savePrepared = async (prepared: PreparedGeneration): Promise<void> => {
+    if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     try {
@@ -98,12 +96,10 @@ export function usePicmake({
       form.initialize();
       setReturnId(null);
       generation.reset();
-      setLastDone(prepared.row);
+      setLastDoneId(prepared.row.id);
       toast("生成完成");
-      return true;
     } catch {
       toast(`${ERROR_TITLES["save-failed"]}：${ERROR_HINTS["save-failed"]}`);
-      return false;
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -194,7 +190,7 @@ export function usePicmake({
       toast("输出尺寸与原图不同，请先接受建议尺寸");
       return;
     }
-    setLastDone(null);
+    setLastDoneId(null);
     const params = form.getParams();
     if (params)
       void startGeneration(
@@ -314,7 +310,7 @@ export function usePicmake({
   const regenerate = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current || pendingSave)
       return;
-    setLastDone(null);
+    setLastDoneId(null);
     if (row.inpaint) {
       void regenerateInpaint(row);
       return;
@@ -331,15 +327,20 @@ export function usePicmake({
     void startGeneration({ ...row.params }, draft);
   };
 
+  /** 各入口共用的清理：清 complete 态、生成态、草稿、返回标记与查看状态（历史选择由各入口自理） */
+  const resetWorkspace = () => {
+    clearDone();
+    generation.reset();
+    form.initialize();
+    setReturnId(null);
+    onViewReset();
+  };
+
   const selectHistory = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
-      clearDone();
-      generation.reset();
       history.select(row.id);
-      form.initialize();
-      setReturnId(null);
-      onViewReset();
+      resetWorkspace();
     });
   };
 
@@ -385,24 +386,16 @@ export function usePicmake({
     if (generation.phase === "generating" || savingRef.current || !returnId)
       return;
     confirmPendingLeave(() => {
-      clearDone();
-      generation.reset();
-      form.initialize();
       history.select(returnId);
-      setReturnId(null);
-      onViewReset();
+      resetWorkspace();
     });
   };
 
   const newGeneration = () => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
-      clearDone();
-      generation.reset();
       history.select(null);
-      form.initialize();
-      setReturnId(null);
-      onViewReset();
+      resetWorkspace();
     });
   };
 
@@ -417,13 +410,7 @@ export function usePicmake({
           .remove(row.id)
           .then(() => {
             toast("已删除");
-            if (selectedId === row.id) {
-              clearDone();
-              generation.reset();
-              form.initialize();
-              setReturnId(null);
-              onViewReset();
-            }
+            if (selectedId === row.id) resetWorkspace();
           })
           .catch((caught) => toastError(caught));
       },
@@ -449,7 +436,7 @@ export function usePicmake({
     confirmState,
     setConfirmState,
     settings,
-    lastDone,
+    lastDoneId,
     clearDone,
     confirmPendingLeave,
   };

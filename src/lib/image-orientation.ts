@@ -237,7 +237,6 @@ export async function prepareInpaintBase(
         source: import("../lib/types").InputSource;
         image: import("../db/schema").ImageRow;
       };
-      note?: "normalized";
     }
   | { ok: false; issue: InpaintIssue }
 > {
@@ -316,7 +315,6 @@ export async function prepareInpaintBase(
         source: { imageId: originalImage.id, name },
         image: originalImage,
       },
-      note: "normalized",
     };
   } finally {
     bitmap.close();

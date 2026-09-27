@@ -1,7 +1,12 @@
 /** 局部重绘纯规则（PRD_INPAINTING IP-05/IP-10，TECH_INPAINTING §6/§7）：
  *  尺寸建议与底图约束、mask 文档校验、画笔范围、覆盖率二值语义、输出目标尺寸。
  *  只放纯函数；Canvas 重放与导出见 inpaint-canvas.ts，EXIF 读取见 image-orientation.ts。 */
-import { SKETCH_MAX_COMMANDS } from "./sketch";
+import {
+  commitCommand,
+  freezeSketch,
+  sketchSnapshotKey,
+  totalPoints,
+} from "./sketch";
 import type {
   InpaintIssue,
   MaskCommand,
@@ -116,46 +121,11 @@ export function makeMaskStroke(
   return { type: "stroke", tool, width, points: [] };
 }
 
-/** 提交一个完整命令：丢弃撤销后的重做分支；沿用草图 2000 命令 / 100000 点保护阈值 */
-export function commitMaskCommand(
-  doc: MaskDocument,
-  cursor: number,
-  command: MaskCommand,
-): { doc: MaskDocument; cursor: number } | null {
-  if (doc.commands.length >= SKETCH_MAX_COMMANDS) return null;
-  return {
-    doc: { ...doc, commands: [...doc.commands.slice(0, cursor), command] },
-    cursor: cursor + 1,
-  };
-}
-
-export function totalMaskPoints(
-  doc: Pick<MaskDocument, "commands">,
-  cursor = doc.commands.length,
-): number {
-  let n = 0;
-  for (let i = 0; i < cursor; i++) {
-    const cmd = doc.commands[i];
-    if (cmd.type === "stroke") n += cmd.points.length;
-  }
-  return n;
-}
-
-/** 变更检测：提交前缀的稳定序列化（无实质修改沿用原资源，IP-07） */
-export function maskSnapshotKey(
-  doc: Pick<MaskDocument, "commands">,
-  cursor = doc.commands.length,
-): string {
-  return JSON.stringify(doc.commands.slice(0, cursor));
-}
-
-/** 确认快照：只保留提交前缀；此后文档不可原地修改（TECH §3.1） */
-export function freezeMask(
-  doc: MaskDocument,
-  cursor = doc.commands.length,
-): MaskDocument {
-  return { ...doc, commands: doc.commands.slice(0, cursor) };
-}
+/** 命令文档语义（提交/统计/快照/截取）与草图共用同一实现，仅命令类型不同 */
+export const commitMaskCommand = commitCommand;
+export const totalMaskPoints = totalPoints;
+export const maskSnapshotKey = sketchSnapshotKey;
+export const freezeMask = freezeSketch;
 
 /**
  * 读取校验（IP-11.4）：版本、底图绑定、尺寸、有限坐标、笔宽与点数上限。
@@ -228,21 +198,7 @@ export function validateMaskDocument(
   };
 }
 
-/** D5 二值映射：coverage alpha → selected。0/127 → false；128/255 → true。 */
-export function coverageSelected(alpha: number): boolean {
-  return alpha >= MASK_ALPHA_THRESHOLD;
-}
-
-/** D5 输出映射：selected 像素导出透明（0），其余不透明（255） */
+/** D5 二值映射：coverage alpha → selected（≥128），selected 像素导出透明（0），其余不透明（255） */
 export function maskOutputAlpha(alpha: number): number {
-  return coverageSelected(alpha) ? 0 : 255;
-}
-
-/** 全选覆盖判定（IP-05：全部涂满属于有效选区，提示覆盖整张图片） */
-export function isFullyCovered(
-  selected: number,
-  width: number,
-  height: number,
-) {
-  return width > 0 && height > 0 && selected >= width * height * 0.995;
+  return alpha >= MASK_ALPHA_THRESHOLD ? 0 : 255;
 }

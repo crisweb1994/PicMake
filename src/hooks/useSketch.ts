@@ -30,7 +30,6 @@ export interface SketchSession {
 export interface SketchApplyPayload {
   image: ImageRow;
   replaces: string | null;
-  origin: SketchOrigin;
 }
 
 export function useSketch(props: {
@@ -180,7 +179,6 @@ export function useSketch(props: {
       const applied = applyRef.current({
         image,
         replaces: current.replacesImageId,
-        origin: current.origin,
       });
       if (applied) {
         close();

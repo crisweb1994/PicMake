@@ -13,7 +13,6 @@ import {
   type ImageGenResult,
   type ImageRequestResult,
   type EditSubmission,
-  type Usage,
 } from "../lib/types";
 
 function mapStatus(
@@ -108,26 +107,9 @@ function toBody(params: GenParams): string {
   });
 }
 
-export function mapUsage(u: any): Usage | null {
-  if (!u || typeof u.output_tokens !== "number") return null;
-  const inputDetailsAvailable =
-    typeof u.input_tokens_details?.text_tokens === "number" &&
-    typeof u.input_tokens_details?.image_tokens === "number";
-  return {
-    totalTokens: u.total_tokens ?? 0,
-    inputTokens: u.input_tokens ?? 0,
-    outputTokens: u.output_tokens ?? 0,
-    textTokens: inputDetailsAvailable ? u.input_tokens_details.text_tokens : 0,
-    imageTokens: inputDetailsAvailable
-      ? u.input_tokens_details.image_tokens
-      : 0,
-    inputDetailsAvailable,
-  };
-}
-
 /* ── 非流式生成 ── */
 
-/** 解析非流式响应体（普通请求与流式嗅探共用） */
+/** 解析非流式响应体（普通请求与流式嗅探共用）；usage 原样保存 */
 export function parseGenResponse(j: any): ImageRequestResult {
   const results: ImageGenResult[] = (j.data ?? []).map((d: any) => ({
     b64: d.b64_json,
@@ -137,7 +119,7 @@ export function parseGenResponse(j: any): ImageRequestResult {
     results.some((r) => typeof r.b64 !== "string" || !r.b64)
   )
     throw new ApiError("unknown", "响应中没有图片数据");
-  return { images: results, usage: mapUsage(j.usage) };
+  return { images: results, usage: j.usage ?? null };
 }
 
 /* ── 异步任务型中转（如 apimart）：
@@ -224,7 +206,10 @@ async function resolveTaskResult(
       if (!urls.length)
         throw new ApiError("unknown", "任务完成但响应中没有图片数据");
       const b64s = await Promise.all(urls.map((u) => urlToB64(u, signal)));
-      return { images: b64s.map((b64) => ({ b64 })), usage: mapUsage(d.usage) };
+      return {
+        images: b64s.map((b64) => ({ b64 })),
+        usage: d.usage ?? null,
+      };
     }
     if (status === "failed" || status === "error" || status === "cancelled") {
       const msg = d?.error?.message ?? d?.message ?? j?.error?.message;
@@ -244,23 +229,6 @@ async function resolveTaskResult(
 export interface StreamHandlers {
   onPartial?: (b64: string, index: number) => void;
   signal?: AbortSignal;
-}
-
-/** 文生图和编辑共享传输与错误语义；配置在调用时固定。 */
-export function generateImageStream(
-  params: GenParams,
-  config: ApiConfig,
-  handlers: StreamHandlers = {},
-): Promise<ImageRequestResult> {
-  return requestImages(params, handlers, config);
-}
-
-export function generateImageEditStream(
-  submission: EditSubmission,
-  config: ApiConfig,
-  handlers: StreamHandlers = {},
-): Promise<ImageRequestResult> {
-  return requestImages(submission.params, handlers, config, submission);
 }
 
 /** 浏览器负责 multipart boundary；文件扩展名来自已存的来源格式。
@@ -323,16 +291,17 @@ export function createImageParser(
         };
         result.images.push(image);
         // usage 是请求级总量，后续完成事件的总量回显覆盖，绝不按图相加。
-        result.usage = mapUsage(d.usage) ?? result.usage;
+        if (d.usage) result.usage = d.usage;
       }
     },
   });
 }
 
-async function requestImages(
+/** 文生图和编辑共享传输与错误语义；配置在调用时固定。edit 存在时走 /images/edits。 */
+export async function requestImages(
   params: GenParams,
-  handlers: StreamHandlers,
   config: ApiConfig,
+  handlers: StreamHandlers = {},
   edit?: EditSubmission,
 ): Promise<ImageRequestResult> {
   const url = apiUrl(

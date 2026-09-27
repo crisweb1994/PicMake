@@ -1,11 +1,6 @@
 /** 草图纯规则（SKETCH_RESEARCH_AND_SPEC §8/§9）：坐标换算、命令提交、撤销游标、
  *  文档校验与变更检测。只放纯函数，Canvas 重放与导出见 sketch-canvas.ts。 */
-import type {
-  SketchCommand,
-  SketchDocument,
-  SketchPoint,
-  SketchStroke,
-} from "./types";
+import type { SketchDocument, SketchPoint, SketchStroke } from "./types";
 
 /** 固定色板（名称用于无障碍；值为实际绘画颜色，不随主题） */
 export const SKETCH_PALETTE: ReadonlyArray<{
@@ -75,12 +70,13 @@ export function makeStroke(
     : { type: "stroke", tool, width, points: [] };
 }
 
-/** 提交一个完整命令：丢弃撤销后的重做分支；超上限拒绝（保留已完成内容） */
-export function commitCommand(
-  doc: SketchDocument,
+/** 提交一个完整命令：丢弃撤销后的重做分支；超上限拒绝（保留已完成内容）。
+ *  草图与选区共用（MaskDocument 结构兼容 SketchDocument，泛型保留原类型）。 */
+export function commitCommand<D extends SketchDocument>(
+  doc: D,
   cursor: number,
-  command: SketchCommand,
-): { doc: SketchDocument; cursor: number } | null {
+  command: D["commands"][number],
+): { doc: D; cursor: number } | null {
   if (doc.commands.length >= SKETCH_MAX_COMMANDS) return null;
   return {
     doc: { ...doc, commands: [...doc.commands.slice(0, cursor), command] },
@@ -109,10 +105,10 @@ export function sketchSnapshotKey(
 }
 
 /** 确认快照：只保留提交前缀，重做分支不落库；此后文档不可原地修改（§8.4） */
-export function freezeSketch(
-  doc: SketchDocument,
-  cursor = doc.commands.length,
-): SketchDocument {
+export function freezeSketch<D extends SketchDocument>(
+  doc: D,
+  cursor: number,
+): D {
   return { ...doc, commands: doc.commands.slice(0, cursor) };
 }
 

@@ -2,7 +2,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
   GenParams,
-  Usage,
   InputSource,
   FidelityChoice,
   SketchDocument,
@@ -27,7 +26,7 @@ export interface HistoryRow {
   id: string;
   prompt: string;
   params: GenParams;
-  usage: Usage | null;
+  usage: Record<string, unknown> | null;
   imageIds: string[];
   createdAt: number;
   inputSources?: InputSource[];

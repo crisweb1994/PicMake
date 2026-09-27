@@ -100,7 +100,6 @@ export default function App() {
         setBarMode("full");
         form.focus();
         toast("选区已应用：填写修改描述后生成");
-        return true;
       }
       if (entry === "draft-input") {
         const chosen = inpaintChosenRef.current;
@@ -117,12 +116,10 @@ export default function App() {
             ? "底图已设为图1，图片编号已更新，请检查描述"
             : "选区已应用：填写修改描述后生成",
         );
-        return true;
       }
       // reedit（IP-07/§8）：替换已确认选区；无实质修改沿用原资源
       form.applyInpaint({ base, mask, original, entry, unchanged });
       toast(unchanged ? "选区未变化：沿用原选区" : "选区已更新");
-      return true;
     },
   });
 
@@ -148,14 +145,12 @@ export default function App() {
           toast(ERROR_HINTS["source-unavailable"]);
           return;
         }
-        const idx = display.row.imageIds.indexOf(imageId);
         const result = await inpaint.open({
           blob: row.blob,
           name: `结果 · ${display.row.prompt.slice(0, 12)}…`,
           entry: "result",
           existing: { imageId, generationId: display.row.id },
         });
-        void idx;
         if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
       });
     });
@@ -399,7 +394,7 @@ export default function App() {
 
   /** complete 态只在展示的确实是刚保存的那次生成时成立 */
   const doneGen =
-    pm.lastDone && history.display?.row.id === pm.lastDone.id
+    pm.lastDoneId && history.display?.row.id === pm.lastDoneId
       ? history.display
       : null;
 
@@ -567,7 +562,6 @@ export default function App() {
       <CreateBar
         mode={barMode}
         generating={pm.phase === "generating"}
-        saving={pm.saving}
         done={doneGen}
         partialIndex={pm.partial?.index ?? 0}
         form={form.form}
