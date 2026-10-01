@@ -63,37 +63,25 @@ export function sketchHasInk(
   return false;
 }
 
-export type SketchExport = { ink: false } | { ink: true; blob: Blob | null };
-
-/** 导出：文档原始尺寸，先判空再合成白底 */
+/** 导出：文档原始尺寸，白底合成；空白判定见画板内的 sketchHasInk */
 export async function exportSketchPng(
   doc: SketchDocument,
-): Promise<SketchExport> {
+): Promise<Blob | null> {
   const strokes = document.createElement("canvas");
   strokes.width = doc.width;
   strokes.height = doc.height;
-  const sctx = strokes.getContext("2d", { willReadFrequently: true });
-  if (!sctx) return { ink: true, blob: null };
+  const sctx = strokes.getContext("2d");
+  if (!sctx) return null;
   replaySketch(sctx, doc);
-  const data = sctx.getImageData(0, 0, doc.width, doc.height).data;
-  let ink = false;
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] > 8) {
-      ink = true;
-      break;
-    }
-  }
-  if (!ink) return { ink: false };
   const out = document.createElement("canvas");
   out.width = doc.width;
   out.height = doc.height;
   const octx = out.getContext("2d");
-  if (!octx) return { ink: true, blob: null };
+  if (!octx) return null;
   octx.fillStyle = "#FFFFFF";
   octx.fillRect(0, 0, doc.width, doc.height);
   octx.drawImage(strokes, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) =>
+  return new Promise<Blob | null>((resolve) =>
     out.toBlob(resolve, "image/png"),
   );
-  return { ink: true, blob };
 }

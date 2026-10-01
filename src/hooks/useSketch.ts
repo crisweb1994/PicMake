@@ -12,13 +12,10 @@ import {
 } from "../lib/sketch";
 import { exportSketchPng } from "../lib/sketch-canvas";
 
-export type SketchOrigin = "blank" | "attachment" | "history";
-
 export interface SketchSession {
   doc: SketchDocument;
   cursor: number;
-  origin: SketchOrigin;
-  /** 编辑已有附件时的原位替换目标；blank/history 为 null */
+  /** 编辑已有附件时的原位替换目标；新建/历史为 null */
   replacesImageId: string | null;
   meta: string;
   /** 打开时的快照键：有修改才拦截关闭 */
@@ -51,16 +48,10 @@ export function useSketch(props: {
   );
 
   const open = useCallback(
-    (
-      doc: SketchDocument,
-      origin: SketchOrigin,
-      meta: string,
-      replacesImageId: string | null,
-    ) => {
+    (doc: SketchDocument, meta: string, replacesImageId: string | null) => {
       setSession({
         doc,
         cursor: doc.commands.length,
-        origin,
         replacesImageId,
         meta,
         openKey: sketchSnapshotKey(doc),
@@ -68,13 +59,6 @@ export function useSketch(props: {
       setConfirming(false);
     },
     [],
-  );
-
-  const openNew = useCallback(
-    (width: number, height: number) => {
-      open(blankSketch(width, height), "blank", `${width} × ${height}`, null);
-    },
-    [open],
   );
 
   const openEdit = useCallback(
@@ -86,7 +70,6 @@ export function useSketch(props: {
       }
       open(
         doc,
-        "attachment",
         `${doc.width} × ${doc.height} · 图${index + 1} 的草图`,
         imageId,
       );
@@ -101,7 +84,7 @@ export function useSketch(props: {
         toast("来源图片不可用，无法继续编辑这张草图");
         return;
       }
-      open(doc, "history", `${doc.width} × ${doc.height} · 历史草图`, null);
+      open(doc, `${doc.width} × ${doc.height} · 历史草图`, null);
     },
     [open],
   );
@@ -148,27 +131,22 @@ export function useSketch(props: {
       const frozen = freezeSketch(current.doc, current.cursor);
       // 无实质修改：沿用原附件，不重复分配图片
       if (
-        current.origin === "attachment" &&
+        current.replacesImageId !== null &&
         sketchSnapshotKey(frozen) === current.openKey
       ) {
         close();
         return;
       }
-      const result = await exportSketchPng(frozen);
+      const blob = await exportSketchPng(frozen);
       if (confirmTokenRef.current !== token) return;
-      if (!result.ink) {
-        setConfirming(false);
-        toast("先在纸上画下构图，空白草图不能作为输入");
-        return;
-      }
-      if (!result.blob) {
+      if (!blob) {
         setConfirming(false);
         toast("草图导出失败，请重试");
         return;
       }
       const image: ImageRow = {
         id: crypto.randomUUID(),
-        blob: result.blob,
+        blob,
         width: frozen.width,
         height: frozen.height,
         format: "png",
@@ -196,7 +174,8 @@ export function useSketch(props: {
     session,
     confirming,
     changed,
-    openNew,
+    openBlank: (width: number, height: number) =>
+      open(blankSketch(width, height), `${width} × ${height}`, null),
     openEdit,
     openHistory,
     stroke,

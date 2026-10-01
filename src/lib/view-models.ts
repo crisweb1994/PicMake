@@ -37,6 +37,12 @@ export interface DisplayInput {
   inpaintRole?: "mask" | "ref" | "candidate";
 }
 
+/** 输入来源的展示名与编号标签（创作条缩略与历史来源预览共用） */
+export function inputDisplay(name: string | undefined, index: number) {
+  const display = name ?? "已有作品";
+  return { name: display, label: `图${index + 1} · ${display}` };
+}
+
 /** 创作条的局部重绘投影 */
 export interface InpaintBarInfo {
   /** 输出目标尺寸 */

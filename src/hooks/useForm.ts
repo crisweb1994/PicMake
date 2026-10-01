@@ -22,6 +22,7 @@ import {
 import { inpaintTargetSize } from "../lib/inpaint";
 import { readInputImage } from "../lib/input-images";
 import type { ImageRow } from "../db/schema";
+import { inputDisplay } from "../lib/view-models";
 import { useImageAssets } from "./useImageAssets";
 
 export function useForm() {
@@ -48,8 +49,7 @@ export function useForm() {
   );
   const images = inputs.map((input, index) => ({
     id: input.imageId,
-    name: input.name ?? "已有作品",
-    label: `图${index + 1} · ${input.name ?? "已有作品"}`,
+    ...inputDisplay(input.name, index),
     url: assets[input.imageId]?.url,
     isSketch: !!input.upload?.sketch,
     /** ✎ 入口角色：底图=修改选区；重绘中参考图停用；普通图可发起 */
@@ -124,41 +124,36 @@ export function useForm() {
     setDirty(true);
     toast("已移除选区：保留底图与描述，切换为普通图片编辑");
   };
-  /** 选区确认：重排底图为图1、保留参考图顺序、设置 mask；接受状态仅对新目标重置 */
+  /** 选区确认：draft-input 重排底图为图1；result 由 initialize 就位、reedit 底图已在位 */
   const applyInpaint = (
     payload: {
       base: ImageRow;
       mask: MaskImage;
       original?: InpaintDraft["original"];
       entry: "result" | "draft-input" | "reedit";
-      unchanged: boolean;
     },
     /** draft-input 入口被选中的原输入（重排后移除） */
     chosenInputId?: string,
   ): void => {
-    setInputs((current) => {
-      if (payload.entry === "reedit") return current; // 底图已在位
-      // 排除被涂选的原输入与任何同底图旧输入（result 入口可能已由 initialize 放入）
-      const rest = current.filter(
-        (input) =>
-          input.imageId !== chosenInputId && input.imageId !== payload.base.id,
-      );
-      const base: InputImage = {
-        imageId: payload.base.id,
-        name: "底图",
-        upload: payload.base,
-      };
-      return [base, ...rest];
-    });
+    if (payload.entry === "draft-input") {
+      setInputs((current) => [
+        {
+          imageId: payload.base.id,
+          name: "底图",
+          upload: payload.base,
+        },
+        ...current.filter(
+          (input) =>
+            input.imageId !== chosenInputId &&
+            input.imageId !== payload.base.id,
+        ),
+      ]);
+    }
     if (payload.entry !== "reedit") {
       const target = inpaintTargetSize(payload.mask.width, payload.mask.height);
       setSizeAccepted(target ? !target.suggested : false);
     }
-    setInpaint((current) => {
-      if (payload.entry === "reedit" && current && payload.unchanged)
-        return current; // 无实质修改沿用原资源
-      return { mask: payload.mask, original: payload.original };
-    });
+    setInpaint({ mask: payload.mask, original: payload.original });
     setDirty(true);
   };
   /** 设为参考图：追加已有结果为输入源，不打断当前草稿 */
@@ -182,14 +177,9 @@ export function useForm() {
     const target =
       replaces ?? inputs.find((input) => input.upload?.sketch)?.imageId ?? null;
     if (target) {
-      const idx = inputs.findIndex((input) => input.imageId === target);
-      if (idx < 0) {
-        toast("原草图附件已变化，请重新确认");
-        return false;
-      }
       setInputs((current) =>
-        current.map((input, i) =>
-          i === idx
+        current.map((input) =>
+          input.imageId === target
             ? { imageId: image.id, name: "草图", upload: image }
             : input,
         ),
@@ -264,10 +254,6 @@ export function useForm() {
     if (validation.length) {
       toast(validation[0]);
       if (!params.prompt.trim()) focus();
-      return null;
-    }
-    if (inputs.length > MAX_INPUT_IMAGES) {
-      toast(ERROR_HINTS["too-many-images"]);
       return null;
     }
     return params;

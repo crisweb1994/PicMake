@@ -2,13 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { requestImages } from "../api/client";
 import { db } from "../db/schema";
 import { b64ToBlob } from "../lib/blob";
-import { MASK_MAX_BYTES, validateMaskDocument } from "../lib/inpaint";
 import {
   ApiError,
   ERROR_HINTS,
-  INPAINT_ISSUE_HINTS,
-  MAX_INPUT_BYTES,
-  MAX_INPUT_IMAGES,
   type ApiConfig,
   type EditDraft,
   type EditSubmission,
@@ -23,41 +19,7 @@ export interface GenerationRun {
   startedAt: number;
 }
 
-interface RequestSnapshot {
-  params: GenParams;
-  draft: EditDraft | null;
-  config: ApiConfig;
-}
-
-/** 由草稿构建 mask 提交快照；校验失败则不发送 */
-function buildInpaintSubmission(
-  draft: NonNullable<EditDraft["inpaint"]>,
-  base: {
-    source: { imageId: string };
-    image: { width: number; height: number };
-  },
-): {
-  maskImage: NonNullable<EditSubmission["inpaint"]>["maskImage"];
-  original?: NonNullable<EditSubmission["inpaint"]>["original"];
-} {
-  const { mask, original } = draft;
-  const validated = validateMaskDocument(mask.mask, base.source.imageId, {
-    width: base.image.width,
-    height: base.image.height,
-  });
-  if ("issue" in validated)
-    throw new Error(INPAINT_ISSUE_HINTS[validated.issue]);
-  if (!mask.blob.size || mask.blob.size >= MASK_MAX_BYTES)
-    throw new Error(INPAINT_ISSUE_HINTS["mask-too-large"]);
-  return {
-    maskImage: { ...mask, mask: validated.doc },
-    ...(original
-      ? { original: { source: { ...original.source }, image: original.image } }
-      : {}),
-  };
-}
-
-function isAbortError(error: unknown): boolean {
+export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
@@ -77,26 +39,26 @@ export function useGeneration() {
     setPartial(null);
   }, []);
 
-  const execute = useCallback(
-    async (snapshot: RequestSnapshot): Promise<GenerationRun> => {
+  const start = useCallback(
+    async (
+      params: GenParams,
+      draft: EditDraft | null,
+      config: ApiConfig,
+    ): Promise<GenerationRun> => {
       if (activeRef.current) throw new Error("generation already running");
       const abort = new AbortController();
       activeRef.current = abort;
       setPhase("generating");
-      setPlan({ n: snapshot.params.n, size: snapshot.params.size });
+      setPlan({ n: params.n, size: params.size });
       clearPreview();
       const startedAt = Date.now();
 
       try {
         let edit: EditSubmission | undefined;
-        if (snapshot.draft) {
-          if (snapshot.draft.inputs.length > MAX_INPUT_IMAGES)
-            throw new ApiError(
-              "too-many-images",
-              ERROR_HINTS["too-many-images"],
-            );
+        if (draft) {
+          // 来源可能来自历史，读取失败（已被删除）是唯一需要拦截的情形
           const sources = await Promise.all(
-            snapshot.draft.inputs.map(async (input, index) => {
+            draft.inputs.map(async (input, index) => {
               const image =
                 input.upload ?? (await db.images.get(input.imageId));
               if (!image)
@@ -104,26 +66,28 @@ export function useGeneration() {
                   "source-unavailable",
                   `图${index + 1}：${ERROR_HINTS["source-unavailable"]}`,
                 );
-              if (!image.blob.size || image.blob.size >= MAX_INPUT_BYTES)
-                throw new ApiError(
-                  "image-too-large",
-                  `图${index + 1}：${ERROR_HINTS["image-too-large"]}`,
-                );
               const { upload: _upload, ...source } = input;
               return { source, image };
             }),
           );
           abort.signal.throwIfAborted();
+          const inpaint = draft.inpaint;
           edit = {
             sources,
-            params: snapshot.params,
-            inputFidelity: snapshot.draft.inputFidelity,
-            ...(snapshot.draft.inpaint
+            inputFidelity: draft.inputFidelity,
+            ...(inpaint
               ? {
-                  inpaint: buildInpaintSubmission(
-                    snapshot.draft.inpaint,
-                    sources[0],
-                  ),
+                  inpaint: {
+                    maskImage: inpaint.mask,
+                    ...(inpaint.original
+                      ? {
+                          original: {
+                            source: { ...inpaint.original.source },
+                            image: inpaint.original.image,
+                          },
+                        }
+                      : {}),
+                  },
                 }
               : {}),
           };
@@ -139,12 +103,7 @@ export function useGeneration() {
             setPartial({ url, index });
           },
         };
-        const result = await requestImages(
-          snapshot.params,
-          snapshot.config,
-          handlers,
-          edit,
-        );
+        const result = await requestImages(params, config, handlers, edit);
         abort.signal.throwIfAborted();
         return { result, edit, startedAt };
       } finally {
@@ -154,17 +113,6 @@ export function useGeneration() {
       }
     },
     [clearPreview],
-  );
-
-  const start = useCallback(
-    (params: GenParams, draft: EditDraft | null, config: ApiConfig) =>
-      execute({
-        params,
-        // 快照隔离：提交后草稿再变化不影响本次请求
-        draft: draft ? structuredClone(draft) : null,
-        config: { ...config },
-      }),
-    [execute],
   );
 
   const cancel = useCallback(() => {
@@ -194,5 +142,3 @@ export function useGeneration() {
     reset,
   };
 }
-
-export { isAbortError };

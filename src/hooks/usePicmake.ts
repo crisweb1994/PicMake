@@ -2,19 +2,11 @@
 import { useRef, useState } from "react";
 import type { HistoryRow } from "../db/schema";
 import { db } from "../db/schema";
-import {
-  useGeneration,
-  isAbortError,
-  type GenerationRun,
-} from "./useGeneration";
+import { useGeneration, isAbortError } from "./useGeneration";
 import type { useHistory } from "./useHistory";
 import type { useForm } from "./useForm";
-import {
-  prepareGeneration,
-  type PreparedGeneration,
-  type ResultMeta,
-} from "../lib/generation";
-import { b64ToBlob, decodeImageMeta } from "../lib/blob";
+import { prepareGeneration, type PreparedGeneration } from "../lib/generation";
+import { b64Format } from "../lib/blob";
 import { inpaintTargetSize } from "../lib/inpaint";
 import {
   ApiError,
@@ -53,7 +45,7 @@ export function usePicmake({
   onDraftReady: () => void;
 }) {
   const settings = useSettings();
-  const { selectedId, selectedRow, display, pendingSave } = history;
+  const { selectedId, display, pendingSave } = history;
   const [returnId, setReturnId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -105,31 +97,6 @@ export function usePicmake({
     }
   };
 
-  const handleRunResult = async (
-    paramsForRun: GenParams,
-    run: GenerationRun,
-    originPrompt?: string,
-  ) => {
-    // 逐张解码：格式与宽高以结果字节为准
-    const metas: ResultMeta[] = [];
-    for (const image of run.result.images) {
-      const meta = await decodeImageMeta(b64ToBlob(image.b64));
-      metas.push(
-        meta ?? { width: 0, height: 0, format: paramsForRun.outputFormat },
-      );
-    }
-    const prepared = prepareGeneration(
-      paramsForRun,
-      run.result,
-      run.edit,
-      run.startedAt,
-      undefined,
-      originPrompt,
-      metas,
-    );
-    await savePrepared(prepared);
-  };
-
   /** 取首个输入源的原始描述（沿链路取最初；局部重绘 inputs[0] 恒为底图） */
   const resolveOriginPrompt = async (
     inputs: Array<{ generationId?: string }>,
@@ -157,7 +124,20 @@ export function usePicmake({
         ? await resolveOriginPrompt(draft.inputs)
         : undefined;
       const run = await generation.start(paramsForRun, draft, config);
-      await handleRunResult(paramsForRun, run, originPrompt);
+      // 逐张嗅探真实格式（中转可能不按请求格式返回）
+      const formats = run.result.images.map(
+        (b64) => b64Format(b64) ?? paramsForRun.outputFormat,
+      );
+      const prepared = prepareGeneration(
+        paramsForRun,
+        run.result,
+        run.edit,
+        run.startedAt,
+        undefined,
+        originPrompt,
+        formats,
+      );
+      await savePrepared(prepared);
     } catch (caught) {
       if (isAbortError(caught)) {
         toast("已取消生成");
@@ -170,15 +150,8 @@ export function usePicmake({
   };
 
   const generate = () => {
-    if (
-      generation.phase === "generating" ||
-      savingRef.current ||
-      workflowBusyRef.current ||
-      form.reading ||
-      confirmState ||
-      pendingSave
-    )
-      return;
+    // 生成中底栏已切到 GenBar，此处只需拦保存期与工作流窗口期的重复触发
+    if (savingRef.current || workflowBusyRef.current || pendingSave) return;
     // 目标尺寸未接受时不发生成请求
     if (
       form.inpaint &&
@@ -274,7 +247,6 @@ export function usePicmake({
         mask: read.mask,
         original: read.draft.inpaint?.original,
         entry: "reedit",
-        unchanged: true,
       });
       form.acceptSize();
       history.select(null);
@@ -285,28 +257,18 @@ export function usePicmake({
     });
   };
 
-  /** 再来一版：局部重绘记录复用同一底图与 mask 直接提交 */
+  /** 再来一版：局部重绘记录复用同一底图与 mask 直接提交（尺寸按当前约束重算，恒合法） */
   const regenerateInpaint = async (row: HistoryRow) => {
     const read = await readInpaintDraft(row);
     if (!read.ok) {
       toast(`${read.missing}不可用，无法再来一版`);
       return;
     }
-    if (
-      row.params.size === "auto" ||
-      row.params.size.w !== (read.params.size as { w: number }).w ||
-      row.params.size.h !== (read.params.size as { w: number; h: number }).h
-    ) {
-      toast("输出尺寸约束已变化，请用「调整上次重绘」确认新尺寸");
-      return;
-    }
     await startGeneration(read.params, read.draft);
   };
 
-  /** 再来一版：用历史记录的参数与输入源直接重发 */
+  /** 再来一版：用历史记录的参数与输入源直接重发（仅 complete 态底栏可达） */
   const regenerate = (row: HistoryRow) => {
-    if (generation.phase === "generating" || savingRef.current || pendingSave)
-      return;
     setLastDoneId(null);
     if (row.inpaint) {
       void regenerateInpaint(row);
@@ -356,23 +318,16 @@ export function usePicmake({
   };
 
   const editImage = (imageId: string) => {
-    if (
-      generation.phase === "generating" ||
-      pendingSave ||
-      !display ||
-      !selectedRow
-    )
-      return;
-    if (!display.images.some((image) => image.id === imageId)) return;
+    if (!display) return;
     clearDone();
-    form.initialize({ ...selectedRow.params, prompt: "" }, [
+    form.initialize({ ...display.row.params, prompt: "" }, [
       {
-        generationId: selectedRow.id,
+        generationId: display.row.id,
         imageId,
-        name: `已有作品 · 第 ${selectedRow.imageIds.indexOf(imageId) + 1} 张`,
+        name: `已有作品 · 第 ${display.row.imageIds.indexOf(imageId) + 1} 张`,
       },
     ]);
-    setReturnId(selectedRow.id);
+    setReturnId(display.row.id);
     history.select(null);
     onViewReset();
     generation.reset();
@@ -432,7 +387,6 @@ export function usePicmake({
     newGeneration,
     confirmState,
     setConfirmState,
-    settings,
     lastDoneId,
     clearDone,
     confirmPendingLeave,

@@ -49,31 +49,6 @@ type TestConn = (
   apiKey: string,
 ) => Promise<TestResult | { ok: false; message: string }>;
 
-function ConnResult(props: { result: string | null }) {
-  if (!props.result) return null;
-  return (
-    <p
-      className={
-        "pm-tconn" + (props.result.startsWith("连接成功") ? " ok" : "")
-      }
-    >
-      {props.result}
-    </p>
-  );
-}
-
-function TestButton(props: { testing: boolean; onTest: () => void }) {
-  return (
-    <Button
-      variant="secondary"
-      isDisabled={props.testing}
-      onPress={props.onTest}
-    >
-      {props.testing ? <Spinner size="sm" /> : "测试连接"}
-    </Button>
-  );
-}
-
 /* ── 设置弹窗 ── */
 export function SettingsModal(props: {
   open: boolean;
@@ -135,28 +110,43 @@ export function SettingsModal(props: {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
-            <ConnResult result={result} />
+            {result && (
+              <p
+                className={
+                  "pm-tconn" + (result.startsWith("连接成功") ? " ok" : "")
+                }
+              >
+                {result}
+              </p>
+            )}
             <p className="pm-hint">
               Key
               仅保存在本机浏览器，只发往上面配置的地址；使用中转站时，画面数据会经过中转方。
             </p>
             <p className="pm-hint">{props.storageText}</p>
             <div className="pm-mbtns">
-              <TestButton
-                testing={testing}
-                onTest={() => {
+              <Button
+                variant="secondary"
+                isDisabled={testing}
+                onPress={() => {
                   setTesting(true);
                   setResult(null);
                   void props.onTest(baseUrl, apiKey).then((r) => {
                     setTesting(false);
                     setResult(
                       r.ok
-                        ? `连接成功 · ${r.models.length} 个模型可用`
+                        ? `连接成功 · ${r.models.length} 个模型可用 · ${
+                            r.models.some((m) => m.includes("gpt-image-2.5"))
+                              ? "含"
+                              : "未含"
+                          } gpt-image-2.5 系列`
                         : r.message,
                     );
                   });
                 }}
-              />
+              >
+                {testing ? <Spinner size="sm" /> : "测试连接"}
+              </Button>
               <Button
                 variant="primary"
                 onPress={() => props.onSave(baseUrl, apiKey)}

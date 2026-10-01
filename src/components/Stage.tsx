@@ -1,5 +1,4 @@
 /** 结果舞台：空 / 生成中 / 单张 / 网格 四形态，纯展示 */
-import type { ReactNode } from "react";
 import { Button } from "@heroui/react";
 import {
   Download,
@@ -238,38 +237,30 @@ export function StageToolbar(props: {
   onEdit?: () => void;
   onDelete: () => void;
 }) {
-  const btns: Array<{
-    label: string;
-    icon: ReactNode;
-    fn: () => void;
-    danger?: boolean;
-  }> = [
-    { label: "放大", icon: <Maximize2 size={13} />, fn: props.onZoom },
-    { label: "下载", icon: <Download size={13} />, fn: props.onDownload },
-    { label: "复用参数", icon: <RotateCcw size={13} />, fn: props.onReuse },
-    ...(props.onEdit
-      ? [{ label: "编辑此图", icon: <RefreshCw size={13} />, fn: props.onEdit }]
-      : []),
-    {
-      label: "删除",
-      icon: <Trash2 size={13} />,
-      fn: props.onDelete,
-      danger: true,
-    },
-  ];
   return (
     <div className="pm-stage-toolbar">
-      {btns.map((b) => (
-        <button
-          key={b.label}
-          type="button"
-          className={b.danger ? "danger" : ""}
-          onClick={b.fn}
-        >
-          {b.icon}
-          {b.label}
+      <button type="button" onClick={props.onZoom}>
+        <Maximize2 size={13} />
+        放大
+      </button>
+      <button type="button" onClick={props.onDownload}>
+        <Download size={13} />
+        下载
+      </button>
+      <button type="button" onClick={props.onReuse}>
+        <RotateCcw size={13} />
+        复用参数
+      </button>
+      {props.onEdit && (
+        <button type="button" onClick={props.onEdit}>
+          <RefreshCw size={13} />
+          编辑此图
         </button>
-      ))}
+      )}
+      <button type="button" className="danger" onClick={props.onDelete}>
+        <Trash2 size={13} />
+        删除
+      </button>
     </div>
   );
 }

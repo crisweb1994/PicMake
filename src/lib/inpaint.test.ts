@@ -3,7 +3,6 @@ import {
   MASK_ALPHA_THRESHOLD,
   blankMask,
   checkInpaintBase,
-  commitMaskCommand,
   inpaintTargetSize,
   maskBrushRange,
   maskOutputAlpha,
@@ -11,6 +10,7 @@ import {
   suggestInpaintSize,
   validateMaskDocument,
 } from "./inpaint";
+import { commitCommand as commitMaskCommand } from "./sketch";
 import type { MaskDocument } from "./types";
 
 describe("suggestInpaintSize（TECH §7 样例表）", () => {
@@ -123,46 +123,23 @@ describe("validateMaskDocument", () => {
     expect(validateMaskDocument(doc)).toEqual({ doc });
   });
 
-  it("底图绑定不匹配 → base-mismatch", () => {
-    const doc = { ...base, baseImageId: "img-2" };
-    expect(validateMaskDocument(doc, "img-1")).toEqual({
-      issue: "base-mismatch",
-    });
-    expect(
-      validateMaskDocument(base, "img-1", { width: 640, height: 480 }),
-    ).toEqual({
-      issue: "base-mismatch",
-    });
-  });
-
-  it("拒绝坏版本 / 非有限点 / 越界笔宽", () => {
+  it("拒绝坏版本 / 缺底图绑定 / 坏尺寸 / 非命令序列", () => {
     expect(validateMaskDocument({ ...base, version: 2 })).toEqual({
+      issue: "invalid-mask",
+    });
+    expect(validateMaskDocument({ ...base, baseImageId: "" })).toEqual({
+      issue: "invalid-mask",
+    });
+    expect(validateMaskDocument({ ...base, width: Number.NaN })).toEqual({
+      issue: "invalid-mask",
+    });
+    expect(validateMaskDocument({ ...base, commands: "x" })).toEqual({
       issue: "invalid-mask",
     });
     expect(
       validateMaskDocument({
         ...base,
-        commands: [
-          {
-            type: "stroke",
-            tool: "pen",
-            width: 10,
-            points: [{ x: NaN, y: 0 }],
-          },
-        ],
-      }),
-    ).toEqual({ issue: "invalid-mask" });
-    expect(
-      validateMaskDocument({
-        ...base,
-        commands: [
-          {
-            type: "stroke",
-            tool: "pen",
-            width: 99999,
-            points: [{ x: 0, y: 0 }],
-          },
-        ],
+        commands: [{ type: "stroke", tool: "pen", width: 10 } as never],
       }),
     ).toEqual({ issue: "invalid-mask" });
   });

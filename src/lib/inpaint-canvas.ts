@@ -173,7 +173,5 @@ export async function exportMaskPng(
   const blob = await new Promise<Blob | null>((resolve) =>
     cov.toBlob(resolve, "image/png"),
   );
-  cov.width = 0;
-  cov.height = 0;
   return { blob, issue: blob ? null : "canvas-failed", selected };
 }

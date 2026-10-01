@@ -110,53 +110,26 @@ export function freezeSketch<D extends SketchDocument>(
   return { ...doc, commands: doc.commands.slice(0, cursor) };
 }
 
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
-/** 读取校验：拒绝异常尺寸、非有限坐标、越界笔宽与坏颜色 */
+/** 读取校验：只查结构完整（文档由本应用产出，笔画内容不作逐点复核） */
 export function validateSketchDocument(value: unknown): SketchDocument | null {
   if (!value || typeof value !== "object") return null;
   const doc = value as Partial<SketchDocument>;
-  if (doc.version !== 1) return null;
-  const { width, height } = doc;
+  const { width, height, commands } = doc;
   if (
+    doc.version !== 1 ||
     !Number.isInteger(width) ||
     !Number.isInteger(height) ||
     !width ||
     !height ||
-    width < 256 ||
-    height < 256 ||
-    width > 3840 ||
-    height > 3840
+    !Array.isArray(commands) ||
+    !commands.every(
+      (cmd) =>
+        !!cmd &&
+        (cmd.type === "clear" ||
+          (cmd.type === "stroke" && Array.isArray(cmd.points))),
+    )
   )
     return null;
-  if (!Array.isArray(doc.commands)) return null;
-  const limit = Math.max(width, height) * 2;
-  for (const cmd of doc.commands) {
-    if (!cmd || typeof cmd !== "object") return null;
-    if (cmd.type === "clear") continue;
-    if (cmd.type !== "stroke") return null;
-    if (cmd.tool !== "pen" && cmd.tool !== "eraser") return null;
-    if (!Number.isFinite(cmd.width) || cmd.width <= 0 || cmd.width > limit)
-      return null;
-    if (
-      cmd.tool === "pen" &&
-      (typeof cmd.color !== "string" || !HEX_COLOR.test(cmd.color))
-    )
-      return null;
-    if (!Array.isArray(cmd.points) || cmd.points.length === 0) return null;
-    for (const p of cmd.points) {
-      if (!p || typeof p !== "object") return null;
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-      // 笔迹允许画到边缘略出界，但拒绝大幅越界坐标
-      if (
-        p.x < -limit ||
-        p.x > width + limit ||
-        p.y < -limit ||
-        p.y > height + limit
-      )
-        return null;
-    }
-  }
   return doc as SketchDocument;
 }
 

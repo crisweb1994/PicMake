@@ -1,5 +1,5 @@
 /** 主题接线：偏好 → <html>.dark 与 theme-color meta 同步；matchMedia 跟随系统外观 */
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSettings } from "../store/settings";
 import { resolveTheme, type ResolvedTheme } from "../lib/theme";
 
@@ -28,10 +28,11 @@ export function useTheme() {
       ?.setAttribute("content", resolved === "dark" ? "#0e0f11" : "#f7f8f9");
   }, [resolved]);
 
-  /** 顶栏快捷钮：切到当前生效主题的反向（写入显式偏好） */
-  const toggle = useCallback(() => {
-    setPref(resolved === "dark" ? "light" : "dark");
-  }, [resolved, setPref]);
-
-  return { pref, resolved, setPref, toggle };
+  return {
+    pref,
+    resolved,
+    setPref,
+    /** 顶栏快捷钮：切到当前生效主题的反向（写入显式偏好） */
+    toggle: () => setPref(resolved === "dark" ? "light" : "dark"),
+  };
 }

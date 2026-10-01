@@ -11,13 +11,15 @@ import type {
 import {
   blankMask,
   checkInpaintBase,
-  commitMaskCommand,
-  freezeMask,
-  maskSnapshotKey,
   validateMaskDocument,
+  MASK_MAX_BYTES,
 } from "../lib/inpaint";
+import {
+  commitCommand as commitMaskCommand,
+  freezeSketch as freezeMask,
+  sketchSnapshotKey as maskSnapshotKey,
+} from "../lib/sketch";
 import { exportMaskPng } from "../lib/inpaint-canvas";
-import { MASK_MAX_BYTES } from "../lib/inpaint";
 import { prepareInpaintBase, readImageMeta } from "../lib/image-orientation";
 
 export type InpaintEntry = "result" | "draft-input" | "reedit";
@@ -32,10 +34,8 @@ export interface InpaintSession {
   doc: MaskDocument;
   cursor: number;
   entry: InpaintEntry;
-  /** 打开时的快照键：无修改沿用原资源、有修改拦截关闭 */
+  /** 打开时的快照键：有修改才拦截关闭 */
   openKey: string;
-  /** 编辑已有选区时传入的原 mask 资源（未修改时沿用，不重复分配） */
-  existingMask: MaskImage | null;
   name: string;
   baseUrl: string;
 }
@@ -45,8 +45,6 @@ export interface InpaintApplyPayload {
   mask: MaskImage;
   original?: { source: InputSource; image: ImageRow };
   entry: InpaintEntry;
-  /** 无实质修改：沿用原资源 */
-  unchanged: boolean;
 }
 
 export interface InpaintOpenParams {
@@ -129,11 +127,7 @@ export function useInpaint(props: {
         const base = params.reedit.base;
         const check = checkInpaintBase(base.width, base.height);
         if (!check.ok) return fail(check.issue);
-        const validated = validateMaskDocument(
-          params.reedit.mask.mask,
-          base.id,
-          { width: base.width, height: base.height },
-        );
+        const validated = validateMaskDocument(params.reedit.mask.mask);
         if ("issue" in validated) return fail(validated.issue);
         const doc = structuredClone(validated.doc);
         if (urlRef.current) URL.revokeObjectURL(urlRef.current);
@@ -147,7 +141,6 @@ export function useInpaint(props: {
           cursor: doc.commands.length,
           entry: "reedit",
           openKey: maskSnapshotKey(doc),
-          existingMask: params.reedit.mask,
           name: params.name,
           baseUrl,
         });
@@ -155,10 +148,11 @@ export function useInpaint(props: {
         return { ok: true };
       }
 
-      const prepared = await prepareInpaintBase(params.blob, params.name);
+      const prepared = await prepareInpaintBase(params.blob, params.name, meta);
       if (openTokenRef.current !== token) return { ok: true };
       if (!prepared.ok) return fail(prepared.issue);
       const base = prepared.base;
+      // 解码后复核：头尺寸与真实尺寸可能不同
       const recheck = checkInpaintBase(base.width, base.height);
       if (!recheck.ok) return fail(recheck.issue);
       const original = prepared.original
@@ -177,7 +171,6 @@ export function useInpaint(props: {
         cursor: 0,
         entry: params.entry,
         openKey: "",
-        existingMask: null,
         name: params.name,
         baseUrl,
       });
@@ -224,21 +217,6 @@ export function useInpaint(props: {
     setConfirming(true);
     void (async () => {
       const frozen = freezeMask(current.doc, current.cursor);
-      const unchanged =
-        current.entry === "reedit" &&
-        !!current.existingMask &&
-        maskSnapshotKey(frozen) === current.openKey;
-      if (unchanged && current.existingMask) {
-        applyRef.current({
-          base: current.base,
-          mask: current.existingMask,
-          original: current.original,
-          entry: current.entry,
-          unchanged: true,
-        });
-        close();
-        return;
-      }
       const result = await exportMaskPng(frozen);
       if (confirmTokenRef.current !== token) return;
       if (result.issue === "empty-mask") {
@@ -269,13 +247,12 @@ export function useInpaint(props: {
         mask,
         original: current.original,
         entry: current.entry,
-        unchanged: false,
       });
       close();
     })();
   }, [session, confirming, close]);
 
-  /** 打开以来是否有修改（关闭拦截与「沿用原资源」判定共用） */
+  /** 打开以来是否有修改（关闭拦截判定） */
   const changed =
     !!session &&
     session.cursor > 0 &&

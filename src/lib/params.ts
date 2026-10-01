@@ -30,6 +30,17 @@ export function sizeText(size: SizeSpec): string {
   return size === "auto" ? "自动" : `${size.w} × ${size.h}`;
 }
 
+/** chip 上的尺寸值文本：自定义宽高 / 比例·基准 / 自动（MiniBar 与比例 chip 共用） */
+export function sizeChipValue(
+  f: Pick<GenForm, "ratio" | "base" | "cw" | "ch">,
+) {
+  return isCustomActive(f)
+    ? `${f.cw}×${f.ch}`
+    : f.ratio === "auto"
+      ? "自动"
+      : `${f.ratio} · ${BASE_LABELS.find((b) => b.id === f.base)?.label}`;
+}
+
 export const RATIO_CHIPS: ReadonlyArray<{ id: RatioId; label: string }> = [
   { id: "1:1", label: "1:1" },
   { id: "4:3", label: "4:3" },
@@ -118,7 +129,7 @@ export function formSize(
 }
 
 /** 按基准分辨率缩放 1K 基准尺寸，保持 /16 整除并夹在 3840 × 2160 内 */
-export function scaleDims(
+function scaleDims(
   w: number,
   h: number,
   base: BaseRes,
@@ -154,7 +165,6 @@ export function paramsToForm(p: GenParams): GenForm {
     ratio: size === "auto" ? "auto" : "3:2",
     cw: size === "auto" ? "" : String(size.w),
     ch: size === "auto" ? "" : String(size.h),
-    base: "1k",
     quality: p.quality,
     n: p.n,
     bg: p.background,
@@ -165,12 +175,6 @@ export function paramsToForm(p: GenParams): GenForm {
 export function validateParams(p: GenParams): string[] {
   const errors: string[] = [];
   if (!p.prompt.trim()) errors.push("先写一句画面描述");
-  if (p.prompt.length > 32000) errors.push("画面描述不能超过 32000 字符");
-  if (!Number.isInteger(p.n) || p.n < 1 || p.n > 4)
-    errors.push("生成张数须在 1～4 张之间");
   if (p.size !== "auto") errors.push(...validateSize(p.size.w, p.size.h));
-  if (p.background === "transparent" && p.outputFormat === "jpeg") {
-    errors.push("透明背景只支持 PNG 或 WebP");
-  }
   return [...new Set(errors)];
 }

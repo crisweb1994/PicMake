@@ -1,12 +1,12 @@
-import { historySources } from "../lib/input-images";
-import { db, type HistoryRow } from "./schema";
+import { db } from "./schema";
+import type { HistoryRow } from "./schema";
 import type { PreparedGeneration } from "../lib/generation";
 
 /** 一条历史引用的全部资源 id：删除回收按剩余历史的并集判定 */
-export function historyResourceIds(row: HistoryRow): string[] {
+function historyResourceIds(row: HistoryRow): string[] {
   return [
     ...row.imageIds,
-    ...historySources(row).map((source) => source.imageId),
+    ...(row.inputSources ?? []).map((source) => source.imageId),
     ...(row.inpaint ? [row.inpaint.maskImageId] : []),
     ...(row.inpaint?.originalSource
       ? [row.inpaint.originalSource.imageId]

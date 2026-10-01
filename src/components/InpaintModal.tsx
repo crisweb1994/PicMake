@@ -33,12 +33,12 @@ import {
   type MaskStroke,
   type SketchPoint,
 } from "../lib/types";
-import { SKETCH_MAX_COMMANDS, SKETCH_MAX_POINTS } from "../lib/sketch";
 import {
-  makeMaskStroke,
-  maskBrushRange,
-  totalMaskPoints,
-} from "../lib/inpaint";
+  SKETCH_MAX_COMMANDS,
+  SKETCH_MAX_POINTS,
+  totalPoints as totalMaskPoints,
+} from "../lib/sketch";
+import { maskBrushRange } from "../lib/inpaint";
 import {
   maskHasSelectionQuick,
   paintOverlayLayer,
@@ -175,8 +175,7 @@ export function InpaintModal(props: {
   /* ── 缩放/平移：围绕视口中心，1×–8×；钳制保证画布至少 48px 留在可视区 ── */
   const clampPan = useCallback(
     (next: { x: number; y: number }, z: number, b: BoardBox) => {
-      const stage = stageRef.current;
-      if (!stage) return next;
+      const stage = stageRef.current!;
       const w = b.fitW * z;
       const h = b.fitH * z;
       const margin = 48;
@@ -306,8 +305,12 @@ export function InpaintModal(props: {
     }
     const pt = toDocPoint(e.clientX, e.clientY);
     if (!pt) return;
-    const cmd = makeMaskStroke(tool === "eraser" ? "eraser" : "pen", brush);
-    cmd.points.push(pt);
+    const cmd: MaskStroke = {
+      type: "stroke",
+      tool: tool === "eraser" ? "eraser" : "pen",
+      width: brush,
+      points: [pt],
+    };
     drawingRef.current = { pid: e.pointerId, cmd, last: pt };
     try {
       stageRef.current?.setPointerCapture(e.pointerId);
@@ -621,14 +624,9 @@ export function MaskViewModal(props: {
   const [width, setWidth] = useState(720);
 
   useLayoutEffect(() => {
-    const measure = () => {
-      const w = wrapRef.current?.clientWidth ?? 720;
-      setWidth(Math.max(240, Math.min(920, w - 8)));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    return () => ro.disconnect();
+    setWidth(
+      Math.max(240, Math.min(920, (wrapRef.current?.clientWidth ?? 720) - 8)),
+    );
   }, []);
 
   const height = Math.round((width * props.baseH) / props.baseW);

@@ -1,16 +1,10 @@
-import type { HistoryRow, ImageRow } from "../db/schema";
+import type { ImageRow } from "../db/schema";
 import {
   ApiError,
   ERROR_HINTS,
   MAX_INPUT_BYTES,
-  type InputSource,
   type OutputFormat,
 } from "./types";
-
-/** 新旧来源投影的唯一规则 */
-export function historySources(row: HistoryRow): InputSource[] {
-  return row.inputSources ?? [];
-}
 
 export function imageFormat(bytes: Uint8Array): OutputFormat | null {
   if ([137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v))

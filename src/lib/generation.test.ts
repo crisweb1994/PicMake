@@ -14,7 +14,7 @@ describe("prepareGeneration", () => {
         outputFormat: "png",
       },
       {
-        images: [{ b64: "AQ==" }, { b64: "Ag==" }],
+        images: ["AQ==", "Ag=="],
         usage: null,
       },
       undefined,

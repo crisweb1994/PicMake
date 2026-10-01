@@ -6,7 +6,6 @@ import {
   MODEL_NAMES,
   type ApiConfig,
   type GenParams,
-  type ImageGenResult,
   type ImageRequestResult,
   type EditSubmission,
 } from "../lib/types";
@@ -43,10 +42,6 @@ async function toApiError(res: Response): Promise<ApiError> {
   return mapStatus(res.status, code, message);
 }
 
-async function raise(res: Response): Promise<never> {
-  throw await toApiError(res);
-}
-
 async function fetchJson<T>(
   path: string,
   config: ApiConfig,
@@ -66,7 +61,7 @@ async function fetchJson<T>(
     if (init?.signal?.aborted) throw e;
     throw new ApiError("network", "无法连接到 API 地址");
   }
-  if (!res.ok) await raise(res);
+  if (!res.ok) throw await toApiError(res);
   return (await res.json()) as T;
 }
 
@@ -88,8 +83,10 @@ export async function testConnection(
 
 /* ── 参数映射 ── */
 
-function toBody(params: GenParams): string {
-  return JSON.stringify({
+function bodyFields(
+  params: GenParams,
+): Record<string, string | number | boolean> {
+  return {
     model: MODEL_NAMES[params.model],
     prompt: params.prompt,
     n: params.n,
@@ -100,22 +97,21 @@ function toBody(params: GenParams): string {
     moderation: "auto",
     stream: true,
     partial_images: 3,
-  });
+  };
+}
+
+function toBody(params: GenParams): string {
+  return JSON.stringify(bodyFields(params));
 }
 
 /* ── 非流式生成 ── */
 
 /** 解析非流式响应体（普通请求与流式嗅探共用）；usage 原样保存 */
 export function parseGenResponse(j: any): ImageRequestResult {
-  const results: ImageGenResult[] = (j.data ?? []).map((d: any) => ({
-    b64: d.b64_json,
-  }));
-  if (
-    !results.length ||
-    results.some((r) => typeof r.b64 !== "string" || !r.b64)
-  )
+  const images: string[] = (j.data ?? []).map((d: any) => d.b64_json);
+  if (!images.length || images.some((b64) => typeof b64 !== "string" || !b64))
     throw new ApiError("unknown", "响应中没有图片数据");
-  return { images: results, usage: j.usage ?? null };
+  return { images, usage: j.usage ?? null };
 }
 
 /* ── 异步任务型中转（如 apimart）：恒回任务单，轮询 GET /tasks/{id} 到 completed 取图片 URL ── */
@@ -199,10 +195,7 @@ async function resolveTaskResult(
       if (!urls.length)
         throw new ApiError("unknown", "任务完成但响应中没有图片数据");
       const b64s = await Promise.all(urls.map((u) => urlToB64(u, signal)));
-      return {
-        images: b64s.map((b64) => ({ b64 })),
-        usage: d.usage ?? null,
-      };
+      return { images: b64s, usage: d.usage ?? null };
     }
     if (status === "failed" || status === "error" || status === "cancelled") {
       const msg = d?.error?.message ?? d?.message ?? j?.error?.message;
@@ -225,9 +218,12 @@ export interface StreamHandlers {
 }
 
 /** multipart 构造；局部重绘追加 mask 部件，不手工设置 boundary */
-export function editFormData(submission: EditSubmission): FormData {
+export function editFormData(
+  submission: EditSubmission,
+  params: GenParams,
+): FormData {
   const form = new FormData();
-  const fields = JSON.parse(toBody(submission.params));
+  const fields = bodyFields(params);
   delete fields.moderation;
   for (const [key, value] of Object.entries(fields))
     form.append(key, String(value));
@@ -277,10 +273,7 @@ export function createImageParser(
         /^image_(generation|edit)\.completed$/.test(type) &&
         d.b64_json
       ) {
-        const image: ImageGenResult = {
-          b64: d.b64_json,
-        };
-        result.images.push(image);
+        result.images.push(d.b64_json);
         // usage 是请求级总量，后续完成事件的总量回显覆盖，绝不按图相加。
         if (d.usage) result.usage = d.usage;
       }
@@ -308,14 +301,14 @@ export async function requestImages(
         Authorization: `Bearer ${config.apiKey}`,
         ...(!edit ? { "Content-Type": "application/json" } : {}),
       },
-      body: edit ? editFormData(edit) : toBody(params),
+      body: edit ? editFormData(edit, params) : toBody(params),
       signal: handlers.signal,
     });
   } catch (e) {
     if (handlers.signal?.aborted) throw e;
     throw new ApiError("network", "无法连接到 API 地址");
   }
-  if (!res.ok) await raise(res);
+  if (!res.ok) throw await toApiError(res);
   // 中转对 stream 请求回 JSON（普通响应或任务单）时就地解析，
   // 不重发请求——重发等于同一批图计费两次。
   if ((res.headers.get("content-type") ?? "").includes("json")) {

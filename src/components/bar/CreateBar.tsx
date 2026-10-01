@@ -17,6 +17,7 @@ import {
   RATIO_CHIPS,
   formSize,
   isCustomActive,
+  sizeChipValue,
   type GenForm,
 } from "../../lib/params";
 import { ratioMismatch } from "../../lib/sketch";
@@ -42,11 +43,6 @@ function MiniBar(props: {
   onExpand: () => void;
 }) {
   const f = props.form;
-  const size = isCustomActive(f)
-    ? `${f.cw}×${f.ch}`
-    : f.ratio === "auto"
-      ? "自动"
-      : `${f.ratio} · ${BASE_LABELS.find((b) => b.id === f.base)?.label}`;
   return (
     <div className="pm-bar-mini">
       <div className="pm-bar-mini-row">
@@ -70,8 +66,8 @@ function MiniBar(props: {
         </button>
       </div>
       <p className="pm-bar-mini-meta">
-        当前 {MODEL_LABELS[f.model]} · {size} · {QUALITY_LABELS[f.quality]} · ×
-        {f.n} · {f.fmt.toUpperCase()} ·{" "}
+        当前 {MODEL_LABELS[f.model]} · {sizeChipValue(f)} ·{" "}
+        {QUALITY_LABELS[f.quality]} · ×{f.n} · {f.fmt.toUpperCase()} ·{" "}
         {f.bg === "auto"
           ? "自动背景"
           : f.bg === "transparent"
@@ -151,7 +147,7 @@ function FullBar(props: FullBarProps) {
       {!!editing && (
         <div className="pm-bar-thumbs">
           {props.images.map((image, index) => {
-            const role = image.inpaintRole ?? (inpaint ? "ref" : "candidate");
+            const role = image.inpaintRole;
             return (
               <div
                 className={"pm-bar-thumb" + (role === "mask" ? " mask" : "")}
@@ -378,13 +374,7 @@ function FullBar(props: FullBarProps) {
 
         <BarChip
           ariaLabel="比例与基准"
-          value={
-            usingCustom
-              ? `${f.cw}×${f.ch}`
-              : f.ratio === "auto"
-                ? "自动"
-                : `${f.ratio} · ${BASE_LABELS.find((b) => b.id === f.base)?.label}`
-          }
+          value={sizeChipValue(f)}
           dirty={
             f.ratio !== DEFAULT_FORM.ratio ||
             f.base !== DEFAULT_FORM.base ||

@@ -52,7 +52,6 @@ export interface EditDraft {
 }
 
 export interface EditSubmission {
-  params: GenParams;
   sources: { source: InputSource; image: import("../db/schema").ImageRow }[];
   inputFidelity: FidelityChoice;
   /** 提交快照中的 mask：仅 multipart 追加 mask 部件，不进入 sources */
@@ -148,18 +147,15 @@ export interface InpaintHistory {
 export type InpaintIssue =
   | "empty-mask"
   | "invalid-mask"
-  | "base-mismatch"
   | "pixel-limit"
   | "ratio-limit"
   | "unsupported-orientation"
   | "canvas-failed"
-  | "mask-too-large"
-  | "size-unaccepted";
+  | "mask-too-large";
 
 export const INPAINT_ISSUE_HINTS: Record<InpaintIssue, string> = {
   "empty-mask": "请先涂选需要修改的区域",
   "invalid-mask": "选区数据无法读取，请重新选择修改区域",
-  "base-mismatch": "底图已变化，请重新选择修改区域",
   "pixel-limit":
     "图片像素过多（超过 16,777,216 像素总量），请缩小后再使用局部重绘",
   "ratio-limit":
@@ -167,15 +163,10 @@ export const INPAINT_ISSUE_HINTS: Record<InpaintIssue, string> = {
   "unsupported-orientation": "无法正确处理这张图片的方向，请重新导出图片后再试",
   "canvas-failed": "当前设备无法处理这张图片，请缩小图片后再试",
   "mask-too-large": "选区文件超出当前限制，请调整后再试",
-  "size-unaccepted": "输出尺寸与原图不同，请先接受建议尺寸",
 };
 
-export interface ImageGenResult {
-  b64: string;
-}
-
 export interface ImageRequestResult {
-  images: ImageGenResult[];
+  images: string[];
   /** 请求级原始 usage（原样保存，不做费用展示） */
   usage: Record<string, unknown> | null;
 }

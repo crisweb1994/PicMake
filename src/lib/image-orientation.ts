@@ -218,10 +218,11 @@ export function readImageMeta(blob: Blob): Promise<OrientationResult> {
 }
 
 /** 准备实际请求底图：orientation 无/=1 复用原文件；2–8 解码应用方向重编码一次；
- *  失败返回明确错误，不静默退回 */
+ *  失败返回明确错误，不静默退回。meta 由调用方读取（含头尺寸拦截）后传入 */
 export async function prepareInpaintBase(
   blob: Blob,
   name: string,
+  meta: Exclude<OrientationResult, { issue: InpaintIssue }>,
   id: () => string = () => crypto.randomUUID(),
 ): Promise<
   | {
@@ -235,15 +236,12 @@ export async function prepareInpaintBase(
     }
   | { ok: false; issue: InpaintIssue }
 > {
-  const meta = await readImageMeta(blob);
-  if ("issue" in meta) return { ok: false, issue: meta.issue };
   const format = imageFormat(
     new Uint8Array(await blob.slice(0, 12).arrayBuffer()),
   );
   if (!format) return { ok: false, issue: "canvas-failed" };
 
   if (meta.orientation === 1) {
-    // 头尺寸仅供提前拦截，以解码结果为准
     let bitmap: ImageBitmap;
     try {
       bitmap = await createImageBitmap(blob);
@@ -271,31 +269,13 @@ export async function prepareInpaintBase(
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx || canvas.width !== width || canvas.height !== height)
-      return { ok: false, issue: "canvas-failed" };
+    if (!ctx) return { ok: false, issue: "canvas-failed" };
     ctx.drawImage(bitmap, 0, 0);
     const encodeFormat = format === "jpeg" ? "jpeg" : "png";
     const blobOut = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, `image/${encodeFormat}`, 0.92),
     );
-    canvas.width = 0;
-    canvas.height = 0;
     if (!blobOut || !blobOut.size) return { ok: false, issue: "canvas-failed" };
-    // 编码后复核：非空、真实格式、尺寸一致
-    const outFormat = imageFormat(
-      new Uint8Array(await blobOut.slice(0, 12).arrayBuffer()),
-    );
-    if (outFormat !== encodeFormat)
-      return { ok: false, issue: "canvas-failed" };
-    let verify: ImageBitmap;
-    try {
-      verify = await createImageBitmap(blobOut);
-    } catch {
-      return { ok: false, issue: "canvas-failed" };
-    }
-    const verified = verify.width === width && verify.height === height;
-    verify.close();
-    if (!verified) return { ok: false, issue: "canvas-failed" };
     const originalImage = {
       id: id(),
       blob,

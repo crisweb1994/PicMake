@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useSettings } from "../store/settings";
 import { toast } from "@heroui/react";
 import { testConnection } from "../api/client";
@@ -11,18 +11,11 @@ export const useSettingsModal = () => {
   );
 
   /** 保存设置（有 apiKey 即视为已引导，启动弹窗由它决定） */
-  const saveSettings = useCallback(
-    (baseUrl: string, apiKey: string) => {
-      settings.setApi(baseUrl, apiKey);
-      setSettingsOpen(false);
-      toast("设置已保存");
-    },
-    [settings],
-  );
-
-  const openSettings = useCallback(() => {
-    setSettingsOpen(true);
-  }, []);
+  const saveSettings = (baseUrl: string, apiKey: string) => {
+    settings.setApi(baseUrl, apiKey);
+    setSettingsOpen(false);
+    toast("设置已保存");
+  };
 
   const runTestConnection = async (baseUrl: string, apiKey: string) => {
     const result = await testConnection({ baseUrl, apiKey });
@@ -31,15 +24,11 @@ export const useSettingsModal = () => {
       : { ok: false as const, message: ERROR_HINTS[result.error.kind] };
   };
 
-  const closeSettings = useCallback(() => {
-    setSettingsOpen(false);
-  }, []);
-
   return {
     settingsOpen,
     runTestConnection,
-    openSettings,
-    closeSettings,
+    openSettings: () => setSettingsOpen(true),
+    closeSettings: () => setSettingsOpen(false),
     saveSettings,
   };
 };

@@ -22,7 +22,7 @@ export function useImageAssets(
     const supplied = new Map(suppliedImages.map((row) => [row.id, row]));
     void db.images
       .bulkGet(ids.filter((id) => !supplied.has(id)))
-      .catch(() => [])
+      .catch(() => [] as (ImageRow | undefined)[])
       .then((rows) => {
         if (cancelled) return;
         const next: Record<string, ImageAsset> = {};
@@ -33,11 +33,6 @@ export function useImageAssets(
           next[row.id] = { row, url };
         }
         setAssets(next);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAssets({});
-        }
       });
     return () => {
       cancelled = true;

@@ -8,7 +8,6 @@ export function DetailCard(props: {
   display: DisplayGen;
   selectedImageId: string | null;
   canEdit: boolean;
-  starred: boolean;
   sources: DisplayInput[];
   onViewSource: (id: string) => void;
   onDownload: () => void;
@@ -28,6 +27,7 @@ export function DetailCard(props: {
 }) {
   const { row, images } = props.display;
   const p = row.params;
+  const starred = !!row.starred;
   const editImageId = props.selectedImageId ?? images[0]?.id ?? null;
   const inpaintRow = !!row.inpaint;
   return (
@@ -37,13 +37,13 @@ export function DetailCard(props: {
         <span className="t">{fmtTime(row.createdAt)}</span>
         <button
           type="button"
-          className={"pm-detail-star" + (props.starred ? " on" : "")}
-          aria-pressed={props.starred}
-          aria-label={props.starred ? "取消收藏" : "收藏这次生成"}
-          title={props.starred ? "取消收藏" : "收藏"}
+          className={"pm-detail-star" + (starred ? " on" : "")}
+          aria-pressed={starred}
+          aria-label={starred ? "取消收藏" : "收藏这次生成"}
+          title={starred ? "取消收藏" : "收藏"}
           onClick={props.onToggleStar}
         >
-          <Star size={13} fill={props.starred ? "currentColor" : "none"} />
+          <Star size={13} fill={starred ? "currentColor" : "none"} />
         </button>
         <button type="button" aria-label="收起详情" onClick={props.onClose}>
           <X size={12} />
