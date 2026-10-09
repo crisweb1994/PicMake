@@ -14,7 +14,7 @@ describe("prepareGeneration", () => {
         outputFormat: "png",
       },
       {
-        images: ["AQ==", "Ag=="],
+        images: ["/9j/", "Ag=="],
         usage: null,
       },
       undefined,
@@ -28,8 +28,12 @@ describe("prepareGeneration", () => {
     expect(result.images.map((image) => image.id)).toEqual(["id-0", "id-1"]);
     expect(result.row.id).toBe("id-2");
     expect(result.row.imageIds).toEqual(["id-0", "id-1"]);
+    // 逐张使用真实格式；无法识别的头部回退请求格式。
     expect(
-      result.images.every((image) => image.blob.type === "image/png"),
-    ).toBe(true);
+      result.images.map((image) => [image.format, image.blob.type]),
+    ).toEqual([
+      ["jpeg", "image/jpeg"],
+      ["png", "image/png"],
+    ]);
   });
 });

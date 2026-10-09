@@ -1,5 +1,6 @@
 /** 局部重绘纯规则：尺寸建议、底图约束、mask 校验、画笔范围、二值语义。Canvas 见 inpaint-canvas.ts */
 import type { InpaintIssue, MaskCommand, MaskDocument } from "./types";
+import { validateSketchDocument } from "./sketch";
 
 /** 底图像素保护阈值（产品保护值，非设备上限） */
 export const INPAINT_MAX_PIXELS = 16_777_216;
@@ -74,8 +75,6 @@ export function inpaintTargetSize(
   suggested: boolean;
   reason: string;
 } | null {
-  const check = checkInpaintBase(w, h);
-  if (!check.ok) return null;
   const out = suggestInpaintSize(w, h);
   if ("err" in out) return null;
   const suggested = out.w !== w || out.h !== h;
@@ -102,33 +101,23 @@ export function blankMask(
 export function validateMaskDocument(
   value: unknown,
 ): { doc: MaskDocument } | { issue: InpaintIssue } {
-  if (!value || typeof value !== "object") return { issue: "invalid-mask" };
-  const raw = value as Partial<MaskDocument>;
-  const { width, height, commands } = raw;
+  const doc = validateSketchDocument(value);
+  const raw = value as Partial<MaskDocument> | null;
   if (
-    raw.version !== 1 ||
-    typeof raw.baseImageId !== "string" ||
+    !doc ||
+    typeof raw?.baseImageId !== "string" ||
     !raw.baseImageId ||
-    !Number.isSafeInteger(width) ||
-    !Number.isSafeInteger(height) ||
-    !width ||
-    !height ||
-    !Array.isArray(commands) ||
-    !commands.every(
-      (cmd) =>
-        !!cmd &&
-        (cmd.type === "clear" ||
-          (cmd.type === "stroke" && Array.isArray(cmd.points))),
-    )
+    !Number.isSafeInteger(doc.width) ||
+    !Number.isSafeInteger(doc.height)
   )
     return { issue: "invalid-mask" };
   return {
     doc: {
       version: 1,
       baseImageId: raw.baseImageId,
-      width,
-      height,
-      commands: commands as MaskCommand[],
+      width: doc.width,
+      height: doc.height,
+      commands: doc.commands as MaskCommand[],
     },
   };
 }

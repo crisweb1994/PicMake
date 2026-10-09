@@ -99,26 +99,14 @@ export const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 /** 局部重绘 */
 
 /** 一笔 = 一次完整拖动或一次单击（圆点）；画笔扩大覆盖，擦除减少覆盖 */
-export interface MaskStroke {
-  type: "stroke";
-  tool: "pen" | "eraser";
-  /** 笔刷直径，底图像素单位；缩放不改变已有笔宽 */
-  width: number;
-  points: SketchPoint[];
-}
+/** width 为底图像素单位的笔刷直径，缩放不改变已有笔宽。 */
+export type MaskStroke = Omit<SketchStroke, "color">;
 
-export interface MaskClear {
-  type: "clear";
-}
-
-export type MaskCommand = MaskStroke | MaskClear;
+export type MaskCommand = MaskStroke | SketchClear;
 
 /** 绑定实际请求底图的选区文档（baseImageId ≠ 方向归一前的原文件） */
-export interface MaskDocument {
-  version: 1;
+export interface MaskDocument extends Omit<SketchDocument, "commands"> {
   baseImageId: string;
-  width: number;
-  height: number;
   commands: MaskCommand[];
 }
 

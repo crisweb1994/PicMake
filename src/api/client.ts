@@ -100,10 +100,6 @@ function bodyFields(
   };
 }
 
-function toBody(params: GenParams): string {
-  return JSON.stringify(bodyFields(params));
-}
-
 /* ── 非流式生成 ── */
 
 /** 解析非流式响应体（普通请求与流式嗅探共用）；usage 原样保存 */
@@ -301,7 +297,9 @@ export async function requestImages(
         Authorization: `Bearer ${config.apiKey}`,
         ...(!edit ? { "Content-Type": "application/json" } : {}),
       },
-      body: edit ? editFormData(edit, params) : toBody(params),
+      body: edit
+        ? editFormData(edit, params)
+        : JSON.stringify(bodyFields(params)),
       signal: handlers.signal,
     });
   } catch (e) {

@@ -115,8 +115,7 @@ export default function App() {
         pm.clearDone();
         clearViewingState();
         setPreviewId(null);
-        setBarMode("full");
-        form.focus();
+        openBar();
         toast("选区已应用：填写修改描述后生成");
       }
       if (entry === "draft-input") {
@@ -124,8 +123,7 @@ export default function App() {
         const reorder = !!chosen && form.inputs.length > 1;
         form.applyInpaint({ base, mask, original, entry }, chosen ?? undefined);
         inpaintChosenRef.current = null;
-        setBarMode("full");
-        form.focus();
+        openBar();
         toast(
           reorder
             ? "底图已设为图1，图片编号已更新，请检查描述"
@@ -288,8 +286,7 @@ export default function App() {
           prompt: `以图${form.inputs.length + 1}的草图为构图参考，保留主体的相对位置与比例，将粗略线条转成完整画面。`,
         });
       }
-      setBarMode("full");
-      form.focus();
+      openBar();
       return true;
     },
   });
@@ -581,7 +578,6 @@ export default function App() {
         }}
         onDownloadAll={downloadAll}
         onUseAsRef={useAsReference}
-        onDismissDone={expandBar}
         onStartInpaint={startInpaintFromInput}
         onEditMask={editMask}
         onRemoveMask={form.removeMask}

@@ -56,40 +56,40 @@
     linear-gradient(180deg, #fdfdfe, #f0f1f3);
 
   /* HeroUI 主题对齐 PicMake 令牌（浅色 + 杏色 accent，替换默认蓝色主题） */
-  --background: #f7f8f9;
-  --foreground: #1d1f22;
-  --surface: #ffffff;
-  --surface-foreground: #1d1f22;
+  --background: var(--pm-bg);
+  --foreground: var(--pm-text-1);
+  --surface: var(--pm-panel-solid);
+  --surface-foreground: var(--pm-text-1);
   --surface-secondary: #f1f2f4;
   --surface-tertiary: #e8e9ec;
-  --overlay: #ffffff;
-  --overlay-foreground: #1d1f22;
+  --overlay: var(--pm-panel-solid);
+  --overlay-foreground: var(--pm-text-1);
   --border: rgba(23, 23, 26, 0.08);
   --border-secondary: rgba(23, 23, 26, 0.1);
   --border-tertiary: rgba(23, 23, 26, 0.14);
 
-  --accent: #ff9a62;
-  --accent-foreground: #231108;
-  --accent-hover: #ffb088;
-  --accent-soft: rgba(255, 154, 98, 0.16);
+  --accent: var(--pm-accent);
+  --accent-foreground: var(--pm-accent-ink);
+  --accent-hover: var(--pm-accent-hover);
+  --accent-soft: var(--pm-accent-soft);
   --accent-soft-foreground: #b8531c;
   --accent-soft-hover: rgba(255, 154, 98, 0.22);
 
-  --danger: #c8563e;
+  --danger: var(--pm-error);
   --danger-foreground: #ffffff;
   --danger-hover: #d96a52;
   --danger-soft: rgba(200, 86, 62, 0.1);
   --danger-soft-foreground: #a84530;
 
-  --success: #218748;
+  --success: var(--pm-ok);
   --success-foreground: #ffffff;
 
-  --field-background: rgba(23, 23, 26, 0.05);
-  --field-foreground: #1d1f22;
-  --field-border: rgba(23, 23, 26, 0.07);
-  --field-border-hover: rgba(23, 23, 26, 0.13);
-  --field-border-focus: rgba(255, 154, 98, 0.5);
-  --field-focus: rgba(255, 154, 98, 0.16);
+  --field-background: var(--pm-fill);
+  --field-foreground: var(--pm-text-1);
+  --field-border: var(--pm-line);
+  --field-border-hover: var(--pm-line-2);
+  --field-border-focus: var(--pm-accent-border);
+  --field-focus: var(--pm-accent-soft);
 
   /* 草图画板令牌：两主题同值——纸面恒白 */
   --pm-sketch-paper: #ffffff;
@@ -116,11 +116,6 @@
   --pm-text-1: #ededef;
   --pm-text-2: #9ba0a8;
   --pm-text-3: #6a7078;
-  --pm-accent: #ff9a62;
-  --pm-accent-soft: rgba(255, 154, 98, 0.16);
-  --pm-accent-ink: #231108;
-  --pm-accent-hover: #ffb088;
-  --pm-accent-border: rgba(255, 154, 98, 0.5);
   --pm-error: #f0846b;
   --pm-error-soft: rgba(240, 132, 107, 0.08);
   --pm-error-border: rgba(240, 132, 107, 0.65);
@@ -150,40 +145,17 @@
     linear-gradient(180deg, #17181c, #101114);
 
   /* HeroUI 主题对齐 PicMake 令牌（暗色 + 杏色 accent，替换默认蓝色主题） */
-  --background: #0e0f11;
-  --foreground: #ededef;
-  --surface: #17181b;
-  --surface-foreground: #ededef;
   --surface-secondary: #1d1e22;
   --surface-tertiary: #232529;
-  --overlay: #17181b;
-  --overlay-foreground: #ededef;
   --border: var(--pm-fill-hover);
   --border-secondary: rgba(255, 255, 255, 0.1);
   --border-tertiary: rgba(255, 255, 255, 0.13);
-
-  --accent: #ff9a62;
-  --accent-foreground: #231108;
-  --accent-hover: #ffb088;
-  --accent-soft: rgba(255, 154, 98, 0.16);
   --accent-soft-foreground: #ffb088;
-  --accent-soft-hover: rgba(255, 154, 98, 0.22);
-
-  --danger: #f0846b;
   --danger-foreground: #2a1008;
   --danger-hover: #f59b86;
   --danger-soft: rgba(240, 132, 107, 0.14);
   --danger-soft-foreground: #f0a08d;
-
-  --success: #7bd88f;
   --success-foreground: #0c2413;
-
-  --field-background: var(--pm-fill);
-  --field-foreground: #ededef;
-  --field-border: var(--pm-fill-hover);
-  --field-border-hover: rgba(255, 255, 255, 0.13);
-  --field-border-focus: rgba(255, 154, 98, 0.5);
-  --field-focus: rgba(255, 154, 98, 0.16);
 }
 
 html,
@@ -456,7 +428,9 @@ body {
     opacity: 0;
   }
 }
-.pm-reserve {
+.pm-reserve,
+.pm-ip-cov.hidden,
+.pm-vm-img.nomask canvas {
   visibility: hidden;
 }
 .pm-gen-pill {
@@ -501,7 +475,8 @@ body {
 }
 
 /* 单张结果 */
-.pm-single {
+.pm-single,
+.pm-grid-wrap {
   position: relative;
   z-index: 1;
   display: flex;
@@ -557,22 +532,21 @@ body {
     background 0.12s,
     color 0.12s;
 }
-.pm-stage-toolbar button:hover {
+.pm-stage-toolbar button:hover,
+.pm-detail-cap button:hover,
+.pm-dcount button:hover,
+.pm-dnone-reset:hover,
+.pm-dstar:hover {
   background: var(--pm-fill-hover);
   color: var(--pm-text-1);
 }
-.pm-stage-toolbar button.danger:hover {
+.pm-stage-toolbar button.danger:hover,
+.pm-bar-thumb .rm:hover,
+.pm-pop-hint.warn {
   color: var(--pm-error);
 }
 
 /* 多张网格 */
-.pm-grid-wrap {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
 .pm-grid4 {
   display: grid;
   grid-template-columns: repeat(2, min(30vh, 26vw));
@@ -592,7 +566,9 @@ body {
 .pm-gtile:hover {
   transform: translateY(-3px);
 }
-.pm-gtile img {
+.pm-gtile img,
+.pm-bar-thumb img,
+.pm-detail-src img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -701,10 +677,15 @@ body {
     transform 75ms ease-out,
     background 0.15s;
 }
-.pm-bar-go:active {
+.pm-bar-go:active,
+.pm-bar-send:active,
+.pm-chip:active {
   transform: scale(0.95);
 }
-.pm-bar-go:disabled {
+.pm-bar-go:disabled,
+.pm-chip:disabled,
+.pm-pop-opt.with-ic:disabled,
+.pm-detail-acts button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -742,12 +723,6 @@ body {
   border: 1px solid var(--pm-line);
   padding: 0;
   cursor: pointer;
-}
-.pm-bar-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 /* 草图缩略图：白底 contain */
 .pm-bar-thumb > button.sk {
@@ -800,9 +775,6 @@ body {
   line-height: 1;
   display: grid;
   place-items: center;
-}
-.pm-bar-thumb .rm:hover {
-  color: var(--pm-error);
 }
 .pm-bar-err {
   font-size: 11px;
@@ -862,10 +834,8 @@ body {
   pointer-events: auto;
   cursor: pointer;
 }
-.pm-bar-send:active {
-  transform: scale(0.95);
-}
-.pm-bar-row2 {
+.pm-bar-row2,
+.pm-bar-donerow {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -926,9 +896,6 @@ body {
     color 0.15s,
     transform 75ms ease-out;
 }
-.pm-chip:active {
-  transform: scale(0.95);
-}
 .pm-chip:hover {
   border-color: var(--pm-line-2);
   background: var(--pm-fill-hover);
@@ -956,10 +923,6 @@ body {
   width: 30px;
   padding: 0;
   justify-content: center;
-}
-.pm-chip:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .pm-chip-return {
   color: var(--pm-text-2);
@@ -1069,11 +1032,6 @@ body {
 .pm-pop-ratio button:hover {
   color: var(--pm-text-1);
 }
-.pm-pop-ratio button.on {
-  color: var(--pm-accent);
-  border-color: var(--pm-accent-border);
-  background: var(--pm-accent-soft);
-}
 .pm-pop .pm-seg {
   margin: 2px 5px 6px;
 }
@@ -1121,9 +1079,6 @@ body {
   line-height: 1.5;
   margin: 0;
 }
-.pm-pop-hint.warn {
-  color: var(--pm-error);
-}
 /* 弹层菜单行（带图标）：附件「上传图片 / 画草图」等入口 */
 .pm-pop-opt.with-ic {
   align-items: center;
@@ -1143,10 +1098,6 @@ body {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-}
-.pm-pop-opt.with-ic:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .pm-pop-n {
   display: flex;
@@ -1168,11 +1119,6 @@ body {
 }
 .pm-pop-n button:hover {
   color: var(--pm-text-1);
-}
-.pm-pop-n button.on {
-  color: var(--pm-accent);
-  border-color: var(--pm-accent-border);
-  background: var(--pm-accent-soft);
 }
 
 /* generating / complete 态 */
@@ -1283,15 +1229,11 @@ body {
   place-items: center;
   font-size: 12px;
 }
-.pm-bar-dismiss:hover {
+.pm-bar-dismiss:hover,
+.pm-ip-close:hover,
+.pm-vm-panel footer button:hover {
   color: var(--pm-text-1);
   background: var(--pm-fill-hover);
-}
-.pm-bar-donerow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 .pm-bar-donerow > * {
   animation: pm-chip-in 0.2s ease-out backwards;
@@ -1434,10 +1376,6 @@ body {
   place-items: center;
   color: var(--pm-text-3);
 }
-.pm-detail-cap button:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
-}
 .pm-detail-cap button.pm-detail-star.on {
   color: var(--pm-accent);
 }
@@ -1520,12 +1458,6 @@ body {
   padding: 0;
   cursor: pointer;
 }
-.pm-detail-src img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
 .pm-detail-src span {
   font-size: 9px;
   color: var(--pm-text-3);
@@ -1556,10 +1488,6 @@ body {
   color: var(--pm-text-1);
   border-color: var(--pm-line-2);
 }
-.pm-detail-acts button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
 .pm-detail-del {
   width: 100%;
   text-align: center;
@@ -1585,7 +1513,10 @@ body {
   font-size: 12.5px;
   transition: background 0.15s;
 }
-.pm-detail-new:hover {
+.pm-detail-new:hover,
+.pm-ip-use.ready:hover,
+.pm-vm-panel footer button.primary:hover,
+.pm-bar-size button:hover {
   background: var(--pm-accent-hover);
 }
 .pm-detail-dur {
@@ -1935,6 +1866,8 @@ body {
 .pm-dfav:hover {
   color: var(--pm-text-1);
 }
+.pm-pop-ratio button.on,
+.pm-pop-n button.on,
 .pm-dfav.on {
   color: var(--pm-accent);
   border-color: var(--pm-accent-border);
@@ -1955,10 +1888,6 @@ body {
   padding: 2px 7px;
   border-radius: 6px;
 }
-.pm-dcount button:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
-}
 .pm-dnone {
   display: flex;
   flex-direction: column;
@@ -1974,10 +1903,6 @@ body {
   border-radius: 7px;
   padding: 4px 12px;
   margin-bottom: 24px;
-}
-.pm-dnone-reset:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
 }
 
 /* 行星标：hover/聚焦/已收藏时常驻 */
@@ -2003,10 +1928,6 @@ body {
 .pm-dstar:focus-visible,
 .pm-dstar.on {
   opacity: 1;
-}
-.pm-dstar:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
 }
 .pm-dstar.on {
   color: var(--pm-accent);
@@ -2184,7 +2105,9 @@ body {
   transition: background 0.12s;
   z-index: 6;
 }
-.pm-sk-close:hover {
+.pm-sk-close:hover,
+.pm-sk-tool:hover,
+.pm-sk-hist button:hover {
   background: var(--pm-sketch-hover);
 }
 .pm-sk-close:disabled {
@@ -2218,13 +2141,11 @@ body {
     border-color 0.12s,
     box-shadow 0.12s;
 }
-.pm-sk-tool::after {
+.pm-sk-tool::after,
+.pm-sk-hist button::after {
   content: "";
   position: absolute;
   inset: -3px;
-}
-.pm-sk-tool:hover {
-  background: var(--pm-sketch-hover);
 }
 .pm-sk-tool.on {
   background: var(--pm-sketch-paper);
@@ -2252,14 +2173,6 @@ body {
   place-items: center;
   color: var(--pm-sketch-ink);
   transition: background 0.12s;
-}
-.pm-sk-hist button::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-}
-.pm-sk-hist button:hover {
-  background: var(--pm-sketch-hover);
 }
 .pm-sk-hist button:disabled {
   color: var(--pm-sketch-ink-dis);
@@ -2562,9 +2475,6 @@ body {
   height: 100%;
   pointer-events: none;
 }
-.pm-ip-cov.hidden {
-  visibility: hidden;
-}
 .pm-ip-ring {
   position: absolute;
   border: 1.5px solid var(--pm-accent);
@@ -2587,10 +2497,6 @@ body {
   display: grid;
   place-items: center;
   cursor: pointer;
-}
-.pm-ip-close:hover {
-  color: var(--pm-text-1);
-  background: var(--pm-fill-hover);
 }
 
 .pm-ip-title {
@@ -2759,9 +2665,6 @@ body {
   color: var(--pm-accent-ink);
   cursor: pointer;
 }
-.pm-ip-use.ready:hover {
-  background: var(--pm-accent-hover);
-}
 .pm-ip-use:disabled {
   pointer-events: none;
 }
@@ -2855,9 +2758,6 @@ body {
   width: 100%;
   height: 100%;
 }
-.pm-vm-img.nomask canvas {
-  visibility: hidden;
-}
 .pm-vm-panel footer {
   display: flex;
   align-items: center;
@@ -2876,18 +2776,11 @@ body {
   font-size: 12px;
   cursor: pointer;
 }
-.pm-vm-panel footer button:hover {
-  color: var(--pm-text-1);
-  background: var(--pm-fill-hover);
-}
 .pm-vm-panel footer button.primary {
   background: var(--pm-accent);
   border-color: transparent;
   color: var(--pm-accent-ink);
   font-weight: 600;
-}
-.pm-vm-panel footer button.primary:hover {
-  background: var(--pm-accent-hover);
 }
 
 /* ── 创作条局部重绘增强 ── */
@@ -2971,9 +2864,6 @@ body {
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-}
-.pm-bar-size button:hover {
-  background: var(--pm-accent-hover);
 }
 .pm-bar-inp-note {
   font-size: 10.5px;

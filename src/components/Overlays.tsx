@@ -12,7 +12,6 @@ import {
   ModalContainer,
   ModalDialog,
   Spinner,
-  useOverlayState,
 } from "@heroui/react";
 import {
   ChevronLeft,
@@ -166,14 +165,13 @@ export function ConfirmDialog(props: {
   state: ConfirmState | null;
   onCancel: () => void;
 }) {
-  const st = useOverlayState({
-    isOpen: props.state != null,
-    onOpenChange: (o) => {
-      if (!o) props.onCancel();
-    },
-  });
   return (
-    <Modal state={st}>
+    <Modal
+      isOpen={props.state != null}
+      onOpenChange={(open) => {
+        if (!open) props.onCancel();
+      }}
+    >
       <ModalBackdrop className="pm-confirm" isKeyboardDismissDisabled>
         <ModalContainer placement="center">
           <ModalDialog

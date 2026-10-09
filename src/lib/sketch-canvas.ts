@@ -73,15 +73,10 @@ export async function exportSketchPng(
   const sctx = strokes.getContext("2d");
   if (!sctx) return null;
   replaySketch(sctx, doc);
-  const out = document.createElement("canvas");
-  out.width = doc.width;
-  out.height = doc.height;
-  const octx = out.getContext("2d");
-  if (!octx) return null;
-  octx.fillStyle = "#FFFFFF";
-  octx.fillRect(0, 0, doc.width, doc.height);
-  octx.drawImage(strokes, 0, 0);
+  sctx.globalCompositeOperation = "destination-over";
+  sctx.fillStyle = "#FFFFFF";
+  sctx.fillRect(0, 0, doc.width, doc.height);
   return new Promise<Blob | null>((resolve) =>
-    out.toBlob(resolve, "image/png"),
+    strokes.toBlob(resolve, "image/png"),
   );
 }

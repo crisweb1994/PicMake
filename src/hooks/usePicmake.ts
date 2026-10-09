@@ -6,7 +6,6 @@ import { useGeneration, isAbortError } from "./useGeneration";
 import type { useHistory } from "./useHistory";
 import type { useForm } from "./useForm";
 import { prepareGeneration, type PreparedGeneration } from "../lib/generation";
-import { b64Format } from "../lib/blob";
 import { inpaintTargetSize } from "../lib/inpaint";
 import {
   ApiError,
@@ -124,10 +123,6 @@ export function usePicmake({
         ? await resolveOriginPrompt(draft.inputs)
         : undefined;
       const run = await generation.start(paramsForRun, draft, config);
-      // 逐张嗅探真实格式（中转可能不按请求格式返回）
-      const formats = run.result.images.map(
-        (b64) => b64Format(b64) ?? paramsForRun.outputFormat,
-      );
       const prepared = prepareGeneration(
         paramsForRun,
         run.result,
@@ -135,7 +130,6 @@ export function usePicmake({
         run.startedAt,
         undefined,
         originPrompt,
-        formats,
       );
       await savePrepared(prepared);
     } catch (caught) {

@@ -1,5 +1,5 @@
 /** 草图编辑会话：工作文档与撤销游标唯一持有；确认导出 PNG 交接线层落附件，不写库 */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "@heroui/react";
 import type { ImageRow } from "../db/schema";
 import type { SketchCommand, SketchDocument } from "../lib/types";
@@ -47,55 +47,46 @@ export function useSketch(props: {
     [],
   );
 
-  const open = useCallback(
-    (doc: SketchDocument, meta: string, replacesImageId: string | null) => {
-      setSession({
-        doc,
-        cursor: doc.commands.length,
-        replacesImageId,
-        meta,
-        openKey: sketchSnapshotKey(doc),
-      });
-      setConfirming(false);
-    },
-    [],
-  );
+  const open = (
+    doc: SketchDocument,
+    meta: string,
+    replacesImageId: string | null,
+  ) => {
+    setSession({
+      doc,
+      cursor: doc.commands.length,
+      replacesImageId,
+      meta,
+      openKey: sketchSnapshotKey(doc),
+    });
+    setConfirming(false);
+  };
 
-  const openEdit = useCallback(
-    (raw: SketchDocument, imageId: string, index: number) => {
-      const doc = validateSketchDocument(raw);
-      if (!doc) {
-        toast("草图数据无法读取，请重新画一张");
-        return;
-      }
-      open(
-        doc,
-        `${doc.width} × ${doc.height} · 图${index + 1} 的草图`,
-        imageId,
-      );
-    },
-    [open],
-  );
+  const openEdit = (raw: SketchDocument, imageId: string, index: number) => {
+    const doc = validateSketchDocument(raw);
+    if (!doc) {
+      toast("草图数据无法读取，请重新画一张");
+      return;
+    }
+    open(doc, `${doc.width} × ${doc.height} · 图${index + 1} 的草图`, imageId);
+  };
 
-  const openHistory = useCallback(
-    (raw: unknown) => {
-      const doc = validateSketchDocument(raw);
-      if (!doc) {
-        toast("来源图片不可用，无法继续编辑这张草图");
-        return;
-      }
-      open(doc, `${doc.width} × ${doc.height} · 历史草图`, null);
-    },
-    [open],
-  );
+  const openHistory = (raw: unknown) => {
+    const doc = validateSketchDocument(raw);
+    if (!doc) {
+      toast("来源图片不可用，无法继续编辑这张草图");
+      return;
+    }
+    open(doc, `${doc.width} × ${doc.height} · 历史草图`, null);
+  };
 
-  const close = useCallback(() => {
+  const close = () => {
     confirmTokenRef.current++;
     setSession(null);
     setConfirming(false);
-  }, []);
+  };
 
-  const stroke = useCallback((command: SketchCommand) => {
+  const stroke = (command: SketchCommand) => {
     setSession((current) => {
       if (!current || !command) return current;
       const next = commitCommand(current.doc, current.cursor, command);
@@ -104,25 +95,25 @@ export function useSketch(props: {
         ? { ...current, doc: next.doc, cursor: next.cursor }
         : current;
     });
-  }, []);
+  };
 
-  const undo = useCallback(() => {
+  const undo = () => {
     setSession((current) =>
       current && current.cursor > 0
         ? { ...current, cursor: current.cursor - 1 }
         : current,
     );
-  }, []);
+  };
 
-  const redo = useCallback(() => {
+  const redo = () => {
     setSession((current) =>
       current && current.cursor < current.doc.commands.length
         ? { ...current, cursor: current.cursor + 1 }
         : current,
     );
-  }, []);
+  };
 
-  const confirm = useCallback(() => {
+  const confirm = () => {
     const current = session;
     if (!current || confirming) return;
     const token = ++confirmTokenRef.current;
@@ -162,7 +153,7 @@ export function useSketch(props: {
       }
       setConfirming(false);
     })();
-  }, [session, confirming, close]);
+  };
 
   /** 打开以来是否有修改（撤销回打开状态视为无修改） */
   const changed =

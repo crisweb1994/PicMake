@@ -133,6 +133,11 @@ describe("validateMaskDocument", () => {
     expect(validateMaskDocument({ ...base, width: Number.NaN })).toEqual({
       issue: "invalid-mask",
     });
+    expect(
+      validateMaskDocument({ ...base, width: Number.MAX_SAFE_INTEGER + 1 }),
+    ).toEqual({
+      issue: "invalid-mask",
+    });
     expect(validateMaskDocument({ ...base, commands: "x" })).toEqual({
       issue: "invalid-mask",
     });

@@ -676,7 +676,6 @@ export function CreateBar(
     onTweak: () => void;
     onDownloadAll: () => void;
     onUseAsRef: () => void;
-    onDismissDone: () => void;
   },
 ) {
   const {
@@ -690,7 +689,6 @@ export function CreateBar(
     onTweak,
     onDownloadAll,
     onUseAsRef,
-    onDismissDone,
     ...full
   } = props;
   const state = generating ? "generating" : done ? "complete" : mode;
@@ -718,7 +716,7 @@ export function CreateBar(
           onTweak={onTweak}
           onDownloadAll={onDownloadAll}
           onUseAsRef={onUseAsRef}
-          onDismiss={onDismissDone}
+          onDismiss={onExpand}
         />
       )}
     </section>

@@ -1,4 +1,4 @@
-import { b64ToBlob } from "./blob";
+import { b64Format, b64ToBlob } from "./blob";
 import type { EditSubmission, GenParams, ImageRequestResult } from "./types";
 import type { HistoryRow, ImageRow } from "../db/schema";
 
@@ -17,11 +17,9 @@ export function prepareGeneration(
   id: () => string = () => crypto.randomUUID(),
   /** 编辑/参考生成时的原始描述 */
   originPrompt?: string,
-  /** 逐张从结果字节嗅探的真实格式；缺省回退请求参数 */
-  resultFormats?: string[],
 ): PreparedGeneration {
-  const images = result.images.map((b64, index) => {
-    const format = resultFormats?.[index] ?? params.outputFormat;
+  const images = result.images.map((b64) => {
+    const format = b64Format(b64) ?? params.outputFormat;
     return {
       id: id(),
       blob: b64ToBlob(b64, `image/${format}`),
