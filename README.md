@@ -40,6 +40,16 @@ pnpm dev        # → http://localhost:5173
 > [!NOTE]
 > 本地开发同理：Key 只写进浏览器 localStorage，全程没有任何服务器参与。
 
+### 本地 mock API
+
+开发时不想消耗额度，或者需要触发各种错误，可以用内置的 mock：
+
+```bash
+pnpm mock       # → http://localhost:8787
+```
+
+在设置里把 API 地址填为 `http://localhost:8787`，Key 随便填。mock 返回按请求尺寸生成的纯色 PNG；在画面描述里加 `[401]`、`[403]`、`[429]`、`[500]`、`[policy]` 模拟对应错误，`[stream-error]` 模拟流式中断，`[slow]` 放慢事件便于测试取消，`[json]` 走非流式 JSON 响应。
+
 ## 部署
 
 构建产物是纯静态文件，任意静态托管都能用，仓库已带两家的配置：
