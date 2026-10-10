@@ -62,7 +62,8 @@ export default function App() {
   const form = useForm();
   const history = useHistory();
   const theme = useTheme();
-  const settings = useSettings();
+  const baseUrl = useSettings((s) => s.baseUrl);
+  const apiKey = useSettings((s) => s.apiKey);
   const [previewId, setPreviewId] = useState<string | null>(null);
   // 底栏：mini 收起 / full 展开
   const [barMode, setBarMode] = useState<"mini" | "full">("mini");
@@ -601,8 +602,8 @@ export default function App() {
       <SettingsModal
         key={settingsOpen ? "settings-open" : "settings-closed"}
         open={settingsOpen}
-        baseUrl={settings.baseUrl}
-        apiKey={settings.apiKey}
+        baseUrl={baseUrl}
+        apiKey={apiKey}
         storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
         theme={theme.pref}
         onThemeChange={theme.setPref}

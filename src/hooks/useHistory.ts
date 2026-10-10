@@ -6,6 +6,7 @@ import { deleteHistory, saveGeneration, toggleStar } from "../db/history";
 import type { PreparedGeneration } from "../lib/generation";
 import type { DisplayGen, DisplayImage } from "../lib/view-models";
 import { inputDisplay } from "../lib/view-models";
+import { nextSelection } from "../lib/workspace-rules";
 import { useImageAssets } from "./useImageAssets";
 
 const EMPTY_ROWS: HistoryRow[] = [];
@@ -30,18 +31,8 @@ export function useHistory() {
     if (!rawRows) return;
     const previousRows = previousRowsRef.current;
     previousRowsRef.current = rawRows;
-    if (!previousRows) {
-      setSelectedId(rawRows[0]?.id ?? null);
-      return;
-    }
-    // 写入完成可早于 liveQuery 更新；仅回退确实从列表中删除的作品。
-    if (
-      selectedId &&
-      previousRows.some((row) => row.id === selectedId) &&
-      !rawRows.some((row) => row.id === selectedId)
-    ) {
-      setSelectedId(rawRows[0]?.id ?? null);
-    }
+    const next = nextSelection(previousRows, rawRows, selectedId);
+    if (next !== selectedId) setSelectedId(next);
   }, [rawRows, selectedId]);
 
   useEffect(() => {

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ImageRow } from "../db/schema";
 import type {
+  InpaintEntry,
   InpaintIssue,
   InputSource,
   MaskDocument,
@@ -21,8 +22,6 @@ import {
 } from "../lib/sketch";
 import { exportMaskPng } from "../lib/inpaint-canvas";
 import { prepareInpaintBase, readImageMeta } from "../lib/image-orientation";
-
-export type InpaintEntry = "result" | "draft-input" | "reedit";
 
 export interface InpaintSession {
   /** 实际请求底图（方向归一后） */

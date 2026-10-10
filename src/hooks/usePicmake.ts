@@ -43,7 +43,6 @@ export function usePicmake({
   /** 草稿落位后回调：页面据此展开创作条并聚焦 */
   onDraftReady: () => void;
 }) {
-  const settings = useSettings();
   const { selectedId, display, pendingSave } = history;
   const [returnId, setReturnId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -114,10 +113,9 @@ export function usePicmake({
     workflowBusyRef.current = true;
     history.select(null);
     onViewReset();
-    const config: ApiConfig = {
-      baseUrl: settings.baseUrl,
-      apiKey: settings.apiKey,
-    };
+    // 配置在发请求时读一次，不订阅 settings
+    const { baseUrl, apiKey } = useSettings.getState();
+    const config: ApiConfig = { baseUrl, apiKey };
     try {
       const originPrompt = draft
         ? await resolveOriginPrompt(draft.inputs)
@@ -146,28 +144,28 @@ export function usePicmake({
   const generate = () => {
     // 生成中底栏已切到 GenBar，此处只需拦保存期与工作流窗口期的重复触发
     if (savingRef.current || workflowBusyRef.current || pendingSave) return;
+    const checked = form.checkParams();
     // 目标尺寸未接受时不发生成请求
-    if (
-      form.inpaint &&
-      form.inpaintInfo?.suggested &&
-      !form.inpaintInfo.accepted
-    ) {
-      toast("输出尺寸与原图不同，请先接受建议尺寸");
+    if (!checked.ok && checked.reason === "size-not-accepted") {
+      if (checked.message) toast(checked.message);
       return;
     }
     setLastDoneId(null);
-    const params = form.getParams();
-    if (params)
-      void startGeneration(
-        params,
-        form.inputs.length
-          ? {
-              inputs: form.inputs,
-              inputFidelity: form.inputFidelity,
-              ...(form.inpaint ? { inpaint: form.inpaint } : {}),
-            }
-          : null,
-      );
+    if (!checked.ok) {
+      if (checked.message) toast(checked.message);
+      if (checked.focusPrompt) form.focus();
+      return;
+    }
+    void startGeneration(
+      checked.params,
+      form.inputs.length
+        ? {
+            inputs: form.inputs,
+            inputFidelity: form.inputFidelity,
+            ...(form.inpaint ? { inpaint: form.inpaint } : {}),
+          }
+        : null,
+    );
   };
 
   /** 读取局部重绘记录资源：底图、参考图、mask；原文件缺失可省略，其余阻断 */
