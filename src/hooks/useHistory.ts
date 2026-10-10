@@ -86,9 +86,15 @@ export function useHistory() {
   const images = (displayRow?.imageIds ?? []).map((id) => ({
     id,
     url: pendingSave ? pendingUrls[id] : assets[id]?.url,
+    format: pendingSave
+      ? pendingSave.images.find((image) => image.id === id)?.format
+      : assets[id]?.row.format,
   }));
   const display: DisplayGen | null =
-    displayRow && images.every((image): image is DisplayImage => !!image.url)
+    displayRow &&
+    images.every(
+      (image): image is DisplayImage => !!image.url && !!image.format,
+    )
       ? { row: displayRow, images }
       : null;
 

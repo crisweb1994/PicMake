@@ -4,6 +4,8 @@ import type { SizeSpec } from "./types";
 export interface DisplayImage {
   id: string;
   url: string;
+  /** 图片实际格式（png / jpeg / webp），决定下载扩展名 */
+  format: string;
 }
 
 /** 生成中占位布局：本次请求的张数与尺寸（决定占位卡比例） */

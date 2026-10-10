@@ -20,6 +20,7 @@ import { useForm } from "./hooks/useForm";
 import { usePicmake } from "./hooks/usePicmake";
 import { useSketch } from "./hooks/useSketch";
 import { db } from "./db/schema";
+import { downloadName } from "./lib/download";
 import { fmtBytes } from "./lib/format";
 import { formSize } from "./lib/params";
 import { SKETCH_DEFAULT_SIZE } from "./lib/sketch";
@@ -360,11 +361,7 @@ export default function App() {
   const downloadOne = (idx: number) => {
     if (!history.display) return;
     const im = history.display.images[idx];
-    const ext =
-      history.display.row.params.outputFormat === "jpeg"
-        ? "jpg"
-        : history.display.row.params.outputFormat;
-    downloadUrl(im.url, `PicMake-${history.display.row.id.slice(0, 8)}.${ext}`);
+    downloadUrl(im.url, downloadName(history.display.row.id, idx, im.format));
   };
   const downloadAll = () =>
     history.display?.images.forEach((_, i) => downloadOne(i));
@@ -642,7 +639,13 @@ export default function App() {
       <Lightbox
         img={lightbox}
         prompt={history.display?.row.prompt ?? ""}
-        onDownload={() => lightbox && downloadUrl(lightbox.url, "PicMake.png")}
+        onDownload={() => {
+          const idx =
+            history.display?.images.findIndex(
+              (image) => image.id === lightbox?.id,
+            ) ?? -1;
+          if (idx >= 0) downloadOne(idx);
+        }}
         onReuse={() => {
           setLightbox(null);
           if (history.display) pm.reuseParams(history.display.row);
