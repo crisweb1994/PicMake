@@ -1,5 +1,4 @@
-/** 值 chip + 向上弹层原语（chipbar 设计系统，PRD §5.2）。
- *  独立导出供自定义组合：任何「label + 当前值 + 弹层」形态的控件都可以用 BarChip 搭。 */
+/** 值 chip + 向上弹层原语（BarChip / PopRow） */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export function BarChip(props: {
@@ -48,7 +47,11 @@ export function BarChip(props: {
         {props.icon}
         {props.value != null && <b>{props.value}</b>}
         {props.suffix && <span className="pm-chip-suffix">{props.suffix}</span>}
-        {!props.icon && <span className="pm-chip-car" aria-hidden>▾</span>}
+        {!props.icon && (
+          <span className="pm-chip-car" aria-hidden>
+            ▾
+          </span>
+        )}
       </button>
       {open && (
         <div
@@ -88,7 +91,9 @@ export function PopRow(props: {
         <span className="nm">{props.name}</span>
         <span className="ds">{props.desc}</span>
       </span>
-      <span className="ck" aria-hidden>✓</span>
+      <span className="ck" aria-hidden>
+        ✓
+      </span>
     </button>
   );
 }

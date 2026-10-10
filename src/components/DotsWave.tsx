@@ -1,13 +1,5 @@
-/**
- * 生成中点阵波动效（对角顺序波）：canvas 绘制整齐点阵，波峰沿左上→右下方向流动，
- * 波峰色随 --pm-accent、基色随 --pm-text-1（从 CSS 令牌读取，不写死色值）。
- *
- * 副作用（均随组件挂载启动、卸载清理）：
- * - requestAnimationFrame 动画循环
- * - ResizeObserver（容器尺寸 / DPR 变化时重建画布）
- * - MutationObserver（<html> class 变化即主题切换时，重读令牌颜色）
- * - prefers-reduced-motion: reduce 时不启动循环，仅静态绘制一帧
- */
+/** 生成中点阵波动（对角波），颜色取 CSS 令牌。副作用（随卸载清理）：rAF 循环、
+ *  ResizeObserver、MutationObserver（主题切换重读令牌）；reduced-motion 只画一帧 */
 import { useEffect, useRef } from "react";
 
 const SPACING = 23;
@@ -19,11 +11,6 @@ function readToken(name: string, fallback: string) {
     .getPropertyValue(name)
     .trim();
   return /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
-}
-
-function withAlpha(hex: string, alpha: number) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 export function DotsWave() {
@@ -49,9 +36,8 @@ export function DotsWave() {
         for (let x = SPACING / 2; x < width; x += SPACING) {
           const phase = ((x + y) / (width + height)) * PHASE_SPAN - t * SPEED;
           const amp = Math.pow(Math.max(0, Math.sin(phase)), 2);
-          const alpha = 0.07 + amp * 0.68;
-          ctx.fillStyle =
-            amp > 0.55 ? withAlpha(crest, alpha) : withAlpha(base, alpha);
+          ctx.globalAlpha = 0.07 + amp * 0.68;
+          ctx.fillStyle = amp > 0.55 ? crest : base;
           ctx.beginPath();
           ctx.arc(x, y, 1.5 + amp * 1.2, 0, Math.PI * 2);
           ctx.fill();

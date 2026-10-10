@@ -1,6 +1,5 @@
-/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props。
- *  布局（PRD §5.1，2026-09-23）：全幅舞台 + 底部 CreateBar + 舞台右上 DetailCard。 */
-import { useEffect, useMemo, useRef, useState } from "react";
+/** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props */
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
 import { CreateBar } from "./components/bar/CreateBar";
@@ -20,18 +19,19 @@ import { useHistory } from "./hooks/useHistory";
 import { useForm } from "./hooks/useForm";
 import { usePicmake } from "./hooks/usePicmake";
 import { useSketch } from "./hooks/useSketch";
-import { useViewUi } from "./hooks/useViewUi";
 import { db } from "./db/schema";
 import { fmtBytes } from "./lib/format";
 import { formSize } from "./lib/params";
-import { SKETCH_DEFAULT_SIZE, ratioMismatch } from "./lib/sketch";
+import { SKETCH_DEFAULT_SIZE } from "./lib/sketch";
 import {
   ERROR_HINTS,
   INPAINT_ISSUE_HINTS,
   MAX_INPUT_IMAGES,
   type MaskCommand,
 } from "./lib/types";
+import type { DisplayImage } from "./lib/view-models";
 import { useSettingsModal } from "./hooks/useSettings";
+import { useSettings } from "./store/settings";
 import { useTheme } from "./hooks/useTheme";
 import { toast } from "@heroui/react";
 
@@ -42,6 +42,15 @@ function downloadUrl(url: string, name: string) {
   a.click();
 }
 
+/** 画板绘制上限提示（草图与选区共用文案） */
+function onDrawLimit(kind: "commands" | "points") {
+  toast(
+    kind === "commands"
+      ? "已达绘制上限（2000 步），请撤销或清空后再继续"
+      : "已达采样点上限，本笔到此为止",
+  );
+}
+
 export default function App() {
   const {
     settingsOpen,
@@ -50,32 +59,41 @@ export default function App() {
     closeSettings,
     runTestConnection,
   } = useSettingsModal();
-  const view = useViewUi();
   const form = useForm();
   const history = useHistory();
   const theme = useTheme();
+  const settings = useSettings();
   const [previewId, setPreviewId] = useState<string | null>(null);
-  /** 底栏 UI 状态（PRD §5.2）：mini 收起 / full 展开；generating、complete 由流程态覆盖 */
+  // 底栏：mini 收起 / full 展开
   const [barMode, setBarMode] = useState<"mini" | "full">("mini");
+  /* 轮播与灯箱的查看状态；何时清理由页面流程决定 */
+  const [focusIdx, setFocusIdx] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<DisplayImage | null>(null);
+  const clearViewingState = useCallback(() => {
+    setFocusIdx(null);
+    setLightbox(null);
+  }, []);
+  /** 展开创作条并聚焦描述框（草稿落位与手动展开共用） */
+  const openBar = () => {
+    setBarMode("full");
+    form.focus();
+  };
   const pm = usePicmake({
     history,
     form,
     onViewReset: () => {
-      view.clearViewingState();
+      clearViewingState();
       setPreviewId(null);
     },
-    onDraftReady: () => {
-      setBarMode("full");
-      form.focus();
-    },
+    onDraftReady: openBar,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  /* ── 局部重绘（PRD_INPAINTING）：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
-  /** draft-input 入口被涂选的原输入 id：确认后重排为图1 并移除原位（IP-02） */
+  /* ── 局部重绘：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
+  // draft-input 入口被涂选的原输入 id（确认后重排为图1）
   const inpaintChosenRef = useRef<string | null>(null);
   const [viewMask, setViewMask] = useState<{
     baseUrl: string;
@@ -86,47 +104,41 @@ export default function App() {
     rowId: string;
   } | null>(null);
   const inpaint = useInpaint({
-    onApply: ({ base, mask, original, entry, unchanged }) => {
+    onApply: ({ base, mask, original, entry }) => {
       if (entry === "result") {
-        // IP-01：仅带入该结果；确认选区后切到重绘草稿，舞台进入空状态
+        // 仅带入该结果；确认后切到重绘草稿
         form.initialize(undefined, [
           { imageId: base.id, name: "底图", upload: base },
         ]);
-        form.applyInpaint({ base, mask, original, entry, unchanged });
+        form.applyInpaint({ base, mask, original, entry });
         history.select(null);
         pm.clearDone();
-        view.clearViewingState();
+        clearViewingState();
         setPreviewId(null);
-        setBarMode("full");
-        form.focus();
+        openBar();
         toast("选区已应用：填写修改描述后生成");
-        return true;
       }
       if (entry === "draft-input") {
         const chosen = inpaintChosenRef.current;
         const reorder = !!chosen && form.inputs.length > 1;
-        form.applyInpaint(
-          { base, mask, original, entry, unchanged },
-          chosen ?? undefined,
-        );
+        form.applyInpaint({ base, mask, original, entry }, chosen ?? undefined);
         inpaintChosenRef.current = null;
-        setBarMode("full");
-        form.focus();
+        openBar();
         toast(
           reorder
             ? "底图已设为图1，图片编号已更新，请检查描述"
             : "选区已应用：填写修改描述后生成",
         );
-        return true;
       }
-      // reedit（IP-07/§8）：替换已确认选区；无实质修改沿用原资源
-      form.applyInpaint({ base, mask, original, entry, unchanged });
-      toast(unchanged ? "选区未变化：沿用原选区" : "选区已更新");
-      return true;
+      if (entry === "reedit") {
+        form.applyInpaint({ base, mask, original, entry });
+        toast("选区已更新");
+      }
     },
   });
 
-  const canOpenInpaint = () =>
+  /** 各画板/重绘入口共用的可用判定：弹层互斥且不与生成/保存/读取并发 */
+  const workspaceFree = () =>
     pm.phase !== "generating" &&
     !pm.saving &&
     !form.reading &&
@@ -136,36 +148,33 @@ export default function App() {
     !inpaint.session &&
     !inpaint.opening;
 
-  /** IP-01：对展示记录的某一张结果发起；打开编辑器前经放弃确认（草稿/未保存结果） */
+  /** 对展示记录的某一张结果发起；打开前经放弃确认 */
   const startInpaintFromResult = (imageId: string) => {
-    if (!canOpenInpaint()) return;
+    if (!workspaceFree()) return;
     const display = history.display;
-    if (!display || !display.images.some((image) => image.id === imageId))
-      return;
+    if (!display) return;
     pm.confirmPendingLeave(() => {
       void db.images.get(imageId).then(async (row) => {
         if (!row) {
           toast(ERROR_HINTS["source-unavailable"]);
           return;
         }
-        const idx = display.row.imageIds.indexOf(imageId);
         const result = await inpaint.open({
           blob: row.blob,
           name: `结果 · ${display.row.prompt.slice(0, 12)}…`,
           entry: "result",
           existing: { imageId, generationId: display.row.id },
         });
-        void idx;
         if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
       });
     });
   };
 
-  /** IP-02：对草稿中的某张普通图发起；确认后该图重排为图1（草图不作为底图） */
+  /** 对草稿中的普通图发起；确认后重排为图1（✎ 按钮已保证草图走画板） */
   const startInpaintFromInput = (imageId: string) => {
-    if (!canOpenInpaint()) return;
+    if (!workspaceFree()) return;
     const input = form.inputs.find((item) => item.imageId === imageId);
-    if (!input || input.upload?.sketch) return;
+    if (!input) return;
     void (async () => {
       const row = input.upload ?? (await db.images.get(imageId));
       if (!row) {
@@ -177,9 +186,9 @@ export default function App() {
         blob: row.blob,
         name: input.name ?? "图片",
         entry: "draft-input",
-        ...(input.generationId
-          ? { existing: { imageId, generationId: input.generationId } }
-          : { existing: { imageId } }),
+        existing: input.generationId
+          ? { imageId, generationId: input.generationId }
+          : { imageId },
       });
       if (!result.ok) {
         inpaintChosenRef.current = null;
@@ -188,15 +197,14 @@ export default function App() {
     })();
   };
 
-  /** 重开已确认选区（IP-08）：底图缩略图 ✎ / 修改选区 */
+  /** 重开已确认选区：底图缩略图 ✎（选区存在时 inputs[0] 恒为绑定底图） */
   const editMask = () => {
-    if (!canOpenInpaint() || !form.inpaint) return;
+    if (!workspaceFree() || !form.inpaint) return;
     const baseInput = form.inputs[0];
-    if (!baseInput) return;
     void (async () => {
       const base = baseInput.upload ?? (await db.images.get(baseInput.imageId));
-      if (!base || base.id !== form.inpaint!.mask.mask.baseImageId) {
-        toast("底图已变化，请重新选择修改区域");
+      if (!base) {
+        toast(ERROR_HINTS["source-unavailable"]);
         return;
       }
       const result = await inpaint.open({
@@ -231,7 +239,7 @@ export default function App() {
     inpaint.close();
   };
 
-  /** IP-15：查看选区（只读叠加在实际请求底图），可发起「调整上次重绘」 */
+  /** 查看选区（只读），可发起「调整上次重绘」 */
   const openViewMask = () => {
     const row = history.display?.row;
     const inp = row?.inpaint;
@@ -260,50 +268,37 @@ export default function App() {
     return () => URL.revokeObjectURL(viewMask.baseUrl);
   }, [viewMask]);
 
-  /* ── 草图画板（SKETCH §6/§8）：画板只产出附件，确认落回创作条，不发请求 ── */
+  /* ── 草图画板：只产出附件，确认落回创作条，不发请求 ── */
   const sketch = useSketch({
     onApply: ({ image, replaces }) => {
       const wasEmpty = !replaces && form.inputs.length === 0;
       const sizeBefore = formSize(form.form);
       const promptEmpty = !form.form.prompt.trim();
       if (!form.applySketch(image, replaces)) return false;
-      // §6.4 草图首次成为唯一输入且输出为 auto：确认时显式设置为草图尺寸
+      // 草图首次成为唯一输入且输出为 auto：设为草图尺寸
       if (wasEmpty && sizeBefore === "auto") {
         form.patchForm({ cw: String(image.width), ch: String(image.height) });
         toast(`输出尺寸已设为草图尺寸 ${image.width} × ${image.height}`);
       }
-      // §6.3 首次添加草图且描述为空：填入可见可编辑的起始文字（不覆盖已有文字）
+      // 首次添加草图且描述为空：填入起始文字（不覆盖已有）
       if (!replaces && promptEmpty) {
         form.patchForm({
           prompt: `以图${form.inputs.length + 1}的草图为构图参考，保留主体的相对位置与比例，将粗略线条转成完整画面。`,
         });
       }
-      setBarMode("full");
-      form.focus();
+      openBar();
       return true;
     },
   });
   /** 已确认草图的逻辑尺寸（比例不一致提示） */
   const sketchInput = form.inputs.find((input) => input.upload?.sketch);
-  const sketchSize = useMemo(
-    () =>
-      sketchInput?.upload
-        ? { w: sketchInput.upload.width, h: sketchInput.upload.height }
-        : null,
-    [sketchInput],
-  );
+  const sketchSize = sketchInput?.upload
+    ? { w: sketchInput.upload.width, h: sketchInput.upload.height }
+    : null;
 
-  const canOpenSketch = () =>
-    pm.phase !== "generating" &&
-    !pm.saving &&
-    !form.reading &&
-    !history.pendingSave &&
-    !pm.confirmState &&
-    !sketch.session;
-
-  /** 菜单「画草图 / 继续画草图」：新画布 = 当前输出尺寸，auto 时 1024×1024（§6.4） */
+  /** 新画布 = 当前输出尺寸，auto 时 1024×1024 */
   const openSketchNew = () => {
-    if (!canOpenSketch()) return;
+    if (!workspaceFree()) return;
     if (
       !form.images.some((image) => image.isSketch) &&
       form.inputs.length >= MAX_INPUT_IMAGES
@@ -312,7 +307,7 @@ export default function App() {
       return;
     }
     const size = formSize(form.form);
-    sketch.openNew(
+    sketch.openBlank(
       ...(size === "auto"
         ? ([SKETCH_DEFAULT_SIZE, SKETCH_DEFAULT_SIZE] as const)
         : ([size.w, size.h] as const)),
@@ -320,16 +315,16 @@ export default function App() {
   };
 
   const editAttachmentSketch = (imageId: string) => {
-    if (!canOpenSketch()) return;
+    if (!workspaceFree()) return;
     const idx = form.inputs.findIndex((input) => input.imageId === imageId);
     const doc = form.inputs[idx]?.upload?.sketch;
     if (!doc) return;
     sketch.openEdit(doc, imageId, idx);
   };
 
-  /** 历史来源草图：以新草稿打开画板，确认产生新 imageId，不改旧记录（§8.2） */
+  /** 历史来源草图：以新草稿打开，不改旧记录 */
   const continueHistorySketch = (imageId: string) => {
-    if (!canOpenSketch()) return;
+    if (!workspaceFree()) return;
     setPreviewId(null);
     void db.images.get(imageId).then((row) => {
       if (!row) {
@@ -355,17 +350,6 @@ export default function App() {
     sketch.close();
   };
 
-  // 比例不一致 toast（§6.4）：仅在进入不一致状态时提示一次，就地提示见尺寸弹层
-  const mismatchRef = useRef(false);
-  useEffect(() => {
-    const size = formSize(form.form);
-    const mismatch =
-      !!sketchSize && size !== "auto" && ratioMismatch(size, sketchSize);
-    if (mismatch && !mismatchRef.current)
-      toast("输出比例与草图不同，构图可能调整");
-    mismatchRef.current = mismatch;
-  }, [form.form, sketchSize]);
-
   const [usageText, setUsageText] = useState("");
   useEffect(() => {
     void navigator.storage?.estimate?.().then((est) => {
@@ -388,8 +372,8 @@ export default function App() {
   const selectedImageId = history.display
     ? history.display.images.length === 1
       ? history.display.images[0].id
-      : view.focusIdx !== null
-        ? (history.display.images[view.focusIdx]?.id ?? null)
+      : focusIdx !== null
+        ? (history.display.images[focusIdx]?.id ?? null)
         : null
     : null;
   const editSelected = () => {
@@ -399,18 +383,16 @@ export default function App() {
 
   /** complete 态只在展示的确实是刚保存的那次生成时成立 */
   const doneGen =
-    pm.lastDone && history.display?.row.id === pm.lastDone.id
+    pm.lastDoneId && history.display?.row.id === pm.lastDoneId
       ? history.display
       : null;
 
   const expandBar = () => {
     pm.clearDone();
-    setBarMode("full");
-    form.focus();
+    openBar();
   };
 
-  // full 态点条外收起：仅在无草稿（未改过任何字段、无输入图、无编辑来源）时；
-  // 画板 / 选区编辑器打开期间点击落在浮层上，不收回（SK13 同源阻断）
+  // full 态点条外收起：仅在无草稿时；点击落在浮层上不收回
   useEffect(() => {
     if (barMode !== "full") return;
     const onDown = (e: PointerEvent) => {
@@ -438,8 +420,7 @@ export default function App() {
     pm.phase === "idle" &&
     detailClosedFor !== history.display.row.id;
 
-  // 舞台滚轮切换历史（PRD FR-6，2026-09-23）：仅无草稿、无未保存结果、无弹层且非生成中时响应；
-  // 有任何阻断条件时不挂监听（滚轮落到默认行为），避免误触丢草稿。
+  // 舞台滚轮切换历史：仅无草稿、无未保存结果、无弹层且非生成中时挂监听
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -452,12 +433,12 @@ export default function App() {
       form.inputs.length > 0 ||
       settingsOpen ||
       drawerOpen ||
-      !!view.lightbox ||
+      !!lightbox ||
       !!sketch.session ||
       !!inpaint.session ||
       !!inpaint.opening ||
       !!viewMask ||
-      view.focusIdx !== null;
+      focusIdx !== null;
     if (blocked) return;
     let last = 0;
     const onWheel = (e: WheelEvent) => {
@@ -505,9 +486,9 @@ export default function App() {
           partial={pm.partial}
           genPlan={pm.plan}
           display={history.display}
-          onFocus={view.setFocusIdx}
+          onFocus={setFocusIdx}
           onLightbox={(id) =>
-            view.setLightbox(
+            setLightbox(
               history.display?.images.find((image) => image.id === id) ?? null,
             )
           }
@@ -534,9 +515,8 @@ export default function App() {
           selectedImageId={selectedImageId}
           canEdit={!history.pendingSave && !pm.saving}
           sources={history.sourceImages}
-          starred={!!history.display.row.starred}
           onViewSource={setPreviewId}
-          onDownload={() => downloadOne(view.focusIdx ?? 0)}
+          onDownload={() => downloadOne(focusIdx ?? 0)}
           onCopyPrompt={() => {
             if (history.display)
               void navigator.clipboard
@@ -567,7 +547,6 @@ export default function App() {
       <CreateBar
         mode={barMode}
         generating={pm.phase === "generating"}
-        saving={pm.saving}
         done={doneGen}
         partialIndex={pm.partial?.index ?? 0}
         form={form.form}
@@ -599,11 +578,6 @@ export default function App() {
         }}
         onDownloadAll={downloadAll}
         onUseAsRef={useAsReference}
-        onDismissDone={() => {
-          pm.clearDone();
-          setBarMode("full");
-          form.focus();
-        }}
         onStartInpaint={startInpaintFromInput}
         onEditMask={editMask}
         onRemoveMask={form.removeMask}
@@ -627,8 +601,8 @@ export default function App() {
       <SettingsModal
         key={settingsOpen ? "settings-open" : "settings-closed"}
         open={settingsOpen}
-        baseUrl={pm.settings.baseUrl}
-        apiKey={pm.settings.apiKey}
+        baseUrl={settings.baseUrl}
+        apiKey={settings.apiKey}
         storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
         theme={theme.pref}
         onThemeChange={theme.setPref}
@@ -639,25 +613,23 @@ export default function App() {
       {history.display &&
         pm.phase === "idle" &&
         history.display.images.length > 1 &&
-        view.focusIdx !== null && (
+        focusIdx !== null && (
           <Carousel
-            img={history.display.images[view.focusIdx]}
+            img={history.display.images[focusIdx]}
             prompt={history.display.row.prompt}
-            index={view.focusIdx}
+            index={focusIdx}
             total={history.display.images.length}
             onPrev={() => {
               const n = history.display!.images.length;
-              view.setFocusIdx((view.focusIdx! - 1 + n) % n);
+              setFocusIdx((focusIdx! - 1 + n) % n);
             }}
             onNext={() => {
               const n = history.display!.images.length;
-              view.setFocusIdx((view.focusIdx! + 1) % n);
+              setFocusIdx((focusIdx! + 1) % n);
             }}
-            onClose={() => view.setFocusIdx(null)}
-            onZoom={() =>
-              view.setLightbox(history.display!.images[view.focusIdx!])
-            }
-            onDownload={() => downloadOne(view.focusIdx!)}
+            onClose={() => setFocusIdx(null)}
+            onZoom={() => setLightbox(history.display!.images[focusIdx!])}
+            onDownload={() => downloadOne(focusIdx!)}
             onReuse={() => pm.reuseParams(history.display!.row)}
             onEdit={history.pendingSave ? undefined : editSelected}
             onDelete={() => pm.deleteGen(history.display!.row)}
@@ -668,16 +640,14 @@ export default function App() {
         onCancel={() => pm.setConfirmState(null)}
       />
       <Lightbox
-        img={view.lightbox}
+        img={lightbox}
         prompt={history.display?.row.prompt ?? ""}
-        onDownload={() =>
-          view.lightbox && downloadUrl(view.lightbox.url, "PicMake.png")
-        }
+        onDownload={() => lightbox && downloadUrl(lightbox.url, "PicMake.png")}
         onReuse={() => {
-          view.setLightbox(null);
+          setLightbox(null);
           if (history.display) pm.reuseParams(history.display.row);
         }}
-        onClose={() => view.setLightbox(null)}
+        onClose={() => setLightbox(null)}
       />
       <InputPreview
         key={previewId ?? "closed"}
@@ -708,13 +678,7 @@ export default function App() {
           onRedo={sketch.redo}
           onConfirm={sketch.confirm}
           onRequestClose={requestCloseSketch}
-          onLimit={(kind) =>
-            toast(
-              kind === "commands"
-                ? "已达绘制上限（2000 步），请撤销或清空后再继续"
-                : "已达采样点上限，本笔到此为止",
-            )
-          }
+          onLimit={onDrawLimit}
         />
       )}
       {inpaint.session && (
@@ -734,13 +698,7 @@ export default function App() {
           onRedo={inpaint.redo}
           onConfirm={inpaint.confirm}
           onRequestClose={requestCloseInpaint}
-          onLimit={(kind) =>
-            toast(
-              kind === "commands"
-                ? "已达绘制上限（2000 步），请撤销或清空后再继续"
-                : "已达采样点上限，本笔到此为止",
-            )
-          }
+          onLimit={onDrawLimit}
         />
       )}
       {inpaint.opening && (

@@ -1,8 +1,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/* Tailwind v4 preflight 移除了 v3 的 button 默认 cursor: pointer，此处补回。
-   放 base 层：下方未分层的 .pm-* 规则（zoom-in / not-allowed 等）优先级更高，可自由覆写。 */
+/* Tailwind v4 preflight 移除了 button 默认 cursor: pointer，此处补回（base 层，可被覆写） */
 @layer base {
   button:not(:disabled),
   [role="button"]:not(:disabled) {
@@ -10,8 +9,7 @@
   }
 }
 
-/* PicMake 设计令牌：浅色为 :root 默认、深色经 <html>.dark 覆盖（对照 docs/prd.md §5.3）。
-   组件样式只引用令牌不写死色值；两套主题共用唯一强调色 --pm-accent。浅色观感对照 docs/demos/theme-preview.html */
+/* 设计令牌：浅色 :root 默认、深色经 .dark 覆盖；两主题共用唯一强调色 --pm-accent */
 :root {
   color-scheme: light;
   --pm-bg: #f7f8f9;
@@ -58,42 +56,42 @@
     linear-gradient(180deg, #fdfdfe, #f0f1f3);
 
   /* HeroUI 主题对齐 PicMake 令牌（浅色 + 杏色 accent，替换默认蓝色主题） */
-  --background: #f7f8f9;
-  --foreground: #1d1f22;
-  --surface: #ffffff;
-  --surface-foreground: #1d1f22;
+  --background: var(--pm-bg);
+  --foreground: var(--pm-text-1);
+  --surface: var(--pm-panel-solid);
+  --surface-foreground: var(--pm-text-1);
   --surface-secondary: #f1f2f4;
   --surface-tertiary: #e8e9ec;
-  --overlay: #ffffff;
-  --overlay-foreground: #1d1f22;
+  --overlay: var(--pm-panel-solid);
+  --overlay-foreground: var(--pm-text-1);
   --border: rgba(23, 23, 26, 0.08);
   --border-secondary: rgba(23, 23, 26, 0.1);
   --border-tertiary: rgba(23, 23, 26, 0.14);
 
-  --accent: #ff9a62;
-  --accent-foreground: #231108;
-  --accent-hover: #ffb088;
-  --accent-soft: rgba(255, 154, 98, 0.16);
+  --accent: var(--pm-accent);
+  --accent-foreground: var(--pm-accent-ink);
+  --accent-hover: var(--pm-accent-hover);
+  --accent-soft: var(--pm-accent-soft);
   --accent-soft-foreground: #b8531c;
   --accent-soft-hover: rgba(255, 154, 98, 0.22);
 
-  --danger: #c8563e;
+  --danger: var(--pm-error);
   --danger-foreground: #ffffff;
   --danger-hover: #d96a52;
   --danger-soft: rgba(200, 86, 62, 0.1);
   --danger-soft-foreground: #a84530;
 
-  --success: #218748;
+  --success: var(--pm-ok);
   --success-foreground: #ffffff;
 
-  --field-background: rgba(23, 23, 26, 0.05);
-  --field-foreground: #1d1f22;
-  --field-border: rgba(23, 23, 26, 0.07);
-  --field-border-hover: rgba(23, 23, 26, 0.13);
-  --field-border-focus: rgba(255, 154, 98, 0.5);
-  --field-focus: rgba(255, 154, 98, 0.16);
+  --field-background: var(--pm-fill);
+  --field-foreground: var(--pm-text-1);
+  --field-border: var(--pm-line);
+  --field-border-hover: var(--pm-line-2);
+  --field-border-focus: var(--pm-accent-border);
+  --field-focus: var(--pm-accent-soft);
 
-  /* 草图画板纸面与控件令牌（SKETCH §7.3）：两主题同值——纸面恒白、绘画内容不随主题 */
+  /* 草图画板令牌：两主题同值——纸面恒白 */
   --pm-sketch-paper: #ffffff;
   --pm-sketch-edge: #ececec;
   --pm-sketch-hint: #d9d9d9;
@@ -108,7 +106,7 @@
   --pm-sketch-meta: #a8a8a8;
 }
 
-/* 深色覆盖（现状视觉，对照 docs/prd.md §5.3 原始定义） */
+/* 深色覆盖 */
 .dark {
   color-scheme: dark;
   --pm-bg: #0e0f11;
@@ -118,17 +116,12 @@
   --pm-text-1: #ededef;
   --pm-text-2: #9ba0a8;
   --pm-text-3: #6a7078;
-  --pm-accent: #ff9a62;
-  --pm-accent-soft: rgba(255, 154, 98, 0.16);
-  --pm-accent-ink: #231108;
-  --pm-accent-hover: #ffb088;
-  --pm-accent-border: rgba(255, 154, 98, 0.5);
   --pm-error: #f0846b;
   --pm-error-soft: rgba(240, 132, 107, 0.08);
   --pm-error-border: rgba(240, 132, 107, 0.65);
   --pm-ok: #7bd88f;
 
-  /* 深色控件填充（PRD §5.3：控件底 rgba(255,255,255,.045)； */
+  /* 深色控件填充 */
   --pm-fill: rgba(255, 255, 255, 0.045);
   --pm-fill-hover: rgba(255, 255, 255, 0.075);
   --pm-fill-active: rgba(255, 255, 255, 0.09);
@@ -152,40 +145,17 @@
     linear-gradient(180deg, #17181c, #101114);
 
   /* HeroUI 主题对齐 PicMake 令牌（暗色 + 杏色 accent，替换默认蓝色主题） */
-  --background: #0e0f11;
-  --foreground: #ededef;
-  --surface: #17181b;
-  --surface-foreground: #ededef;
   --surface-secondary: #1d1e22;
   --surface-tertiary: #232529;
-  --overlay: #17181b;
-  --overlay-foreground: #ededef;
   --border: var(--pm-fill-hover);
   --border-secondary: rgba(255, 255, 255, 0.1);
   --border-tertiary: rgba(255, 255, 255, 0.13);
-
-  --accent: #ff9a62;
-  --accent-foreground: #231108;
-  --accent-hover: #ffb088;
-  --accent-soft: rgba(255, 154, 98, 0.16);
   --accent-soft-foreground: #ffb088;
-  --accent-soft-hover: rgba(255, 154, 98, 0.22);
-
-  --danger: #f0846b;
   --danger-foreground: #2a1008;
   --danger-hover: #f59b86;
   --danger-soft: rgba(240, 132, 107, 0.14);
   --danger-soft-foreground: #f0a08d;
-
-  --success: #7bd88f;
   --success-foreground: #0c2413;
-
-  --field-background: var(--pm-fill);
-  --field-foreground: #ededef;
-  --field-border: var(--pm-fill-hover);
-  --field-border-hover: rgba(255, 255, 255, 0.13);
-  --field-border-focus: rgba(255, 154, 98, 0.5);
-  --field-focus: rgba(255, 154, 98, 0.16);
 }
 
 html,
@@ -207,7 +177,7 @@ body {
   background: var(--pm-accent-soft);
 }
 
-/* ══ PicMake 组件样式（对照 docs/prd.md §5.3 与原型 V2） ══ */
+/* ══ 组件样式 ══ */
 
 /* 浮岛基底 */
 .pm-island {
@@ -259,7 +229,7 @@ body {
   color: var(--pm-text-1);
 }
 
-/* 舞台（2026-09-23 起全幅，右侧不再让位给右坞；底部让位给创作条） */
+/* 舞台 */
 .pm-stage-col {
   position: fixed;
   inset: 0;
@@ -458,7 +428,9 @@ body {
     opacity: 0;
   }
 }
-.pm-reserve {
+.pm-reserve,
+.pm-ip-cov.hidden,
+.pm-vm-img.nomask canvas {
   visibility: hidden;
 }
 .pm-gen-pill {
@@ -503,7 +475,8 @@ body {
 }
 
 /* 单张结果 */
-.pm-single {
+.pm-single,
+.pm-grid-wrap {
   position: relative;
   z-index: 1;
   display: flex;
@@ -559,22 +532,21 @@ body {
     background 0.12s,
     color 0.12s;
 }
-.pm-stage-toolbar button:hover {
+.pm-stage-toolbar button:hover,
+.pm-detail-cap button:hover,
+.pm-dcount button:hover,
+.pm-dnone-reset:hover,
+.pm-dstar:hover {
   background: var(--pm-fill-hover);
   color: var(--pm-text-1);
 }
-.pm-stage-toolbar button.danger:hover {
+.pm-stage-toolbar button.danger:hover,
+.pm-bar-thumb .rm:hover,
+.pm-pop-hint.warn {
   color: var(--pm-error);
 }
 
 /* 多张网格 */
-.pm-grid-wrap {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
 .pm-grid4 {
   display: grid;
   grid-template-columns: repeat(2, min(30vh, 26vw));
@@ -594,7 +566,9 @@ body {
 .pm-gtile:hover {
   transform: translateY(-3px);
 }
-.pm-gtile img {
+.pm-gtile img,
+.pm-bar-thumb img,
+.pm-detail-src img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -631,7 +605,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ══ 底部创作条 CreateBar（PRD §5.2，2026-09-23）：mini / full / generating / complete ══ */
+/* ══ 底部创作条 ══ */
 .pm-bar {
   left: 50%;
   bottom: 18px;
@@ -703,10 +677,15 @@ body {
     transform 75ms ease-out,
     background 0.15s;
 }
-.pm-bar-go:active {
+.pm-bar-go:active,
+.pm-bar-send:active,
+.pm-chip:active {
   transform: scale(0.95);
 }
-.pm-bar-go:disabled {
+.pm-bar-go:disabled,
+.pm-chip:disabled,
+.pm-pop-opt.with-ic:disabled,
+.pm-detail-acts button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -745,13 +724,7 @@ body {
   padding: 0;
   cursor: pointer;
 }
-.pm-bar-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-/* 草图缩略图：白底 contain，不裁掉构图；右下画笔标识（SKETCH §6.3） */
+/* 草图缩略图：白底 contain */
 .pm-bar-thumb > button.sk {
   background: var(--pm-sketch-paper);
 }
@@ -802,9 +775,6 @@ body {
   line-height: 1;
   display: grid;
   place-items: center;
-}
-.pm-bar-thumb .rm:hover {
-  color: var(--pm-error);
 }
 .pm-bar-err {
   font-size: 11px;
@@ -864,10 +834,8 @@ body {
   pointer-events: auto;
   cursor: pointer;
 }
-.pm-bar-send:active {
-  transform: scale(0.95);
-}
-.pm-bar-row2 {
+.pm-bar-row2,
+.pm-bar-donerow {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -928,9 +896,6 @@ body {
     color 0.15s,
     transform 75ms ease-out;
 }
-.pm-chip:active {
-  transform: scale(0.95);
-}
 .pm-chip:hover {
   border-color: var(--pm-line-2);
   background: var(--pm-fill-hover);
@@ -958,10 +923,6 @@ body {
   width: 30px;
   padding: 0;
   justify-content: center;
-}
-.pm-chip:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .pm-chip-return {
   color: var(--pm-text-2);
@@ -1071,11 +1032,6 @@ body {
 .pm-pop-ratio button:hover {
   color: var(--pm-text-1);
 }
-.pm-pop-ratio button.on {
-  color: var(--pm-accent);
-  border-color: var(--pm-accent-border);
-  background: var(--pm-accent-soft);
-}
 .pm-pop .pm-seg {
   margin: 2px 5px 6px;
 }
@@ -1123,9 +1079,6 @@ body {
   line-height: 1.5;
   margin: 0;
 }
-.pm-pop-hint.warn {
-  color: var(--pm-error);
-}
 /* 弹层菜单行（带图标）：附件「上传图片 / 画草图」等入口 */
 .pm-pop-opt.with-ic {
   align-items: center;
@@ -1145,10 +1098,6 @@ body {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-}
-.pm-pop-opt.with-ic:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .pm-pop-n {
   display: flex;
@@ -1170,11 +1119,6 @@ body {
 }
 .pm-pop-n button:hover {
   color: var(--pm-text-1);
-}
-.pm-pop-n button.on {
-  color: var(--pm-accent);
-  border-color: var(--pm-accent-border);
-  background: var(--pm-accent-soft);
 }
 
 /* generating / complete 态 */
@@ -1285,15 +1229,11 @@ body {
   place-items: center;
   font-size: 12px;
 }
-.pm-bar-dismiss:hover {
+.pm-bar-dismiss:hover,
+.pm-ip-close:hover,
+.pm-vm-panel footer button:hover {
   color: var(--pm-text-1);
   background: var(--pm-fill-hover);
-}
-.pm-bar-donerow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 .pm-bar-donerow > * {
   animation: pm-chip-in 0.2s ease-out backwards;
@@ -1396,7 +1336,7 @@ body {
   line-height: 1.5;
 }
 
-/* ══ 舞台右上详情浮卡 DetailCard（承接原右坞「本次生成详情」，PRD §5.2）══ */
+/* ══ 详情浮卡 ══ */
 .pm-detail {
   top: 14px;
   right: 14px;
@@ -1435,10 +1375,6 @@ body {
   display: grid;
   place-items: center;
   color: var(--pm-text-3);
-}
-.pm-detail-cap button:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
 }
 .pm-detail-cap button.pm-detail-star.on {
   color: var(--pm-accent);
@@ -1491,7 +1427,7 @@ body {
   overflow-wrap: anywhere;
   margin: 0;
 }
-/* 原始描述（编辑/参考生成链路的源头 prompt，弱化展示；PRD 2026-09-23） */
+/* 原始描述（源头 prompt，弱化展示） */
 .pm-detail-origin {
   font-size: 10.5px;
   color: var(--pm-text-3);
@@ -1521,12 +1457,6 @@ body {
   border: 1px solid var(--pm-line);
   padding: 0;
   cursor: pointer;
-}
-.pm-detail-src img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 .pm-detail-src span {
   font-size: 9px;
@@ -1558,10 +1488,6 @@ body {
   color: var(--pm-text-1);
   border-color: var(--pm-line-2);
 }
-.pm-detail-acts button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
 .pm-detail-del {
   width: 100%;
   text-align: center;
@@ -1587,7 +1513,10 @@ body {
   font-size: 12.5px;
   transition: background 0.15s;
 }
-.pm-detail-new:hover {
+.pm-detail-new:hover,
+.pm-ip-use.ready:hover,
+.pm-vm-panel footer button.primary:hover,
+.pm-bar-size button:hover {
   background: var(--pm-accent-hover);
 }
 .pm-detail-dur {
@@ -1598,15 +1527,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 弹层（HeroUI Modal/Drawer 容器样式覆写）。
-   遮罩不加 backdrop-filter：Chromium 下遮罩淡出/卸载后模糊层可能残留
-   不重绘（「阴影残留」的一个来源），统一用纯色压暗 */
+/* HeroUI 弹层覆写：遮罩不加 backdrop-filter（Chromium 模糊残留），用纯色压暗 */
 .modal__backdrop {
   background: var(--pm-scrim);
 }
-/* 确认弹窗退出不挂动画：RAC 要等 animation.finished 才卸载遮罩，动画时钟
-   停摆（标签页被遮挡/渲染节流）时 finished 永不结算，遮罩会留在页面上挡住
-   交互。去掉退出动画后 getAnimations() 为空，RAC 在同一帧内立即卸载 */
+/* 确认弹窗退出不挂动画：动画时钟停摆时 animation.finished 永不结算，遮罩会卡住 */
 .modal__backdrop.pm-confirm[data-exiting="true"],
 .pm-confirm .modal__container[data-exiting="true"] {
   animation: none;
@@ -1701,7 +1626,7 @@ body {
   margin: 0;
 }
 
-/* 轮播（多图点选浮层）：z 低于灯箱，放大时灯箱盖在其上 */
+/* 轮播：z 低于灯箱 */
 .pm-car {
   position: fixed;
   inset: 0;
@@ -1774,7 +1699,7 @@ body {
   z-index: 2;
 }
 
-/* 历史抽屉（HeroUI Drawer 承担定位与滑入动画，这里只定义面板外观） */
+/* 历史抽屉（定位与滑入动画由 HeroUI Drawer 承担） */
 .pm-drawer-hd {
   width: 280px;
   height: 100%;
@@ -1867,7 +1792,7 @@ body {
   gap: 6px;
 }
 
-/* 历史筛选区（2026-09-23：搜索 + 日期预设档 + 只看收藏；对照 docs/demos/history-filter.html） */
+/* 历史筛选区 */
 .pm-dfilter {
   display: flex;
   flex-direction: column;
@@ -1941,6 +1866,8 @@ body {
 .pm-dfav:hover {
   color: var(--pm-text-1);
 }
+.pm-pop-ratio button.on,
+.pm-pop-n button.on,
 .pm-dfav.on {
   color: var(--pm-accent);
   border-color: var(--pm-accent-border);
@@ -1961,10 +1888,6 @@ body {
   padding: 2px 7px;
   border-radius: 6px;
 }
-.pm-dcount button:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
-}
 .pm-dnone {
   display: flex;
   flex-direction: column;
@@ -1981,12 +1904,8 @@ body {
   padding: 4px 12px;
   margin-bottom: 24px;
 }
-.pm-dnone-reset:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
-}
 
-/* 行星标：默认隐藏，行 hover、键盘聚焦或已收藏时常驻；星标写库经 onToggleStar 上报 */
+/* 行星标：hover/聚焦/已收藏时常驻 */
 .pm-drow {
   position: relative;
 }
@@ -2009,10 +1928,6 @@ body {
 .pm-dstar:focus-visible,
 .pm-dstar.on {
   opacity: 1;
-}
-.pm-dstar:hover {
-  background: var(--pm-fill-hover);
-  color: var(--pm-text-1);
 }
 .pm-dstar.on {
   color: var(--pm-accent);
@@ -2051,7 +1966,7 @@ body {
   /* 确认中的加载指示为功能性反馈，reduced-motion 下保留 */
 }
 
-/* 输入图片预览弹窗（Overlays InputPreview 使用） */
+/* 输入图片预览弹窗 */
 .pm-input-preview {
   padding: 24px;
   width: min(900px, 92vw);
@@ -2093,10 +2008,7 @@ body {
   margin: 12px 0 8px;
 }
 
-/* ══ 草图画板 SketchModal（SKETCH §6/§7，对照 docs/demos/sketch-demo.html）══
-   ChatGPT Sketch 式白色全幅编辑器：整张白纸铺满弹层，控件浮在纸面上——
-   左上 ✕ / 顶中工具胶囊 / 右上撤销重做清空 / 左侧大小滑杆 / 底部色板 / 右下 ✓。
-   z 低于 HeroUI 弹层（100000），放弃修改确认框与 toast 盖在画板之上。 */
+/* ══ 草图画板 ══（z 低于 HeroUI 弹层，确认框与 toast 盖在其上） */
 .pm-sk-overlay {
   position: fixed;
   inset: 0;
@@ -2193,7 +2105,9 @@ body {
   transition: background 0.12s;
   z-index: 6;
 }
-.pm-sk-close:hover {
+.pm-sk-close:hover,
+.pm-sk-tool:hover,
+.pm-sk-hist button:hover {
   background: var(--pm-sketch-hover);
 }
 .pm-sk-close:disabled {
@@ -2227,13 +2141,11 @@ body {
     border-color 0.12s,
     box-shadow 0.12s;
 }
-.pm-sk-tool::after {
+.pm-sk-tool::after,
+.pm-sk-hist button::after {
   content: "";
   position: absolute;
   inset: -3px;
-}
-.pm-sk-tool:hover {
-  background: var(--pm-sketch-hover);
 }
 .pm-sk-tool.on {
   background: var(--pm-sketch-paper);
@@ -2261,14 +2173,6 @@ body {
   place-items: center;
   color: var(--pm-sketch-ink);
   transition: background 0.12s;
-}
-.pm-sk-hist button::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-}
-.pm-sk-hist button:hover {
-  background: var(--pm-sketch-hover);
 }
 .pm-sk-hist button:disabled {
   color: var(--pm-sketch-ink-dis);
@@ -2398,8 +2302,7 @@ body {
     #e53935
   );
 }
-/* 原生取色输入：绝对定位不占 flex 布局，锚在色板行左下（彩虹圈一侧），
-   弹出的取色窗跟随该锚点而非回退到视口左上角 */
+/* 原生取色输入：绝对定位不占 flex 布局，取色窗跟随锚点而非弹到视口左上角 */
 .pm-sk-custom-input {
   position: absolute;
   left: 0;
@@ -2464,7 +2367,7 @@ body {
   pointer-events: none;
 }
 
-/* 画板控件焦点环（FR-9：focus-visible 可见） */
+/* 画板控件焦点环 */
 .pm-sk-close:focus-visible,
 .pm-sk-tool:focus-visible,
 .pm-sk-hist button:focus-visible,
@@ -2511,11 +2414,9 @@ body {
   }
 }
 
-/* ══════════ 局部重绘（PRD_INPAINTING / docs/demos/inpaint-demo.html 对照）══════════
-   选区编辑器：弹层涂选，控件浮在画布上——左上关闭 / 顶中标题 / 右上撤销重做清空+显隐 /
-   左下缩放平移 / 底中工具与粗细 / 右下「使用选区」。缩放倍率相对适应窗口（IP-06）。 */
+/* ══ 局部重绘 ══ */
 
-/* 覆盖层专用令牌（IP-04：两主题与明暗底图均可辨；不把大面积品牌色当装饰） */
+/* 覆盖层专用令牌 */
 :root {
   --pm-inpaint-fill: #e66e28;
 }
@@ -2574,9 +2475,6 @@ body {
   height: 100%;
   pointer-events: none;
 }
-.pm-ip-cov.hidden {
-  visibility: hidden;
-}
 .pm-ip-ring {
   position: absolute;
   border: 1.5px solid var(--pm-accent);
@@ -2599,10 +2497,6 @@ body {
   display: grid;
   place-items: center;
   cursor: pointer;
-}
-.pm-ip-close:hover {
-  color: var(--pm-text-1);
-  background: var(--pm-fill-hover);
 }
 
 .pm-ip-title {
@@ -2771,9 +2665,6 @@ body {
   color: var(--pm-accent-ink);
   cursor: pointer;
 }
-.pm-ip-use.ready:hover {
-  background: var(--pm-accent-hover);
-}
 .pm-ip-use:disabled {
   pointer-events: none;
 }
@@ -2807,7 +2698,7 @@ body {
   white-space: nowrap;
 }
 
-/* ── 只读选区查看（IP-15）── */
+/* ── 只读选区查看 ── */
 .pm-vm-backdrop {
   position: fixed;
   inset: 0;
@@ -2867,9 +2758,6 @@ body {
   width: 100%;
   height: 100%;
 }
-.pm-vm-img.nomask canvas {
-  visibility: hidden;
-}
 .pm-vm-panel footer {
   display: flex;
   align-items: center;
@@ -2888,21 +2776,14 @@ body {
   font-size: 12px;
   cursor: pointer;
 }
-.pm-vm-panel footer button:hover {
-  color: var(--pm-text-1);
-  background: var(--pm-fill-hover);
-}
 .pm-vm-panel footer button.primary {
   background: var(--pm-accent);
   border-color: transparent;
   color: var(--pm-accent-ink);
   font-weight: 600;
 }
-.pm-vm-panel footer button.primary:hover {
-  background: var(--pm-accent-hover);
-}
 
-/* ── 创作条局部重绘增强（IP-08/IP-10）── */
+/* ── 创作条局部重绘增强 ── */
 .pm-bar-thumb.mask > button:first-child {
   box-shadow:
     0 0 0 2px var(--pm-panel-solid),
@@ -2983,9 +2864,6 @@ body {
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-}
-.pm-bar-size button:hover {
-  background: var(--pm-accent-hover);
 }
 .pm-bar-inp-note {
   font-size: 10.5px;

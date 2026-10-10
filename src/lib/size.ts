@@ -1,7 +1,7 @@
 /** 自定义尺寸校验 */
 export const SIZE_LIMITS = { long: 3840, short: 2160, ratio: 3 } as const;
 
-/** 校验自定义宽高：能被 16 整除、比例 1:3～3:1、长边 ≤ 3840 且短边 ≤ 2160（D4 旋转归一的 4K 框） */
+/** 校验自定义宽高：16 整除、比例 1:3～3:1、长边 ≤ 3840 且短边 ≤ 2160 */
 export function validateSize(w: number, h: number): string[] {
   const errs: string[] = [];
   if (!Number.isInteger(w) || !Number.isInteger(h)) errs.push("宽高须为整数");

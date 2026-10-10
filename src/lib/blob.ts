@@ -8,20 +8,8 @@ export function b64ToBlob(b64: string, mime = "image/png"): Blob {
   return new Blob([bytes], { type: mime });
 }
 
-/** 从实际字节识别格式并解码宽高（TECH §10.1）：一次处理一张并关闭位图；
- *  不把请求 output_format/size 当成结果事实。失败返回 null（按不可继续编辑处理）。 */
-export async function decodeImageMeta(
-  blob: Blob,
-): Promise<{ width: number; height: number; format: string } | null> {
-  const bytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
-  const format = imageFormat(bytes);
-  if (!format) return null;
-  try {
-    const bitmap = await createImageBitmap(blob);
-    const meta = { width: bitmap.width, height: bitmap.height, format };
-    bitmap.close();
-    return meta;
-  } catch {
-    return null;
-  }
+/** 从 b64 头部嗅探真实图片格式（16 个 base64 字符 = 12 字节）；失败返回 null */
+export function b64Format(b64: string): string | null {
+  const head = atob(b64.slice(0, 16));
+  return imageFormat(Uint8Array.from(head, (ch) => ch.charCodeAt(0)));
 }

@@ -1,8 +1,4 @@
-/**
- * OpenAI 兼容 API 客户端（官方或中转站）。
- * 约定见 docs/gpt-image-2.5-api.md：响应恒为 b64_json；流式走 SSE。
- * 生成是单次请求事务：无自动降级、无重试、无会话级记忆（PRD FR-4，2026-09-22）。
- */
+/** OpenAI 兼容 API 客户端：响应恒为 b64_json，流式走 SSE；单次请求事务，无降级无重试 */
 import { createParser } from "eventsource-parser";
 import { apiUrl } from "../lib/url";
 import {
@@ -10,10 +6,8 @@ import {
   MODEL_NAMES,
   type ApiConfig,
   type GenParams,
-  type ImageGenResult,
   type ImageRequestResult,
   type EditSubmission,
-  type Usage,
 } from "../lib/types";
 
 function mapStatus(
@@ -48,10 +42,6 @@ async function toApiError(res: Response): Promise<ApiError> {
   return mapStatus(res.status, code, message);
 }
 
-async function raise(res: Response): Promise<never> {
-  throw await toApiError(res);
-}
-
 async function fetchJson<T>(
   path: string,
   config: ApiConfig,
@@ -71,7 +61,7 @@ async function fetchJson<T>(
     if (init?.signal?.aborted) throw e;
     throw new ApiError("network", "无法连接到 API 地址");
   }
-  if (!res.ok) await raise(res);
+  if (!res.ok) throw await toApiError(res);
   return (await res.json()) as T;
 }
 
@@ -93,8 +83,10 @@ export async function testConnection(
 
 /* ── 参数映射 ── */
 
-function toBody(params: GenParams): string {
-  return JSON.stringify({
+function bodyFields(
+  params: GenParams,
+): Record<string, string | number | boolean> {
+  return {
     model: MODEL_NAMES[params.model],
     prompt: params.prompt,
     n: params.n,
@@ -105,45 +97,20 @@ function toBody(params: GenParams): string {
     moderation: "auto",
     stream: true,
     partial_images: 3,
-  });
-}
-
-export function mapUsage(u: any): Usage | null {
-  if (!u || typeof u.output_tokens !== "number") return null;
-  const inputDetailsAvailable =
-    typeof u.input_tokens_details?.text_tokens === "number" &&
-    typeof u.input_tokens_details?.image_tokens === "number";
-  return {
-    totalTokens: u.total_tokens ?? 0,
-    inputTokens: u.input_tokens ?? 0,
-    outputTokens: u.output_tokens ?? 0,
-    textTokens: inputDetailsAvailable ? u.input_tokens_details.text_tokens : 0,
-    imageTokens: inputDetailsAvailable
-      ? u.input_tokens_details.image_tokens
-      : 0,
-    inputDetailsAvailable,
   };
 }
 
 /* ── 非流式生成 ── */
 
-/** 解析非流式响应体（普通请求与流式嗅探共用） */
+/** 解析非流式响应体（普通请求与流式嗅探共用）；usage 原样保存 */
 export function parseGenResponse(j: any): ImageRequestResult {
-  const results: ImageGenResult[] = (j.data ?? []).map((d: any) => ({
-    b64: d.b64_json,
-  }));
-  if (
-    !results.length ||
-    results.some((r) => typeof r.b64 !== "string" || !r.b64)
-  )
+  const images: string[] = (j.data ?? []).map((d: any) => d.b64_json);
+  if (!images.length || images.some((b64) => typeof b64 !== "string" || !b64))
     throw new ApiError("unknown", "响应中没有图片数据");
-  return { images: results, usage: mapUsage(j.usage) };
+  return { images, usage: j.usage ?? null };
 }
 
-/* ── 异步任务型中转（如 apimart）：
-      POST /images/generations 恒回 {data:[{status:"submitted",task_id}]}
-      （与 stream 无关），需轮询 GET /tasks/{task_id} 到 completed，
-      结果是 data.result.images[].url[] 的图片 URL（CORS *），非 b64 ── */
+/* ── 异步任务型中转（如 apimart）：恒回任务单，轮询 GET /tasks/{id} 到 completed 取图片 URL ── */
 
 const TASK_POLL_INTERVAL_MS = 3000;
 const TASK_POLL_TIMEOUT_MS = 300_000;
@@ -224,7 +191,7 @@ async function resolveTaskResult(
       if (!urls.length)
         throw new ApiError("unknown", "任务完成但响应中没有图片数据");
       const b64s = await Promise.all(urls.map((u) => urlToB64(u, signal)));
-      return { images: b64s.map((b64) => ({ b64 })), usage: mapUsage(d.usage) };
+      return { images: b64s, usage: d.usage ?? null };
     }
     if (status === "failed" || status === "error" || status === "cancelled") {
       const msg = d?.error?.message ?? d?.message ?? j?.error?.message;
@@ -246,29 +213,13 @@ export interface StreamHandlers {
   signal?: AbortSignal;
 }
 
-/** 文生图和编辑共享传输与错误语义；配置在调用时固定。 */
-export function generateImageStream(
-  params: GenParams,
-  config: ApiConfig,
-  handlers: StreamHandlers = {},
-): Promise<ImageRequestResult> {
-  return requestImages(params, handlers, config);
-}
-
-export function generateImageEditStream(
+/** multipart 构造；局部重绘追加 mask 部件，不手工设置 boundary */
+export function editFormData(
   submission: EditSubmission,
-  config: ApiConfig,
-  handlers: StreamHandlers = {},
-): Promise<ImageRequestResult> {
-  return requestImages(submission.params, handlers, config, submission);
-}
-
-/** 浏览器负责 multipart boundary；文件扩展名来自已存的来源格式。
- *  局部重绘追加一个 mask 部件（D7）：字段名 mask、文件名 mask.png、image/png Blob；
- *  不手工设置 Content-Type/boundary，与 image 部件同一处理方式。 */
-export function editFormData(submission: EditSubmission): FormData {
+  params: GenParams,
+): FormData {
   const form = new FormData();
-  const fields = JSON.parse(toBody(submission.params));
+  const fields = bodyFields(params);
   delete fields.moderation;
   for (const [key, value] of Object.entries(fields))
     form.append(key, String(value));
@@ -318,21 +269,19 @@ export function createImageParser(
         /^image_(generation|edit)\.completed$/.test(type) &&
         d.b64_json
       ) {
-        const image: ImageGenResult = {
-          b64: d.b64_json,
-        };
-        result.images.push(image);
+        result.images.push(d.b64_json);
         // usage 是请求级总量，后续完成事件的总量回显覆盖，绝不按图相加。
-        result.usage = mapUsage(d.usage) ?? result.usage;
+        if (d.usage) result.usage = d.usage;
       }
     },
   });
 }
 
-async function requestImages(
+/** 文生图和编辑共享传输与错误语义；配置在调用时固定。edit 存在时走 /images/edits。 */
+export async function requestImages(
   params: GenParams,
-  handlers: StreamHandlers,
   config: ApiConfig,
+  handlers: StreamHandlers = {},
   edit?: EditSubmission,
 ): Promise<ImageRequestResult> {
   const url = apiUrl(
@@ -348,14 +297,16 @@ async function requestImages(
         Authorization: `Bearer ${config.apiKey}`,
         ...(!edit ? { "Content-Type": "application/json" } : {}),
       },
-      body: edit ? editFormData(edit) : toBody(params),
+      body: edit
+        ? editFormData(edit, params)
+        : JSON.stringify(bodyFields(params)),
       signal: handlers.signal,
     });
   } catch (e) {
     if (handlers.signal?.aborted) throw e;
     throw new ApiError("network", "无法连接到 API 地址");
   }
-  if (!res.ok) await raise(res);
+  if (!res.ok) throw await toApiError(res);
   // 中转对 stream 请求回 JSON（普通响应或任务单）时就地解析，
   // 不重发请求——重发等于同一批图计费两次。
   if ((res.headers.get("content-type") ?? "").includes("json")) {

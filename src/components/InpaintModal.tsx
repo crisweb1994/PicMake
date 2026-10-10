@@ -1,12 +1,6 @@
-/** 局部重绘选区编辑器（PRD_INPAINTING IP-04～IP-07，交互对照 docs/demos/inpaint-demo.html）：
- *  弹层涂选——画笔/擦除/粗细（底图像素单位）、撤销/重做/清空、隐藏选区（隐藏时禁止涂画）、
- *  缩放 1×–8×（0.25 步长，相对适应窗口）与拖动画布平移、圆形笔刷光标、右下「使用选区」。
- *  受控展示组件：文档、撤销游标与确认态由 useInpaint 持有；工具、缩放、平移、光标、
- *  进行中笔触为组件内部交互状态。坐标以底图像素为逻辑单位，缩放不改已有笔宽。
- *  背景点击与 Esc 不关闭（FR-9）；有未确认修改时关闭由接线层确认；焦点圈闭并在关闭后还原。
- *
- *  副作用清单：ResizeObserver(stage)、画笔初始焦点 rAF、指针捕获（stage），
- *  均随卸载清理；进行中笔触只画进 Canvas，松手才提交一个完整命令。 */
+/** 局部重绘选区编辑器：画笔/擦除/粗细、撤销重做清空、隐藏选区、缩放平移。受控展示组件，
+ *  坐标以底图像素为单位，缩放不改笔宽；Esc 不关闭，有修改时关闭由接线层确认。
+ *  副作用（随卸载清理）：ResizeObserver / 初始焦点 rAF / 指针捕获 */
 import { FocusScope } from "react-aria";
 import {
   useCallback,
@@ -39,19 +33,18 @@ import {
   type MaskStroke,
   type SketchPoint,
 } from "../lib/types";
-import { SKETCH_MAX_COMMANDS, SKETCH_MAX_POINTS } from "../lib/sketch";
 import {
-  makeMaskStroke,
-  maskBrushRange,
-  totalMaskPoints,
-} from "../lib/inpaint";
+  SKETCH_MAX_COMMANDS,
+  SKETCH_MAX_POINTS,
+  totalPoints as totalMaskPoints,
+} from "../lib/sketch";
+import { maskBrushRange } from "../lib/inpaint";
 import {
   maskHasSelectionQuick,
   paintOverlayLayer,
 } from "../lib/inpaint-canvas";
 
-/** 显示覆盖层颜色（IP-04：专用令牌 --pm-inpaint-*，两主题可辨）。
- *  Canvas 不支持 CSS 变量：从根元素解析令牌值，缺省回退品牌强调色。 */
+/** Canvas 不支持 CSS 变量：从根元素解析 --pm-inpaint-fill，缺省回退强调色 */
 function overlayFill(): string {
   const value = getComputedStyle(document.documentElement)
     .getPropertyValue("--pm-inpaint-fill")
@@ -72,7 +65,7 @@ export function InpaintModal(props: {
   name: string;
   baseW: number;
   baseH: number;
-  /** D1 归一化发生时的提示 */
+  /** 归一化发生时的提示 */
   normalized: boolean;
   doc: MaskDocument;
   cursor: number;
@@ -112,8 +105,7 @@ export function InpaintModal(props: {
 
   const brushRange = maskBrushRange(doc.width, doc.height);
 
-  /* ── 布局：contain 完整容纳底图（避开四周浮动控件），记为 1×（适应窗口）。
-   *  布局变化保留选区坐标（文档坐标不变），仅复位视图（IP-06：resize 不丢选区） ── */
+  /* ── 布局：contain 容纳底图记为 1×；resize 只复位视图，不丢选区 ── */
   const fit = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -151,9 +143,7 @@ export function InpaintModal(props: {
     return () => ro.disconnect();
   }, [fit]);
 
-  /* ── 显示层立即模式重绘：clear → 已提交命令 → 进行中笔触（tldraw 同思路）。
-   *  每帧全量重画同一 perfect-freehand 轮廓，无增量合成 → 无衰减、无接缝；
-   *  显示与判空/导出共用 drawMaskCommand，请求范围与所见范围同构（D5）── */
+  /* ── 显示层全量重绘：显示与判空/导出共用同一笔触轮廓 ── */
   const renderDisplay = useCallback(
     (live: MaskStroke | null) => {
       const cov = covRef.current;
@@ -182,12 +172,10 @@ export function InpaintModal(props: {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  /* ── 缩放 / 平移：围绕视口中心，0.25 步长，1×–8×；平移只改视图 ──
-     pan 即画布左上角在舞台内的坐标；钳制保证至少 margin px 留在可视区（IP-06） */
+  /* ── 缩放/平移：围绕视口中心，1×–8×；钳制保证画布至少 48px 留在可视区 ── */
   const clampPan = useCallback(
     (next: { x: number; y: number }, z: number, b: BoardBox) => {
-      const stage = stageRef.current;
-      if (!stage) return next;
+      const stage = stageRef.current!;
       const w = b.fitW * z;
       const h = b.fitH * z;
       const margin = 48;
@@ -293,7 +281,7 @@ export function InpaintModal(props: {
   const onPointerDown = (e: React.PointerEvent) => {
     if (props.confirming) return;
     if (drawingRef.current || panningRef.current) {
-      // 多指：终止未完成笔触，不触发新手势（TECH §6.1）
+      // 多指：终止未完成笔触，不触发新手势
       if (drawingRef.current) {
         drawingRef.current = null;
         renderDisplay(null);
@@ -310,15 +298,19 @@ export function InpaintModal(props: {
       }
       return;
     }
-    if (overlayHidden) return; // 隐藏选区时禁止涂画，避免盲操作（IP-04）
+    if (overlayHidden) return; // 隐藏选区时禁止涂画
     if (doc.commands.length >= SKETCH_MAX_COMMANDS) {
       props.onLimit("commands");
       return;
     }
     const pt = toDocPoint(e.clientX, e.clientY);
     if (!pt) return;
-    const cmd = makeMaskStroke(tool === "eraser" ? "eraser" : "pen", brush);
-    cmd.points.push(pt);
+    const cmd: MaskStroke = {
+      type: "stroke",
+      tool: tool === "eraser" ? "eraser" : "pen",
+      width: brush,
+      points: [pt],
+    };
     drawingRef.current = { pid: e.pointerId, cmd, last: pt };
     try {
       stageRef.current?.setPointerCapture(e.pointerId);
@@ -374,7 +366,7 @@ export function InpaintModal(props: {
     if (!d || e.pointerId !== d.pid) return;
     drawingRef.current = null;
     if (discard) {
-      renderDisplay(null); // 指针中断：丢弃未完成的一笔（IP-05）
+      renderDisplay(null); // 指针中断：丢弃未完成的一笔
       return;
     }
     props.onStroke(d.cmd);
@@ -616,7 +608,7 @@ export function InpaintModal(props: {
   );
 }
 
-/** 只读选区查看（IP-15）：实际请求底图 + 已保存选区叠加，可显隐、可发起「调整上次重绘」。 */
+/** 只读选区查看：底图 + 已保存选区叠加 */
 export function MaskViewModal(props: {
   baseUrl: string;
   name: string;
@@ -632,14 +624,9 @@ export function MaskViewModal(props: {
   const [width, setWidth] = useState(720);
 
   useLayoutEffect(() => {
-    const measure = () => {
-      const w = wrapRef.current?.clientWidth ?? 720;
-      setWidth(Math.max(240, Math.min(920, w - 8)));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    return () => ro.disconnect();
+    setWidth(
+      Math.max(240, Math.min(920, (wrapRef.current?.clientWidth ?? 720) - 8)),
+    );
   }, []);
 
   const height = Math.round((width * props.baseH) / props.baseW);

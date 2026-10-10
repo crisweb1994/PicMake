@@ -1,11 +1,5 @@
-/** 草图纯规则（SKETCH_RESEARCH_AND_SPEC §8/§9）：坐标换算、命令提交、撤销游标、
- *  文档校验与变更检测。只放纯函数，Canvas 重放与导出见 sketch-canvas.ts。 */
-import type {
-  SketchCommand,
-  SketchDocument,
-  SketchPoint,
-  SketchStroke,
-} from "./types";
+/** 草图纯规则：坐标换算、命令提交、撤销游标、文档校验；Canvas 见 sketch-canvas.ts */
+import type { SketchDocument, SketchPoint, SketchStroke } from "./types";
 
 /** 固定色板（名称用于无障碍；值为实际绘画颜色，不随主题） */
 export const SKETCH_PALETTE: ReadonlyArray<{
@@ -27,10 +21,10 @@ export const SKETCH_PALETTE: ReadonlyArray<{
   { name: "品红", hex: "#D6247A" },
 ];
 
-/** 内存保护阈值（§9：待实测的建议值，不是性能承诺） */
+/** 内存保护阈值（建议值） */
 export const SKETCH_MAX_COMMANDS = 2000;
 export const SKETCH_MAX_POINTS = 100000;
-/** 输出为 auto 时的新画布尺寸（§6.4） */
+/** 输出为 auto 时的新画布尺寸 */
 export const SKETCH_DEFAULT_SIZE = 1024;
 
 export function blankSketch(width: number, height: number): SketchDocument {
@@ -75,12 +69,12 @@ export function makeStroke(
     : { type: "stroke", tool, width, points: [] };
 }
 
-/** 提交一个完整命令：丢弃撤销后的重做分支；超上限拒绝（保留已完成内容） */
-export function commitCommand(
-  doc: SketchDocument,
+/** 提交命令：丢弃重做分支；超上限拒绝。草图与选区共用 */
+export function commitCommand<D extends SketchDocument>(
+  doc: D,
   cursor: number,
-  command: SketchCommand,
-): { doc: SketchDocument; cursor: number } | null {
+  command: D["commands"][number],
+): { doc: D; cursor: number } | null {
   if (doc.commands.length >= SKETCH_MAX_COMMANDS) return null;
   return {
     doc: { ...doc, commands: [...doc.commands.slice(0, cursor), command] },
@@ -100,7 +94,7 @@ export function totalPoints(
   return n;
 }
 
-/** 变更检测：提交前缀的稳定序列化（§6.5 有修改才拦截关闭、§8.2 无修改沿用原附件） */
+/** 变更检测：提交前缀的稳定序列化 */
 export function sketchSnapshotKey(
   doc: Pick<SketchDocument, "commands">,
   cursor = doc.commands.length,
@@ -108,65 +102,38 @@ export function sketchSnapshotKey(
   return JSON.stringify(doc.commands.slice(0, cursor));
 }
 
-/** 确认快照：只保留提交前缀，重做分支不落库；此后文档不可原地修改（§8.4） */
-export function freezeSketch(
-  doc: SketchDocument,
-  cursor = doc.commands.length,
-): SketchDocument {
+/** 确认快照：只保留提交前缀，此后不可原地修改 */
+export function freezeSketch<D extends SketchDocument>(
+  doc: D,
+  cursor: number,
+): D {
   return { ...doc, commands: doc.commands.slice(0, cursor) };
 }
 
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
-/** 读取校验（§9）：拒绝异常尺寸、非有限坐标、越界笔宽、坏颜色与不支持的版本 */
+/** 读取校验：只查结构完整（文档由本应用产出，笔画内容不作逐点复核） */
 export function validateSketchDocument(value: unknown): SketchDocument | null {
   if (!value || typeof value !== "object") return null;
   const doc = value as Partial<SketchDocument>;
-  if (doc.version !== 1) return null;
-  const { width, height } = doc;
+  const { width, height, commands } = doc;
   if (
+    doc.version !== 1 ||
     !Number.isInteger(width) ||
     !Number.isInteger(height) ||
     !width ||
     !height ||
-    width < 256 ||
-    height < 256 ||
-    width > 3840 ||
-    height > 3840
+    !Array.isArray(commands) ||
+    !commands.every(
+      (cmd) =>
+        !!cmd &&
+        (cmd.type === "clear" ||
+          (cmd.type === "stroke" && Array.isArray(cmd.points))),
+    )
   )
     return null;
-  if (!Array.isArray(doc.commands)) return null;
-  const limit = Math.max(width, height) * 2;
-  for (const cmd of doc.commands) {
-    if (!cmd || typeof cmd !== "object") return null;
-    if (cmd.type === "clear") continue;
-    if (cmd.type !== "stroke") return null;
-    if (cmd.tool !== "pen" && cmd.tool !== "eraser") return null;
-    if (!Number.isFinite(cmd.width) || cmd.width <= 0 || cmd.width > limit)
-      return null;
-    if (
-      cmd.tool === "pen" &&
-      (typeof cmd.color !== "string" || !HEX_COLOR.test(cmd.color))
-    )
-      return null;
-    if (!Array.isArray(cmd.points) || cmd.points.length === 0) return null;
-    for (const p of cmd.points) {
-      if (!p || typeof p !== "object") return null;
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-      // 笔迹允许画到边缘略出界，但拒绝大幅越界坐标
-      if (
-        p.x < -limit ||
-        p.x > width + limit ||
-        p.y < -limit ||
-        p.y > height + limit
-      )
-        return null;
-    }
-  }
   return doc as SketchDocument;
 }
 
-/** 输出比例与草图比例是否不一致（§6.4 就地提示；容差 1%） */
+/** 比例是否不一致（容差 1%） */
 export function ratioMismatch(
   a: { w: number; h: number },
   b: { w: number; h: number },

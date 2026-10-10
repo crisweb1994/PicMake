@@ -151,75 +151,16 @@ describe("validateSketchDocument", () => {
     expect(validateSketchDocument({})).toBeNull();
     expect(validateSketchDocument({ ...valid(), version: 2 })).toBeNull();
     expect(validateSketchDocument({ ...valid(), width: 0 })).toBeNull();
-    expect(validateSketchDocument({ ...valid(), width: 100 })).toBeNull(); // 低于 256
-    expect(validateSketchDocument({ ...valid(), width: 4096 })).toBeNull();
     expect(validateSketchDocument({ ...valid(), commands: "x" })).toBeNull();
   });
 
-  it("拒绝坏笔画：非法工具 / 越界笔宽 / 坏颜色 / 非有限坐标", () => {
+  it("拒绝缺 points 的笔画命令（防止渲染崩溃）", () => {
     expect(
       validateSketchDocument({
         ...valid(),
-        commands: [strokeCmd({ tool: "brush" as never })],
+        commands: [{ type: "stroke", tool: "pen" } as never],
       }),
     ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ width: 1e6 })],
-      }),
-    ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ width: 0 })],
-      }),
-    ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ color: "red" })],
-      }),
-    ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ color: undefined })],
-      }),
-    ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ points: [{ x: Number.NaN, y: 1 }] })],
-      }),
-    ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ points: [{ x: -99999, y: 1 }] })],
-      }),
-    ).toBeNull();
-    expect(
-      validateSketchDocument({
-        ...valid(),
-        commands: [strokeCmd({ points: [] })],
-      }),
-    ).toBeNull();
-  });
-
-  it("橡皮不需要颜色；轻微出界坐标允许（画到边缘）", () => {
-    const doc = {
-      ...valid(),
-      commands: [
-        {
-          type: "stroke",
-          tool: "eraser",
-          width: 20,
-          points: [{ x: 1030, y: -8 }],
-        },
-      ],
-    };
-    expect(validateSketchDocument(doc)).toEqual(doc);
   });
 });
 

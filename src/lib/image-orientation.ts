@@ -1,7 +1,5 @@
-/** 有限范围的容器尺寸 / EXIF 方向读取与底图准备（TECH_INPAINTING §5，D1）。
- *  只实现本任务所需：JPEG/PNG/WebP 的头尺寸与 orientation 标签（覆盖 1–8），
- *  不做通用 EXIF 编辑器；解析失败返回明确结果，禁止以宽高差异推断方向。
- *  无标签按 orientation=1 处理；损坏 / 冲突元数据不让流程静默继续。 */
+/** 容器尺寸 / EXIF 方向读取与底图准备：只覆盖 JPEG/PNG/WebP 的 orientation 1–8。
+ *  损坏元数据返回明确错误，不让流程静默继续 */
 import { imageFormat } from "./input-images";
 import type { InpaintIssue } from "./types";
 
@@ -219,14 +217,12 @@ export function readImageMeta(blob: Blob): Promise<OrientationResult> {
     });
 }
 
-/** D1：进入绘制前准备实际请求底图。
- *  - orientation 无 / =1：复用原文件，不重复保存；
- *  - orientation 2–8：解码应用方向一次，生成无方向标签的请求素材
- *    （JPEG 质量 0.92，PNG/WebP 转 PNG 保留 alpha），编辑器展示该素材；
- *  - 元数据损坏 / 解码或编码失败：明确错误，不静默退回可能错位的请求。 */
+/** 准备实际请求底图：orientation 无/=1 复用原文件；2–8 解码应用方向重编码一次；
+ *  失败返回明确错误，不静默退回。meta 由调用方读取（含头尺寸拦截）后传入 */
 export async function prepareInpaintBase(
   blob: Blob,
   name: string,
+  meta: Exclude<OrientationResult, { issue: InpaintIssue }>,
   id: () => string = () => crypto.randomUUID(),
 ): Promise<
   | {
@@ -237,19 +233,15 @@ export async function prepareInpaintBase(
         source: import("../lib/types").InputSource;
         image: import("../db/schema").ImageRow;
       };
-      note?: "normalized";
     }
   | { ok: false; issue: InpaintIssue }
 > {
-  const meta = await readImageMeta(blob);
-  if ("issue" in meta) return { ok: false, issue: meta.issue };
   const format = imageFormat(
     new Uint8Array(await blob.slice(0, 12).arrayBuffer()),
   );
   if (!format) return { ok: false, issue: "canvas-failed" };
 
   if (meta.orientation === 1) {
-    // 头尺寸仅供提前拦截；以解码结果为准复核（D2：尽可能先拦截，解码后复核）
     let bitmap: ImageBitmap;
     try {
       bitmap = await createImageBitmap(blob);
@@ -277,31 +269,13 @@ export async function prepareInpaintBase(
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx || canvas.width !== width || canvas.height !== height)
-      return { ok: false, issue: "canvas-failed" };
+    if (!ctx) return { ok: false, issue: "canvas-failed" };
     ctx.drawImage(bitmap, 0, 0);
     const encodeFormat = format === "jpeg" ? "jpeg" : "png";
     const blobOut = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, `image/${encodeFormat}`, 0.92),
     );
-    canvas.width = 0;
-    canvas.height = 0;
     if (!blobOut || !blobOut.size) return { ok: false, issue: "canvas-failed" };
-    // 编码后复核：非空、真实格式、尺寸一致
-    const outFormat = imageFormat(
-      new Uint8Array(await blobOut.slice(0, 12).arrayBuffer()),
-    );
-    if (outFormat !== encodeFormat)
-      return { ok: false, issue: "canvas-failed" };
-    let verify: ImageBitmap;
-    try {
-      verify = await createImageBitmap(blobOut);
-    } catch {
-      return { ok: false, issue: "canvas-failed" };
-    }
-    const verified = verify.width === width && verify.height === height;
-    verify.close();
-    if (!verified) return { ok: false, issue: "canvas-failed" };
     const originalImage = {
       id: id(),
       blob,
@@ -316,7 +290,6 @@ export async function prepareInpaintBase(
         source: { imageId: originalImage.id, name },
         image: originalImage,
       },
-      note: "normalized",
     };
   } finally {
     bitmap.close();

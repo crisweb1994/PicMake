@@ -31,15 +31,19 @@ export interface DisplayInput {
   name: string;
   label: string;
   url?: string;
-  origin?: string;
-  /** 草图附件：点击重新打开画板而非普通预览（SKETCH §6.3） */
+  /** 草图附件：点击重开画板而非预览 */
   isSketch?: boolean;
-  /** 局部重绘 ✎ 入口角色（IP-08）：mask=底图（修改选区）；ref=重绘中参考图（停用）；
-   *  candidate=普通图片（可发起局部重绘并成为底图） */
+  /** ✎ 入口角色：mask=底图；ref=重绘中参考图（停用）；candidate=普通图 */
   inpaintRole?: "mask" | "ref" | "candidate";
 }
 
-/** 创作条的局部重绘投影（IP-08/IP-10） */
+/** 输入来源的展示名与编号标签（创作条缩略与历史来源预览共用） */
+export function inputDisplay(name: string | undefined, index: number) {
+  const display = name ?? "已有作品";
+  return { name: display, label: `图${index + 1} · ${display}` };
+}
+
+/** 创作条的局部重绘投影 */
 export interface InpaintBarInfo {
   /** 输出目标尺寸 */
   tw: number;

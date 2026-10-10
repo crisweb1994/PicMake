@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { historySources, imageFormat } from "./input-images";
-import type { HistoryRow } from "../db/schema";
+import { imageFormat } from "./input-images";
 import { prepareGeneration } from "./generation";
 import { formToParams, DEFAULT_FORM } from "./params";
 
@@ -15,7 +14,6 @@ describe("多图输入边界与来源", () => {
       expect(imageFormat(new TextEncoder().encode(text))).toBeNull();
   });
   it("无来源的历史返回空，新来源按提交顺序保存，Blob 不写进历史元信息", () => {
-    expect(historySources({} as HistoryRow)).toEqual([]);
     const params = formToParams(DEFAULT_FORM);
     const sources = ["b", "a"].map((id) => ({
       source: { imageId: id, name: id + ".png" },
@@ -23,13 +21,14 @@ describe("多图输入边界与来源", () => {
     }));
     const prepared = prepareGeneration(
       params,
-      { images: [{ b64: "AQ==" }], usage: null },
-      { params, sources, inputFidelity: "high" },
+      { images: ["AQ=="], usage: null },
+      { sources, inputFidelity: "high" },
       Date.now(),
     );
-    expect(
-      historySources(prepared.row).map((source) => source.imageId),
-    ).toEqual(["b", "a"]);
+    expect(prepared.row.inputSources?.map((source) => source.imageId)).toEqual([
+      "b",
+      "a",
+    ]);
     expect(prepared.sources).toEqual(sources.map((source) => source.image));
     expect(prepared.row.inputFidelity).toBe("high");
     expect(JSON.stringify(prepared.row)).not.toMatch(/blob|upload/);

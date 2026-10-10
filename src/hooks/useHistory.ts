@@ -5,7 +5,7 @@ import { db, ensurePersistentStorage, type HistoryRow } from "../db/schema";
 import { deleteHistory, saveGeneration, toggleStar } from "../db/history";
 import type { PreparedGeneration } from "../lib/generation";
 import type { DisplayGen, DisplayImage } from "../lib/view-models";
-import { historySources } from "../lib/input-images";
+import { inputDisplay } from "../lib/view-models";
 import { useImageAssets } from "./useImageAssets";
 
 const EMPTY_ROWS: HistoryRow[] = [];
@@ -57,7 +57,7 @@ export function useHistory() {
   }, [pendingSave]);
 
   const displayRow = pendingSave?.row ?? selectedRow;
-  const sources = displayRow ? historySources(displayRow) : [];
+  const sources = displayRow?.inputSources ?? [];
   const suppliedSources = useMemo(
     () => pendingSave?.sources ?? [],
     [pendingSave],
@@ -68,28 +68,18 @@ export function useHistory() {
     ...rows.map((row) => row.imageIds[0]),
   ];
   const { assets } = useImageAssets(assetIds, suppliedSources);
-  const thumbnailUrls = useMemo(
-    () =>
-      Object.fromEntries(
-        rows.flatMap((row) => {
-          const id = row.imageIds[0];
-          return id && assets[id] ? [[id, assets[id].url] as const] : [];
-        }),
-      ),
-    [assets, rows],
+  const thumbnailUrls = Object.fromEntries(
+    rows.flatMap((row) => {
+      const id = row.imageIds[0];
+      return id && assets[id] ? ([[id, assets[id].url]] as const) : [];
+    }),
   );
 
   const sourceImages = sources.map((source, index) => ({
     id: source.imageId,
-    name: source.name ?? "已有作品",
-    label: `图${index + 1} · ${source.name ?? "已有作品"}`,
-    origin: !source.generationId
-      ? "上传的图片"
-      : rows.some((row) => row.id === source.generationId)
-        ? "来自已有作品"
-        : "来源作品已删除",
+    ...inputDisplay(source.name, index),
     url: assets[source.imageId]?.url,
-    /** 来源是草图：预览时提供「继续画这张草图」（SKETCH §6.3/§8.2，不改旧记录） */
+    /** 来源是草图：预览提供「继续画这张草图」 */
     isSketch: !!assets[source.imageId]?.row.sketch,
   }));
 

@@ -2,19 +2,10 @@
 import { useRef, useState } from "react";
 import type { HistoryRow } from "../db/schema";
 import { db } from "../db/schema";
-import {
-  useGeneration,
-  isAbortError,
-  type GenerationRun,
-} from "./useGeneration";
+import { useGeneration, isAbortError } from "./useGeneration";
 import type { useHistory } from "./useHistory";
 import type { useForm } from "./useForm";
-import {
-  prepareGeneration,
-  type PreparedGeneration,
-  type ResultMeta,
-} from "../lib/generation";
-import { b64ToBlob, decodeImageMeta } from "../lib/blob";
+import { prepareGeneration, type PreparedGeneration } from "../lib/generation";
 import { inpaintTargetSize } from "../lib/inpaint";
 import {
   ApiError,
@@ -30,7 +21,7 @@ import type { ConfirmState } from "../lib/view-models";
 import { useSettings } from "../store/settings";
 import { toast } from "@heroui/react";
 
-/** 错误反馈统一走 toast（PRD FR-8，2026-09-22）：标题 + 建议或原始信息 */
+/** 错误反馈统一走 toast：标题 + 建议或原始信息 */
 function toastError(error: unknown) {
   const kind = error instanceof ApiError ? error.kind : "unknown";
   const detail =
@@ -49,21 +40,20 @@ export function usePicmake({
   history: ReturnType<typeof useHistory>;
   form: ReturnType<typeof useForm>;
   onViewReset: () => void;
-  /** 编辑此图 / 复用参数把草稿落位后回调：页面据此展开创作条并聚焦（PRD §5.1/§5.2） */
+  /** 草稿落位后回调：页面据此展开创作条并聚焦 */
   onDraftReady: () => void;
 }) {
   const settings = useSettings();
-  const { selectedId, selectedRow, display, pendingSave } = history;
+  const { selectedId, display, pendingSave } = history;
   const [returnId, setReturnId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
-  /** 底栏 complete 态的数据源：最近一次保存成功的结果（chipbar §5.2） */
-  const [lastDone, setLastDone] = useState<HistoryRow | null>(null);
+  /** 底栏 complete 态数据源：最近保存成功的结果 id */
+  const [lastDoneId, setLastDoneId] = useState<string | null>(null);
   const generation = useGeneration();
-  const clearDone = () => setLastDone(null);
-  /** 完整工作流锁（TECH §9.1）：从第一个 await 前同步锁住资源准备→请求→解码→保存，
-   *  双击提交与各入口共用同一把锁；取消经 token 失效迟到回调。 */
+  const clearDone = () => setLastDoneId(null);
+  /** 完整工作流锁：第一个 await 前同步锁住资源准备→请求→解码→保存 */
   const workflowBusyRef = useRef(false);
 
   const confirmPendingLeave = (onLeave: () => void) => {
@@ -87,10 +77,8 @@ export function usePicmake({
     });
   };
 
-  const savePrepared = async (
-    prepared: PreparedGeneration,
-  ): Promise<boolean> => {
-    if (savingRef.current) return false;
+  const savePrepared = async (prepared: PreparedGeneration): Promise<void> => {
+    if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
     try {
@@ -98,45 +86,17 @@ export function usePicmake({
       form.initialize();
       setReturnId(null);
       generation.reset();
-      setLastDone(prepared.row);
+      setLastDoneId(prepared.row.id);
       toast("生成完成");
-      return true;
     } catch {
       toast(`${ERROR_TITLES["save-failed"]}：${ERROR_HINTS["save-failed"]}`);
-      return false;
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
   };
 
-  const handleRunResult = async (
-    paramsForRun: GenParams,
-    run: GenerationRun,
-    originPrompt?: string,
-  ) => {
-    // 逐张解码实际元信息（TECH §10.1）：格式与宽高以结果字节为准，不用请求参数伪装
-    const metas: ResultMeta[] = [];
-    for (const image of run.result.images) {
-      const meta = await decodeImageMeta(b64ToBlob(image.b64));
-      metas.push(
-        meta ?? { width: 0, height: 0, format: paramsForRun.outputFormat },
-      );
-    }
-    const prepared = prepareGeneration(
-      paramsForRun,
-      run.result,
-      run.edit,
-      run.startedAt,
-      undefined,
-      originPrompt,
-      metas,
-    );
-    await savePrepared(prepared);
-  };
-
-  /** 编辑/参考生成时取首个输入源记录的原始描述（沿链路取最初那条；PRD 2026-09-23）。
-   *  局部重绘分支 inputs[0] 恒为实际底图（TECH §9.2），不会误取参考图来源。 */
+  /** 取首个输入源的原始描述（沿链路取最初；局部重绘 inputs[0] 恒为底图） */
   const resolveOriginPrompt = async (
     inputs: Array<{ generationId?: string }>,
   ): Promise<string | undefined> => {
@@ -163,7 +123,15 @@ export function usePicmake({
         ? await resolveOriginPrompt(draft.inputs)
         : undefined;
       const run = await generation.start(paramsForRun, draft, config);
-      await handleRunResult(paramsForRun, run, originPrompt);
+      const prepared = prepareGeneration(
+        paramsForRun,
+        run.result,
+        run.edit,
+        run.startedAt,
+        undefined,
+        originPrompt,
+      );
+      await savePrepared(prepared);
     } catch (caught) {
       if (isAbortError(caught)) {
         toast("已取消生成");
@@ -176,16 +144,9 @@ export function usePicmake({
   };
 
   const generate = () => {
-    if (
-      generation.phase === "generating" ||
-      savingRef.current ||
-      workflowBusyRef.current ||
-      form.reading ||
-      confirmState ||
-      pendingSave
-    )
-      return;
-    // 尺寸接受复核（IP-10）：目标尺寸未接受时不发生成请求
+    // 生成中底栏已切到 GenBar，此处只需拦保存期与工作流窗口期的重复触发
+    if (savingRef.current || workflowBusyRef.current || pendingSave) return;
+    // 目标尺寸未接受时不发生成请求
     if (
       form.inpaint &&
       form.inpaintInfo?.suggested &&
@@ -194,7 +155,7 @@ export function usePicmake({
       toast("输出尺寸与原图不同，请先接受建议尺寸");
       return;
     }
-    setLastDone(null);
+    setLastDoneId(null);
     const params = form.getParams();
     if (params)
       void startGeneration(
@@ -209,8 +170,7 @@ export function usePicmake({
       );
   };
 
-  /** 读取局部重绘记录的完整资源（IP-16/A31）：实际底图、参考图、mask；
-   *  原文件缺失可省略并提示，其余缺失则阻断该动作。 */
+  /** 读取局部重绘记录资源：底图、参考图、mask；原文件缺失可省略，其余阻断 */
   const readInpaintDraft = async (
     row: HistoryRow,
   ): Promise<
@@ -252,7 +212,7 @@ export function usePicmake({
       inputFidelity: row.inputFidelity ?? "auto",
       inpaint: { mask: maskRow as MaskImage },
     };
-    // 目标尺寸按当前约束复核：约束变化须重新接受（IP-10/§7）
+    // 目标尺寸按当前约束复核
     const target = inpaintTargetSize(baseRow.width, baseRow.height);
     if (!target) return { ok: false, missing: "底图" };
     const params: GenParams = {
@@ -262,7 +222,7 @@ export function usePicmake({
     return { ok: true, draft, mask: maskRow as MaskImage, params };
   };
 
-  /** 「调整上次重绘」（IP-16）：恢复底图、参考图、选区与描述参数为可编辑草稿，不生成 */
+  /** 调整上次重绘：恢复为可编辑草稿，不生成 */
   const adjustInpaint = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current || pendingSave)
       return;
@@ -281,7 +241,6 @@ export function usePicmake({
         mask: read.mask,
         original: read.draft.inpaint?.original,
         entry: "reedit",
-        unchanged: true,
       });
       form.acceptSize();
       history.select(null);
@@ -292,29 +251,19 @@ export function usePicmake({
     });
   };
 
-  /** 「再来一版」（IP-16）：局部重绘记录复用同一请求底图与 mask 直接提交 */
+  /** 再来一版：局部重绘记录复用同一底图与 mask 直接提交（尺寸按当前约束重算，恒合法） */
   const regenerateInpaint = async (row: HistoryRow) => {
     const read = await readInpaintDraft(row);
     if (!read.ok) {
       toast(`${read.missing}不可用，无法再来一版`);
       return;
     }
-    if (
-      row.params.size === "auto" ||
-      row.params.size.w !== (read.params.size as { w: number }).w ||
-      row.params.size.h !== (read.params.size as { w: number; h: number }).h
-    ) {
-      toast("输出尺寸约束已变化，请用「调整上次重绘」确认新尺寸");
-      return;
-    }
     await startGeneration(read.params, read.draft);
   };
 
-  /** 「再来一版」：用历史记录的参数与输入源直接重发一次（chipbar complete 态） */
+  /** 再来一版：用历史记录的参数与输入源直接重发（仅 complete 态底栏可达） */
   const regenerate = (row: HistoryRow) => {
-    if (generation.phase === "generating" || savingRef.current || pendingSave)
-      return;
-    setLastDone(null);
+    setLastDoneId(null);
     if (row.inpaint) {
       void regenerateInpaint(row);
       return;
@@ -331,15 +280,20 @@ export function usePicmake({
     void startGeneration({ ...row.params }, draft);
   };
 
+  /** 各入口共用的清理：complete 态、生成态、草稿、返回标记与查看状态（历史选择由各入口自理） */
+  const resetWorkspace = () => {
+    clearDone();
+    generation.reset();
+    form.initialize();
+    setReturnId(null);
+    onViewReset();
+  };
+
   const selectHistory = (row: HistoryRow) => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
-      clearDone();
-      generation.reset();
       history.select(row.id);
-      form.initialize();
-      setReturnId(null);
-      onViewReset();
+      resetWorkspace();
     });
   };
 
@@ -358,23 +312,16 @@ export function usePicmake({
   };
 
   const editImage = (imageId: string) => {
-    if (
-      generation.phase === "generating" ||
-      pendingSave ||
-      !display ||
-      !selectedRow
-    )
-      return;
-    if (!display.images.some((image) => image.id === imageId)) return;
+    if (!display) return;
     clearDone();
-    form.initialize({ ...selectedRow.params, prompt: "" }, [
+    form.initialize({ ...display.row.params, prompt: "" }, [
       {
-        generationId: selectedRow.id,
+        generationId: display.row.id,
         imageId,
-        name: `已有作品 · 第 ${selectedRow.imageIds.indexOf(imageId) + 1} 张`,
+        name: `已有作品 · 第 ${display.row.imageIds.indexOf(imageId) + 1} 张`,
       },
     ]);
-    setReturnId(selectedRow.id);
+    setReturnId(display.row.id);
     history.select(null);
     onViewReset();
     generation.reset();
@@ -385,24 +332,16 @@ export function usePicmake({
     if (generation.phase === "generating" || savingRef.current || !returnId)
       return;
     confirmPendingLeave(() => {
-      clearDone();
-      generation.reset();
-      form.initialize();
       history.select(returnId);
-      setReturnId(null);
-      onViewReset();
+      resetWorkspace();
     });
   };
 
   const newGeneration = () => {
     if (generation.phase === "generating" || savingRef.current) return;
     confirmPendingLeave(() => {
-      clearDone();
-      generation.reset();
       history.select(null);
-      form.initialize();
-      setReturnId(null);
-      onViewReset();
+      resetWorkspace();
     });
   };
 
@@ -417,13 +356,7 @@ export function usePicmake({
           .remove(row.id)
           .then(() => {
             toast("已删除");
-            if (selectedId === row.id) {
-              clearDone();
-              generation.reset();
-              form.initialize();
-              setReturnId(null);
-              onViewReset();
-            }
+            if (selectedId === row.id) resetWorkspace();
           })
           .catch((caught) => toastError(caught));
       },
@@ -448,8 +381,7 @@ export function usePicmake({
     newGeneration,
     confirmState,
     setConfirmState,
-    settings,
-    lastDone,
+    lastDoneId,
     clearDone,
     confirmPendingLeave,
   };

@@ -1,11 +1,6 @@
 /** 只测试参数映射与 SSE 解析，不发网络请求。 */
 import { describe, expect, it } from "vitest";
-import {
-  createImageParser,
-  editFormData,
-  mapUsage,
-  parseGenResponse,
-} from "./client";
+import { createImageParser, editFormData, parseGenResponse } from "./client";
 import {
   ApiError,
   type EditSubmission,
@@ -18,16 +13,17 @@ const usage = {
   output_tokens: 300,
   input_tokens_details: { text_tokens: 100, image_tokens: 200 },
 };
+const params = {
+  model: "flare",
+  prompt: "添加一朵花",
+  size: { w: 1024, h: 1024 },
+  n: 2,
+  quality: "high",
+  background: "auto",
+  outputFormat: "webp",
+} as const;
+
 const submission: EditSubmission = {
-  params: {
-    model: "flare",
-    prompt: "添加一朵花",
-    size: { w: 1024, h: 1024 },
-    n: 2,
-    quality: "high",
-    background: "auto",
-    outputFormat: "webp",
-  },
   sources: [
     {
       source: { generationId: "parent", imageId: "source" },
@@ -45,7 +41,7 @@ const submission: EditSubmission = {
 
 describe("编辑请求映射", () => {
   it("multipart 保留来源格式、保真度和生成参数", () => {
-    const body = editFormData(submission);
+    const body = editFormData(submission, params);
     expect(body.get("image")).toBeInstanceOf(Blob);
     expect((body.get("image") as File).name).toBe("source.jpg");
     expect((body.get("image") as File).type).toBe("image/jpeg");
@@ -67,7 +63,7 @@ describe("编辑请求映射", () => {
     });
   });
   it("auto 档不发送 input_fidelity（部分中转不支持该参数）", () => {
-    const body = editFormData({ ...submission, inputFidelity: "auto" });
+    const body = editFormData({ ...submission, inputFidelity: "auto" }, params);
     expect(body.get("input_fidelity")).toBeNull();
   });
   it("多图按输入顺序使用 image[]", async () => {
@@ -87,7 +83,7 @@ describe("编辑请求映射", () => {
         },
       ],
     };
-    const body = editFormData(multi);
+    const body = editFormData(multi, params);
     expect(body.has("image")).toBe(false);
     const images = body.getAll("image[]") as File[];
     expect(images.map((file) => file.type)).toEqual([
@@ -108,28 +104,8 @@ describe("请求级 usage", () => {
       data: [{ b64_json: "a" }, { b64_json: "b" }],
       usage,
     });
-    expect(result.images).toHaveLength(2);
-    expect(result.usage?.outputTokens).toBe(300);
-    expect(result.images.every((image) => !("usage" in image))).toBe(true);
-  });
-  it("缺少输入明细不猜测 token 构成", () => {
-    expect(mapUsage({ input_tokens: 300, output_tokens: 100 })).toMatchObject({
-      inputTokens: 300,
-      textTokens: 0,
-      imageTokens: 0,
-      inputDetailsAvailable: false,
-    });
-    expect(mapUsage(null)).toBeNull();
-    expect(
-      mapUsage({
-        output_tokens: 100,
-        input_tokens_details: { text_tokens: 50 },
-      }),
-    ).toMatchObject({
-      textTokens: 0,
-      imageTokens: 0,
-      inputDetailsAvailable: false,
-    });
+    expect(result.images).toEqual(["a", "b"]);
+    expect(result.usage).toEqual(usage);
   });
   it("拒绝空结果及没有图片的响应", () => {
     expect(() => parseGenResponse({ data: [] })).toThrow();
@@ -155,11 +131,8 @@ describe("生成和编辑 SSE", () => {
       for (let i = 0; i < stream.length; i += 7)
         parser.feed(stream.slice(i, i + 7));
       expect(partials).toEqual(["preview"]);
-      expect(result.images.map((image) => image.b64)).toEqual([
-        "first",
-        "second",
-      ]);
-      expect(result.usage).toEqual(mapUsage(usage));
+      expect(result.images).toEqual(["first", "second"]);
+      expect(result.usage).toEqual(usage);
     });
   }
   it("保留流内内容政策错误的类别", () => {

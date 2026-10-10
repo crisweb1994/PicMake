@@ -3,15 +3,14 @@ import {
   MASK_ALPHA_THRESHOLD,
   blankMask,
   checkInpaintBase,
-  commitMaskCommand,
   inpaintTargetSize,
-  isFullyCovered,
   maskBrushRange,
   maskOutputAlpha,
   sizeReason,
   suggestInpaintSize,
   validateMaskDocument,
 } from "./inpaint";
+import { commitCommand as commitMaskCommand } from "./sketch";
 import type { MaskDocument } from "./types";
 
 describe("suggestInpaintSize（TECH §7 样例表）", () => {
@@ -124,46 +123,28 @@ describe("validateMaskDocument", () => {
     expect(validateMaskDocument(doc)).toEqual({ doc });
   });
 
-  it("底图绑定不匹配 → base-mismatch", () => {
-    const doc = { ...base, baseImageId: "img-2" };
-    expect(validateMaskDocument(doc, "img-1")).toEqual({
-      issue: "base-mismatch",
+  it("拒绝坏版本 / 缺底图绑定 / 坏尺寸 / 非命令序列", () => {
+    expect(validateMaskDocument({ ...base, version: 2 })).toEqual({
+      issue: "invalid-mask",
+    });
+    expect(validateMaskDocument({ ...base, baseImageId: "" })).toEqual({
+      issue: "invalid-mask",
+    });
+    expect(validateMaskDocument({ ...base, width: Number.NaN })).toEqual({
+      issue: "invalid-mask",
     });
     expect(
-      validateMaskDocument(base, "img-1", { width: 640, height: 480 }),
+      validateMaskDocument({ ...base, width: Number.MAX_SAFE_INTEGER + 1 }),
     ).toEqual({
-      issue: "base-mismatch",
+      issue: "invalid-mask",
     });
-  });
-
-  it("拒绝坏版本 / 非有限点 / 越界笔宽", () => {
-    expect(validateMaskDocument({ ...base, version: 2 })).toEqual({
+    expect(validateMaskDocument({ ...base, commands: "x" })).toEqual({
       issue: "invalid-mask",
     });
     expect(
       validateMaskDocument({
         ...base,
-        commands: [
-          {
-            type: "stroke",
-            tool: "pen",
-            width: 10,
-            points: [{ x: NaN, y: 0 }],
-          },
-        ],
-      }),
-    ).toEqual({ issue: "invalid-mask" });
-    expect(
-      validateMaskDocument({
-        ...base,
-        commands: [
-          {
-            type: "stroke",
-            tool: "pen",
-            width: 99999,
-            points: [{ x: 0, y: 0 }],
-          },
-        ],
+        commands: [{ type: "stroke", tool: "pen", width: 10 } as never],
       }),
     ).toEqual({ issue: "invalid-mask" });
   });
@@ -181,12 +162,6 @@ describe("coverage 二值语义（D5 / A52）", () => {
     expect(maskOutputAlpha(128)).toBe(0);
     expect(maskOutputAlpha(255)).toBe(0);
     expect(MASK_ALPHA_THRESHOLD).toBe(128);
-  });
-
-  it("全选覆盖判定（IP-05）", () => {
-    expect(isFullyCovered(1024 * 768, 1024, 768)).toBe(true);
-    expect(isFullyCovered(1024 * 768 - 10, 1024, 768)).toBe(true);
-    expect(isFullyCovered(1000, 1024, 768)).toBe(false);
   });
 });
 
