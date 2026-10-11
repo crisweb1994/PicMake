@@ -2,7 +2,11 @@
 import { toast } from "@heroui/react";
 import { deleteHistory, toggleStar as toggleStarRow } from "../db/history";
 import { ERROR_HINTS } from "../lib/types";
-import { hasUserWork, leaveDecision } from "../lib/workspace-rules";
+import {
+  hasUserWork,
+  leaveDecision,
+  wheelTarget,
+} from "../lib/workspace-rules";
 import { useWorkspace } from "../store/workspace";
 import {
   acceptSize,
@@ -23,6 +27,7 @@ import {
 import {
   findRow,
   selectDisplayRow,
+  selectRows,
   selectSelectedImageId,
 } from "../store/workspace/selectors";
 import { readInpaintDraft, toastError } from "./generate";
@@ -116,6 +121,19 @@ export function editImage(imageId: string) {
     resetView();
     openBar();
   }, true);
+}
+
+/** 编辑当前选中的那张图（单张取那张，多张取轮播所在的那张）；没有选中时忽略 */
+export function editSelectedImage() {
+  const imageId = selectSelectedImageId(useWorkspace.getState());
+  if (imageId) editImage(imageId);
+}
+
+/** 舞台滚轮：按时间向旧（deltaY > 0）或向新切换记录；是否响应由 selectCanWheelSwitch 决定 */
+export function switchByWheel(deltaY: number) {
+  const state = useWorkspace.getState();
+  const target = wheelTarget(selectRows(state), state.nav.selectedId, deltaY);
+  if (target) selectHistory(target);
 }
 
 /** 调整上次重绘：恢复为可编辑草稿，不生成 */

@@ -79,6 +79,23 @@ export function shouldCollapseBar(s: {
   return !s.userWork && s.inputCount === 0 && !s.canReturn;
 }
 
+/** 舞台滚轮切换的目标记录：rows 按时间从新到旧；没有选中项时选最近一条；已在边界返回 null */
+export function wheelTarget(
+  rows: readonly { id: string }[],
+  selectedId: string | null,
+  deltaY: number,
+): string | null {
+  if (!rows.length) return null;
+  const index = rows.findIndex((row) => row.id === selectedId);
+  const next =
+    index === -1
+      ? 0
+      : deltaY > 0
+        ? Math.min(rows.length - 1, index + 1)
+        : Math.max(0, index - 1);
+  return next === index ? null : rows[next].id;
+}
+
 /** liveQuery 回推后的选中项：首次加载选最近一条；只有原选中项确实从列表中删除时才回退 */
 export function nextSelection(
   prev: readonly { id: string }[] | undefined,

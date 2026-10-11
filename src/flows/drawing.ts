@@ -61,6 +61,15 @@ function workspaceFree(): boolean {
 /** 异步结果回来后，确认还是打开时的那个画板；已关闭或换了会话就丢弃结果 */
 const sameDrawing = (id: string) => useWorkspace.getState().drawing?.id === id;
 
+/** 画板绘制上限提示（草图与选区共用文案） */
+export function notifyDrawLimit(kind: "commands" | "points") {
+  toast(
+    kind === "commands"
+      ? "已达绘制上限（2000 步），请撤销或清空后再继续"
+      : "已达采样点上限，本笔到此为止",
+  );
+}
+
 /* ── 草图：只产出附件，确认落回创作条，不发请求 ── */
 
 /** 新画布 = 当前输出尺寸，auto 时 1024×1024 */
