@@ -41,6 +41,8 @@ pnpm exec prettier --write <本次修改的文件>
 
 ## 3. 架构与状态边界
 
+> 迁移进行中（2026-10）：工作区状态正在从 hooks 迁到 `src/store/workspace/`（写入只经 `actions.ts` 的命名迁移函数），异步编排迁到 `src/flows/`，方案见 docs/zustand.md。迁移期间新增的共享状态放进 store，不再往 App.tsx 或 `src/hooks/` 里加；不要把已迁移的代码改回 hooks。分层规则由 `.oxlintrc.json` 的 `no-restricted-imports` 检查。
+
 1. **业务组件是受控展示组件**：数据与回调全部由调用方通过 props 传入。组件内**禁止** import zustand store、调用 `src/api/*`、读写 Dexie / localStorage、直接 fetch。
 2. **接线层**：页面组件与页面级 hook 消费 zustand store 与 Dexie `liveQuery`，投影成业务组件 props。生成流程（含流式回调、入库）在页面级编排；落 store、写库、调用 API 与 toast 等全局反馈由接线层负责，不塞进展示组件。
 3. **接口只暴露调用方需要控制的**：props 描述「要什么数据、何时发生什么」。不把 store 快照、领域对象整包传给只关心局部状态的组件——容器先投影；渲染对象本身的组件例外（如结果检查器可收整条 history 记录）。回调传最小标识（id），不传整对象。
