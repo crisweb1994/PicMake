@@ -3,7 +3,12 @@
   "plugins": ["react", "typescript", "oxc"],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ]
   },
   "overrides": [
     {
@@ -17,7 +22,10 @@
                 "name": "zustand",
                 "message": "展示组件只收 props，不订阅 store"
               },
-              { "name": "dexie", "message": "展示组件不读写 IndexedDB" }
+              {
+                "name": "dexie",
+                "message": "展示组件不读写 IndexedDB"
+              }
             ],
             "patterns": [
               {
@@ -44,8 +52,14 @@
           "error",
           {
             "paths": [
-              { "name": "@heroui/react", "message": "store 不发 toast" },
-              { "name": "react", "message": "store 不使用 React API" }
+              {
+                "name": "@heroui/react",
+                "message": "store 不发 toast"
+              },
+              {
+                "name": "react",
+                "message": "store 不使用 React API"
+              }
             ],
             "patterns": [
               {
@@ -59,6 +73,78 @@
                 ],
                 "allowTypeImports": true,
                 "message": "store 不做 IO，只依赖 lib"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/containers/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "dexie",
+                "message": "容器不读写 IndexedDB，经 flows 或 hooks"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["**/api/**", "**/db/**"],
+                "allowTypeImports": true,
+                "message": "容器不做 IO：请求与读写库放进 flows，资源读取放进 hooks"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/flows/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "message": "flows 是普通模块，不持有 React 状态"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "**/hooks/**",
+                  "**/containers/**",
+                  "**/components/**"
+                ],
+                "allowTypeImports": true,
+                "message": "flows 不依赖 React 层，只经 store 的迁移函数写状态"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/hooks/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/api/**",
+                  "**/flows/**",
+                  "**/containers/**",
+                  "**/components/**"
+                ],
+                "allowTypeImports": true,
+                "message": "hooks 只管理绑定 React 生命周期的资源，不做业务编排"
               }
             ]
           }

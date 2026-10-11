@@ -19,6 +19,8 @@ import { useImageAssets } from "./useImageAssets";
 
 const EMPTY_IMAGES: ImageRow[] = [];
 
+export type WorkspaceAssets = ReturnType<typeof useWorkspaceAssets>;
+
 export function useWorkspaceAssets() {
   const rows = useWorkspace(selectRows);
   const displayRow = useWorkspace(selectDisplayRow);

@@ -1,0 +1,180 @@
+/** 结果区：舞台、详情浮卡、轮播、灯箱与选区查看；把 store 与资源投影成展示组件的 props，操作交给 flows。
+ *  副作用：舞台滚轮监听只在 selectCanWheelSwitch 成立期间挂载，条件不满足即移除 */
+import { useEffect, useRef, useState } from "react";
+import { DetailCard } from "../components/DetailCard";
+import { MaskViewModal } from "../components/InpaintModal";
+import { Carousel, Lightbox } from "../components/Overlays";
+import { Stage } from "../components/Stage";
+import { copyPrompt, downloadAll, downloadImage } from "../flows/export";
+import {
+  adjustFromViewMask,
+  openViewMask,
+  startInpaintFromResult,
+} from "../flows/drawing";
+import { cancelGenerate } from "../flows/generate";
+import {
+  adjustInpaint,
+  deleteRecord,
+  editImage,
+  editSelectedImage,
+  newGeneration,
+  reuseParams,
+  switchByWheel,
+  toggleStar,
+} from "../flows/navigation";
+import { useObjectUrl } from "../hooks/useObjectUrl";
+import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
+import { useWorkspace } from "../store/workspace";
+import {
+  closeLightbox,
+  closeViewMask,
+  expandBar,
+  openLightbox,
+  setFocusIdx,
+  setPreviewId,
+} from "../store/workspace/actions";
+import {
+  selectCanWheelSwitch,
+  selectSelectedImageId,
+} from "../store/workspace/selectors";
+
+export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
+  const { display, sourceImages } = assets;
+  // 生成生命周期：只有 generating 显示生成态；saving、unsaved 时舞台展示内存里的结果
+  const run = useWorkspace((s) => s.run);
+  const gen = run.phase === "generating" ? run : null;
+  const pending = run.phase === "saving" || run.phase === "unsaved";
+  const partialUrl = useObjectUrl(gen?.partial?.blob);
+  const selectedImageId = useWorkspace(selectSelectedImageId);
+  const focusIdx = useWorkspace((s) => s.view.focusIdx);
+  const lightboxId = useWorkspace((s) => s.view.lightboxId);
+  const viewMask = useWorkspace((s) => s.view.viewMask);
+  const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
+  const wheelEnabled = useWorkspace(selectCanWheelSwitch);
+  /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
+  const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const lightbox =
+    display?.images.find((image) => image.id === lightboxId) ?? null;
+  // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
+  const detailVisible = !!display && !gen && detailClosedFor !== display.row.id;
+
+  // 舞台滚轮切换历史：规则见 canWheelSwitch，不满足时不挂监听
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || !wheelEnabled) return;
+    let last = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      const now = performance.now();
+      if (now - last < 300 || Math.abs(e.deltaY) < 16) return;
+      last = now;
+      switchByWheel(e.deltaY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [wheelEnabled]);
+
+  return (
+    <>
+      <div className="pm-stage-col" ref={stageRef}>
+        <Stage
+          phase={gen ? "generating" : "idle"}
+          partial={
+            gen?.partial && partialUrl
+              ? { url: partialUrl, index: gen.partial.index }
+              : null
+          }
+          genPlan={gen?.plan ?? null}
+          display={display}
+          onFocus={setFocusIdx}
+          onLightbox={openLightbox}
+          onDownload={(index) => display && downloadImage(display, index)}
+          onDownloadAll={() => display && downloadAll(display)}
+          onReuse={() => display && reuseParams(display.row.id)}
+          onEdit={pending ? undefined : editSelectedImage}
+          onDelete={() => display && deleteRecord(display.row.id)}
+          onCancel={cancelGenerate}
+          onStart={expandBar}
+        />
+      </div>
+
+      {display && detailVisible && (
+        <DetailCard
+          display={display}
+          selectedImageId={selectedImageId}
+          canEdit={run.phase === "idle"}
+          sources={sourceImages}
+          onViewSource={setPreviewId}
+          onDownload={() => downloadImage(display, focusIdx ?? 0)}
+          onCopyPrompt={() => copyPrompt(display.row.prompt)}
+          onReuse={() => reuseParams(display.row.id)}
+          onEdit={editImage}
+          onInpaint={startInpaintFromResult}
+          onViewMask={display.row.inpaint ? openViewMask : undefined}
+          onAdjustInpaint={
+            display.row.inpaint
+              ? () => adjustInpaint(display.row.id)
+              : undefined
+          }
+          onDelete={() => deleteRecord(display.row.id)}
+          onToggleStar={() => toggleStar(display.row.id)}
+          onNew={newGeneration}
+          onClose={() => setDetailClosedFor(display.row.id)}
+        />
+      )}
+
+      {display && !gen && display.images.length > 1 && focusIdx !== null && (
+        <Carousel
+          img={display.images[focusIdx]}
+          prompt={display.row.prompt}
+          index={focusIdx}
+          total={display.images.length}
+          onPrev={() => {
+            const n = display.images.length;
+            setFocusIdx((focusIdx - 1 + n) % n);
+          }}
+          onNext={() => {
+            const n = display.images.length;
+            setFocusIdx((focusIdx + 1) % n);
+          }}
+          onClose={() => setFocusIdx(null)}
+          onZoom={() => openLightbox(display.images[focusIdx].id)}
+          onDownload={() => downloadImage(display, focusIdx)}
+          onReuse={() => reuseParams(display.row.id)}
+          onEdit={pending ? undefined : editSelectedImage}
+          onDelete={() => deleteRecord(display.row.id)}
+        />
+      )}
+
+      <Lightbox
+        img={lightbox}
+        prompt={display?.row.prompt ?? ""}
+        onDownload={() => {
+          const index =
+            display?.images.findIndex((image) => image.id === lightbox?.id) ??
+            -1;
+          if (display && index >= 0) downloadImage(display, index);
+        }}
+        onReuse={() => {
+          closeLightbox();
+          if (display) reuseParams(display.row.id);
+        }}
+        onClose={closeLightbox}
+      />
+
+      {viewMask && viewMaskUrl && (
+        <MaskViewModal
+          baseUrl={viewMaskUrl}
+          name={viewMask.name}
+          baseW={viewMask.base.width}
+          baseH={viewMask.base.height}
+          commands={viewMask.commands}
+          onAdjust={adjustFromViewMask}
+          onClose={closeViewMask}
+        />
+      )}
+    </>
+  );
+}

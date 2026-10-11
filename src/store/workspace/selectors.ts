@@ -1,6 +1,11 @@
 /** 工作区 selector：返回原始值或 store 内已有的引用，避免 zustand v5 因新引用反复渲染 */
 import type { HistoryRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
+import {
+  canWheelSwitch,
+  hasUserWork,
+  shouldCollapseBar,
+} from "../../lib/workspace-rules";
 import type { WorkspaceState } from "./index";
 
 const EMPTY_ROWS: HistoryRow[] = [];
@@ -41,3 +46,31 @@ export const selectSelectedImageId = (s: WorkspaceState): string | null => {
     ? (row.imageIds[s.view.focusIdx] ?? null)
     : null;
 };
+
+/** 草稿有用户修改：改过，或上传正在读取 */
+const selectHasUserWork = (s: WorkspaceState) =>
+  hasUserWork({ dirty: s.draft.dirty, reading: s.draft.readId !== null });
+
+/** 舞台滚轮是否响应：规则见 canWheelSwitch；返回布尔值，只在结果翻转时触发重渲染 */
+export const selectCanWheelSwitch = (s: WorkspaceState) =>
+  canWheelSwitch({
+    run: s.run.phase,
+    userWork: selectHasUserWork(s),
+    inputCount: s.draft.inputs.length,
+    overlayOpen:
+      s.view.settingsOpen ||
+      s.view.drawerOpen ||
+      s.view.lightboxId !== null ||
+      s.view.viewMask !== null ||
+      s.view.focusIdx !== null,
+    drawing: s.drawing !== null,
+    confirming: s.confirm !== null,
+  });
+
+/** 点创作条外是否收起：规则见 shouldCollapseBar，在点击事件里按当前状态计算 */
+export const selectShouldCollapseBar = (s: WorkspaceState) =>
+  shouldCollapseBar({
+    userWork: selectHasUserWork(s),
+    inputCount: s.draft.inputs.length,
+    canReturn: selectCanReturn(s),
+  });

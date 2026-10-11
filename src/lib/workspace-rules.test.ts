@@ -11,6 +11,7 @@ import {
   leaveDecision,
   nextSelection,
   shouldCollapseBar,
+  wheelTarget,
   type RunPhase,
 } from "./workspace-rules";
 
@@ -132,6 +133,31 @@ describe("canWheelSwitch", () => {
     expect(canWheelSwitch({ ...free, overlayOpen: true })).toBe(false);
     expect(canWheelSwitch({ ...free, drawing: true })).toBe(false);
     expect(canWheelSwitch({ ...free, confirming: true })).toBe(false);
+  });
+});
+
+describe("wheelTarget", () => {
+  const list = rows("c", "b", "a"); // 从新到旧
+
+  it("没有记录时不切换", () => {
+    expect(wheelTarget([], null, 100)).toBeNull();
+  });
+
+  it("没有选中项：不论方向都选最近一条", () => {
+    expect(wheelTarget(list, null, 100)).toBe("c");
+    expect(wheelTarget(list, null, -100)).toBe("c");
+    expect(wheelTarget(list, "missing", 100)).toBe("c");
+  });
+
+  it("向下滚去更旧的，向上滚去更新的", () => {
+    expect(wheelTarget(list, "b", 100)).toBe("a");
+    expect(wheelTarget(list, "b", -100)).toBe("c");
+  });
+
+  it("已在最新或最旧的边界时不切换", () => {
+    expect(wheelTarget(list, "a", 100)).toBeNull();
+    expect(wheelTarget(list, "c", -100)).toBeNull();
+    expect(wheelTarget(rows("only"), "only", 100)).toBeNull();
   });
 });
 

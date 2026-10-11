@@ -518,6 +518,13 @@ export const openBar = () =>
     view: { ...s.view, barMode: "full", focusSeq: s.view.focusSeq + 1 },
   }));
 
+/** 展开创作条并离开 complete 态：请求聚焦描述框 */
+export const expandBar = () =>
+  set((s) => ({
+    nav: { ...s.nav, lastDoneId: null },
+    view: { ...s.view, barMode: "full", focusSeq: s.view.focusSeq + 1 },
+  }));
+
 export const setBarMode = (barMode: "mini" | "full") => setView({ barMode });
 
 export const requestPromptFocus = () =>
