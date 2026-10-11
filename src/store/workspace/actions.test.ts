@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import type { HistoryRow } from "../../db/schema";
 import { initialWorkspace, useWorkspace } from "./index";
 import {
   clearDone,
@@ -8,15 +9,19 @@ import {
   openLightbox,
   requestPromptFocus,
   resetView,
+  rowsLoaded,
   selectRecord,
   setConfirm,
   setFocusIdx,
   setLastDoneId,
   setPreviewId,
+  setReturnId,
   openDrawer,
 } from "./actions";
+import { selectCanReturn, selectRows } from "./selectors";
 
 const state = () => useWorkspace.getState();
+const rows = (...ids: string[]) => ids.map((id) => ({ id }) as HistoryRow);
 
 beforeEach(() => {
   useWorkspace.setState(initialWorkspace(), true);
@@ -76,5 +81,33 @@ describe("nav 与 confirm", () => {
     expect(state().confirm?.onOk).toBe(onOk);
     closeConfirm();
     expect(state().confirm).toBeNull();
+  });
+});
+
+describe("history", () => {
+  it("首次回推选中最近一条；未加载时 selectRows 返回同一个空数组", () => {
+    expect(selectRows(state())).toBe(selectRows(state()));
+    rowsLoaded(rows("b", "a"));
+    expect(state().nav.selectedId).toBe("b");
+    expect(selectRows(state()).map((r) => r.id)).toEqual(["b", "a"]);
+  });
+
+  it("选中项被删除时回退；写入早于回推时保持新选中项", () => {
+    rowsLoaded(rows("b", "a"));
+    selectRecord("a");
+    rowsLoaded(rows("b"));
+    expect(state().nav.selectedId).toBe("b");
+    selectRecord("new");
+    rowsLoaded(rows("new", "b"));
+    expect(state().nav.selectedId).toBe("new");
+  });
+
+  it("selectCanReturn：返回目标仍在列表中才可返回", () => {
+    rowsLoaded(rows("a"));
+    expect(selectCanReturn(state())).toBe(false);
+    setReturnId("a");
+    expect(selectCanReturn(state())).toBe(true);
+    rowsLoaded(rows("b"));
+    expect(selectCanReturn(state())).toBe(false);
   });
 });

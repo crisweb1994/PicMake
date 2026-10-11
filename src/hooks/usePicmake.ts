@@ -24,6 +24,7 @@ import {
 } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
+import { selectCanReturn } from "../store/workspace/selectors";
 import {
   clearDone,
   openBar,
@@ -53,6 +54,7 @@ export function usePicmake({
 }) {
   const { selectedId, display, pendingSave } = history;
   const returnId = useWorkspace((s) => s.nav.returnId);
+  const canReturn = useWorkspace(selectCanReturn);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const generation = useGeneration();
@@ -392,7 +394,7 @@ export function usePicmake({
     reuseParams,
     editImage,
     returnToResult,
-    canReturn: !!returnId && history.rows.some((row) => row.id === returnId),
+    canReturn,
     saving,
     newGeneration,
     currentRunPhase,

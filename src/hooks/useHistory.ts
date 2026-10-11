@@ -1,45 +1,24 @@
-/** 历史、当前选择与结果资源；URL 随结果替换或卸载释放。 */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db, ensurePersistentStorage, type HistoryRow } from "../db/schema";
+/** 展示记录与结果资源：列表由 flows/history-sync 写入 store；URL 随结果替换或卸载释放。 */
+import { useLayoutEffect, useMemo, useState } from "react";
 import { deleteHistory, saveGeneration, toggleStar } from "../db/history";
 import type { PreparedGeneration } from "../lib/generation";
 import type { DisplayGen, DisplayImage } from "../lib/view-models";
 import { inputDisplay } from "../lib/view-models";
-import { nextSelection } from "../lib/workspace-rules";
 import { useWorkspace } from "../store/workspace";
 import { selectRecord } from "../store/workspace/actions";
+import { selectRows } from "../store/workspace/selectors";
 import { useImageAssets } from "./useImageAssets";
-
-const EMPTY_ROWS: HistoryRow[] = [];
 
 export function useHistory() {
   const selectedId = useWorkspace((s) => s.nav.selectedId);
+  const rows = useWorkspace(selectRows);
   const [pendingSave, setPendingSave] = useState<PreparedGeneration | null>(
     null,
   );
   const [pendingUrls, setPendingUrls] = useState<Record<string, string>>({});
-  const previousRowsRef = useRef<HistoryRow[] | undefined>(undefined);
-  const rawRows = useLiveQuery(
-    () => db.history.orderBy("createdAt").reverse().toArray(),
-    [],
-  );
-  const rows = rawRows ?? EMPTY_ROWS;
   const selectedRow = selectedId
     ? (rows.find((row) => row.id === selectedId) ?? null)
     : null;
-
-  useEffect(() => {
-    if (!rawRows) return;
-    const previousRows = previousRowsRef.current;
-    previousRowsRef.current = rawRows;
-    const next = nextSelection(previousRows, rawRows, selectedId);
-    if (next !== selectedId) selectRecord(next);
-  }, [rawRows, selectedId]);
-
-  useEffect(() => {
-    void ensurePersistentStorage();
-  }, []);
 
   useLayoutEffect(() => {
     const next: Record<string, string> = {};

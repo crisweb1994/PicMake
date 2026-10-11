@@ -36,6 +36,7 @@ import {
   shouldCollapseBar,
 } from "./lib/workspace-rules";
 import { useObjectUrl } from "./hooks/useObjectUrl";
+import { startHistorySync } from "./flows/history-sync";
 import { saveSettings, testConnection } from "./flows/settings";
 import { useSettings } from "./store/settings";
 import { useWorkspace } from "./store/workspace";
@@ -96,6 +97,8 @@ export default function App() {
   const confirm = useWorkspace((s) => s.confirm);
   const lastDoneId = useWorkspace((s) => s.nav.lastDoneId);
   const pm = usePicmake({ history, form });
+  // 历史列表订阅：IndexedDB 变更回推到 store，卸载时退订
+  useEffect(() => startHistorySync(), []);
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
