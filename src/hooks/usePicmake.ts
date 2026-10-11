@@ -4,7 +4,6 @@ import type { HistoryRow } from "../db/schema";
 import { db } from "../db/schema";
 import { useGeneration, isAbortError } from "./useGeneration";
 import type { useHistory } from "./useHistory";
-import type { useForm } from "./useForm";
 import { prepareGeneration, type PreparedGeneration } from "../lib/generation";
 import { inpaintTargetSize } from "../lib/inpaint";
 import {
@@ -18,6 +17,7 @@ import {
   type MaskImage,
 } from "../lib/types";
 import {
+  draftToParams,
   hasUserWork,
   leaveDecision,
   type RunPhase,
@@ -26,8 +26,12 @@ import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import { selectCanReturn } from "../store/workspace/selectors";
 import {
+  acceptSize,
+  applyInpaintToDraft,
   clearDone,
+  initializeDraft,
   openBar,
+  requestPromptFocus,
   resetView,
   setConfirm,
   setLastDoneId,
@@ -47,10 +51,8 @@ function toastError(error: unknown) {
 
 export function usePicmake({
   history,
-  form,
 }: {
   history: ReturnType<typeof useHistory>;
-  form: ReturnType<typeof useForm>;
 }) {
   const { selectedId, display, pendingSave } = history;
   const returnId = useWorkspace((s) => s.nav.returnId);
@@ -71,9 +73,10 @@ export function usePicmake({
 
   /** 离开或替换当前结果/草稿：规则见 leaveDecision；usesDisplayed = 以展示中的记录为来源 */
   const requestLeave = (onLeave: () => void, usesDisplayed = false) => {
+    const { dirty, readId } = useWorkspace.getState().draft;
     const decision = leaveDecision({
       run: currentRunPhase(),
-      userWork: hasUserWork({ dirty: form.dirty, reading: form.reading }),
+      userWork: hasUserWork({ dirty, reading: readId !== null }),
       usesDisplayed,
     });
     if (decision === "blocked") return;
@@ -105,7 +108,7 @@ export function usePicmake({
     setSaving(true);
     try {
       await history.save(prepared);
-      form.initialize();
+      initializeDraft();
       setReturnId(null);
       generation.reset();
       setLastDoneId(prepared.row.id);
@@ -167,7 +170,13 @@ export function usePicmake({
   const generate = () => {
     // 生成中底栏已切到 GenBar，此处只需拦保存期与工作流窗口期的重复触发
     if (savingRef.current || workflowBusyRef.current || pendingSave) return;
-    const checked = form.checkParams();
+    const draft = useWorkspace.getState().draft;
+    const checked = draftToParams({
+      form: draft.form,
+      inpaint: draft.inpaint,
+      sizeAccepted: draft.sizeAccepted,
+      reading: draft.readId !== null,
+    });
     // 目标尺寸未接受时不发生成请求
     if (!checked.ok && checked.reason === "size-not-accepted") {
       if (checked.message) toast(checked.message);
@@ -176,16 +185,16 @@ export function usePicmake({
     setLastDoneId(null);
     if (!checked.ok) {
       if (checked.message) toast(checked.message);
-      if (checked.focusPrompt) form.focus();
+      if (checked.focusPrompt) requestPromptFocus();
       return;
     }
     void startGeneration(
       checked.params,
-      form.inputs.length
+      draft.inputs.length
         ? {
-            inputs: form.inputs,
-            inputFidelity: form.inputFidelity,
-            ...(form.inpaint ? { inpaint: form.inpaint } : {}),
+            inputs: draft.inputs,
+            inputFidelity: draft.inputFidelity,
+            ...(draft.inpaint ? { inpaint: draft.inpaint } : {}),
           }
         : null,
     );
@@ -254,14 +263,14 @@ export function usePicmake({
         return;
       }
       // 恢复为已确认草稿：接受状态沿用已保存目标（约束变化在生成前重新复核）
-      form.initialize(read.params, read.draft.inputs);
-      form.applyInpaint({
+      initializeDraft(read.params, read.draft.inputs);
+      applyInpaintToDraft({
         base: read.draft.inputs[0].upload!,
         mask: read.mask,
         original: read.draft.inpaint?.original,
         entry: "reedit",
       });
-      form.acceptSize();
+      acceptSize();
       history.select(null);
       setReturnId(null);
       resetView();
@@ -303,7 +312,7 @@ export function usePicmake({
   const resetWorkspace = () => {
     clearDone();
     generation.reset();
-    form.initialize();
+    initializeDraft();
     setReturnId(null);
     resetView();
   };
@@ -319,7 +328,7 @@ export function usePicmake({
     requestLeave(() => {
       clearDone();
       generation.reset();
-      form.initialize(row.params);
+      initializeDraft(row.params);
       history.select(null);
       setReturnId(null);
       resetView();
@@ -334,7 +343,7 @@ export function usePicmake({
     const row = display.row;
     requestLeave(() => {
       clearDone();
-      form.initialize({ ...row.params, prompt: "" }, [
+      initializeDraft({ ...row.params, prompt: "" }, [
         {
           generationId: row.id,
           imageId,
