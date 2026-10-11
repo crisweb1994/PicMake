@@ -1,5 +1,6 @@
 /** 工作区迁移函数：按事件命名，可跨切片、一次 set 完成；组件、hooks 与 flows 只通过这里写入 */
 import type { HistoryRow, ImageRow } from "../../db/schema";
+import type { PreparedGeneration } from "../../lib/generation";
 import { inpaintTargetSize } from "../../lib/inpaint";
 import { formSize, paramsToForm, type GenForm } from "../../lib/params";
 import {
@@ -12,7 +13,7 @@ import {
   type InputImage,
   type MaskImage,
 } from "../../lib/types";
-import type { ConfirmState } from "../../lib/view-models";
+import type { ConfirmState, GenPlan } from "../../lib/view-models";
 import { nextSelection } from "../../lib/workspace-rules";
 import { useWorkspace, type ViewMask, type WorkspaceState } from "./index";
 
@@ -33,7 +34,7 @@ export const initWorkspace = (opts: { settingsOpen: boolean }) =>
 /** liveQuery 回推：更新列表，并在同一次 set 里处理首次自动选中与删除回退 */
 export const rowsLoaded = (rows: HistoryRow[]) =>
   set((s) => ({
-    history: { rows },
+    history: { ...s.history, rows },
     nav: {
       ...s.nav,
       selectedId: nextSelection(
@@ -50,19 +51,24 @@ export const rowsLoaded = (rows: HistoryRow[]) =>
 export const initializeDraft = (
   params?: GenParams,
   inputs: InputImage[] = [],
-) =>
-  set((s) => ({
-    draft: {
-      form: params ? paramsToForm(params) : { ...s.draft.form, prompt: "" },
-      inputs,
-      inpaint: null,
-      sizeAccepted: false,
-      inputFidelity: "auto",
-      dirty: false,
-      readId: null,
-      uploadError: "",
-    },
-  }));
+) => set((s) => ({ draft: freshDraft(s.draft, params, inputs) }));
+
+function freshDraft(
+  current: WorkspaceState["draft"],
+  params?: GenParams,
+  inputs: InputImage[] = [],
+): WorkspaceState["draft"] {
+  return {
+    form: params ? paramsToForm(params) : { ...current.form, prompt: "" },
+    inputs,
+    inpaint: null,
+    sizeAccepted: false,
+    inputFidelity: "auto",
+    dirty: false,
+    readId: null,
+    uploadError: "",
+  };
+}
 
 export const patchForm = (patch: Partial<GenForm>) =>
   set((s) => ({
@@ -243,6 +249,81 @@ export function applySketchAttachment(
     sizeSetTo: setSize ? { w: image.width, h: image.height } : null,
   };
 }
+
+/* ── run ── */
+
+/** 开始生成：只有空闲时能占位，判断与写入同步完成；同时清空选中、完成标记、过渡结果与查看状态 */
+export function beginRun(plan: GenPlan): boolean {
+  if (useWorkspace.getState().run.phase !== "idle") return false;
+  set((s) => ({
+    run: { phase: "generating", plan, partial: null },
+    history: { ...s.history, recent: null },
+    nav: { ...s.nav, selectedId: null, lastDoneId: null },
+    view: { ...s.view, focusIdx: null, lightboxId: null, previewId: null },
+  }));
+  return true;
+}
+
+/** partial 预览：只在生成中更新，取消后才到达的直接忽略 */
+export const setPartial = (blob: Blob, index: number) =>
+  set((s) =>
+    s.run.phase === "generating"
+      ? { run: { ...s.run, partial: { blob, index } } }
+      : s,
+  );
+
+/** 生成结束于取消或失败：回到空闲，草稿保留 */
+export const endRun = () =>
+  set((s) => (s.run.phase === "generating" ? { run: { phase: "idle" } } : s));
+
+/** 请求成功、开始写库：结果先在舞台展示 */
+export const beginSave = (prepared: PreparedGeneration) =>
+  set({ run: { phase: "saving", prepared } });
+
+/** 写库失败：结果留在内存，可查看、下载；离开前需确认放弃 */
+export const markUnsaved = () =>
+  set((s) =>
+    s.run.phase === "saving"
+      ? { run: { phase: "unsaved", prepared: s.run.prepared } }
+      : s,
+  );
+
+/** 放弃未保存的结果 */
+export const discardUnsaved = () =>
+  set((s) => (s.run.phase === "unsaved" ? { run: { phase: "idle" } } : s));
+
+/** 保存成功：选中新记录并进入 complete 态，草稿重置（保留参数）；列表回推前由 recent 过渡显示 */
+export const finishSave = (prepared: PreparedGeneration) =>
+  set((s) => ({
+    run: { phase: "idle" },
+    history: { ...s.history, recent: prepared },
+    nav: {
+      selectedId: prepared.row.id,
+      returnId: null,
+      lastDoneId: prepared.row.id,
+    },
+    draft: freshDraft(s.draft),
+  }));
+
+/** 删除完成：刚保存的那条被删时丢弃过渡结果，列表没回推时也不再从内存显示它 */
+export const recordDeleted = (id: string) =>
+  set((s) =>
+    s.history.recent?.row.id === id
+      ? { history: { ...s.history, recent: null } }
+      : s,
+  );
+
+/** 离开类入口共用的复位：完成标记、返回目标、草稿（保留参数）、查看状态；传 selectId 时同时切换选中。不改生成阶段：未保存结果由 requestLeave 确认后丢弃 */
+export const resetWorkspace = (selectId?: string | null) =>
+  set((s) => ({
+    nav: {
+      selectedId: selectId === undefined ? s.nav.selectedId : selectId,
+      returnId: null,
+      lastDoneId: null,
+    },
+    draft: freshDraft(s.draft),
+    view: { ...s.view, focusIdx: null, lightboxId: null, previewId: null },
+  }));
 
 /* ── nav ── */
 
