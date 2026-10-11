@@ -1,0 +1,405 @@
+/* ══ 草图画板 ══（z 低于 HeroUI 弹层，确认框与 toast 盖在其上） */
+.pm-sk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: var(--pm-scrim);
+  animation: pm-sk-fade 0.18s ease-out;
+}
+@keyframes pm-sk-fade {
+  from {
+    opacity: 0;
+  }
+}
+.pm-sk-board {
+  position: relative;
+  width: min(1080px, calc(100vw - 48px));
+  height: min(780px, calc(100dvh - 48px));
+  background: var(--pm-sketch-paper);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 20px;
+  box-shadow:
+    0 32px 96px rgba(0, 0, 0, 0.38),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  animation: pm-sk-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes pm-sk-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+.pm-sk-zone {
+  position: absolute;
+  inset: 0;
+}
+.pm-sk-paper {
+  position: absolute;
+  background: var(--pm-sketch-paper);
+  border-radius: 8px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow:
+    0 0 0 1px var(--pm-sketch-edge),
+    0 2px 16px rgba(0, 0, 0, 0.06);
+}
+.pm-sk-paper.pen {
+  cursor: crosshair;
+}
+.pm-sk-paper.eraser {
+  cursor: none;
+}
+.pm-sk-paper canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.pm-sk-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0 24px;
+  font-size: 13px;
+  line-height: 1.8;
+  text-align: center;
+  color: var(--pm-sketch-hint);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.pm-sk-ghost {
+  position: absolute;
+  border: 1.5px solid rgba(20, 20, 24, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 浮动控件（命中区域经 ::after 扩到 ≥44px） */
+.pm-sk-close {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  transition: background 0.12s;
+  z-index: 6;
+}
+.pm-sk-close:hover,
+.pm-sk-tool:hover,
+.pm-sk-hist button:hover {
+  background: var(--pm-sketch-hover);
+}
+.pm-sk-close:disabled {
+  opacity: 0.4;
+}
+.pm-sk-pill {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-sketch-line);
+  border-radius: 26px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  z-index: 6;
+}
+.pm-sk-tool {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  border: 1px solid transparent;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.pm-sk-tool::after,
+.pm-sk-hist button::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+}
+.pm-sk-tool.on {
+  background: var(--pm-sketch-paper);
+  border-color: var(--pm-sketch-line);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.12);
+}
+.pm-sk-tool:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+.pm-sk-hist {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  display: flex;
+  gap: 6px;
+  z-index: 6;
+}
+.pm-sk-hist button {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--pm-sketch-ink);
+  transition: background 0.12s;
+}
+.pm-sk-hist button:disabled {
+  color: var(--pm-sketch-ink-dis);
+  pointer-events: none;
+}
+
+/* 左侧工具大小滑杆（上大下小，hover/聚焦显当前笔径） */
+.pm-sk-sizer-wrap {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 6;
+}
+.pm-sk-sizer {
+  position: relative;
+  width: 36px;
+  height: 184px;
+  touch-action: none;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.pm-sk-size-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  cursor: pointer;
+}
+.pm-sk-sizer:has(:focus-visible) {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 3px;
+}
+.pm-sk-sizer-track {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--pm-sketch-track);
+  border-radius: 2px;
+}
+.pm-sk-sizer-fill {
+  position: absolute;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  background: var(--pm-sketch-ink);
+  border-radius: 2px;
+}
+.pm-sk-sizer-knob {
+  position: absolute;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pm-sketch-paper);
+  border: 1px solid var(--pm-sketch-knob);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transform: translate(-50%, -50%);
+}
+.pm-sk-size-dot {
+  position: absolute;
+  left: 52px;
+  border-radius: 50%;
+  background: var(--pm-sketch-ink);
+  pointer-events: none;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.pm-sk-sizer-wrap:hover .pm-sk-size-dot,
+.pm-sk-sizer:focus-within + .pm-sk-size-dot {
+  opacity: 1;
+}
+
+/* 底部色板（首个彩虹圈 = 自定义取色；选中环用品牌强调色） */
+.pm-sk-colors {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 200px);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  z-index: 6;
+}
+.pm-sk-sw {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  position: relative;
+  transition: transform 0.12s;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.09);
+}
+.pm-sk-sw:hover {
+  transform: scale(1.1);
+}
+.pm-sk-sw.on {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.09),
+    0 0 0 2.5px #ffffff,
+    0 0 0 5px var(--pm-accent);
+}
+.pm-sk-sw.rainbow {
+  background: conic-gradient(
+    #e53935,
+    #f5a623,
+    #f4772e,
+    #2e9e4f,
+    #1b8a7a,
+    #26a9e0,
+    #2e6fe8,
+    #4f46e5,
+    #8b2fd6,
+    #d6247a,
+    #e53935
+  );
+}
+/* 原生取色输入：绝对定位不占 flex 布局，取色窗跟随锚点而非弹到视口左上角 */
+.pm-sk-custom-input {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: none;
+  padding: 0;
+}
+
+/* 右下确认 FAB：空白灰禁用 → 有墨淡橙 → hover 实心强调 */
+.pm-sk-use {
+  position: absolute;
+  right: 34px;
+  bottom: 34px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pm-sketch-idle);
+  color: var(--pm-sketch-ink-dis);
+  z-index: 6;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+.pm-sk-use:disabled {
+  cursor: not-allowed;
+}
+.pm-sk-use.ready {
+  background: var(--pm-accent-soft);
+  color: var(--pm-sketch-accent-ink);
+}
+.pm-sk-use.ready:hover {
+  background: var(--pm-accent);
+  color: var(--pm-accent-ink);
+  transform: scale(1.06);
+}
+.pm-sk-use.busy svg {
+  animation: pm-sk-spin 1s linear infinite;
+}
+@keyframes pm-sk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 左下画布信息 */
+.pm-sk-meta {
+  position: absolute;
+  left: 26px;
+  bottom: 32px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--pm-sketch-meta);
+  font-variant-numeric: tabular-nums;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* 画板控件焦点环 */
+.pm-sk-close:focus-visible,
+.pm-sk-tool:focus-visible,
+.pm-sk-hist button:focus-visible,
+.pm-sk-use:focus-visible,
+.pm-sk-sizer:focus-visible,
+.pm-sk-sw:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .pm-sk-board {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+  }
+  .pm-sk-colors {
+    gap: 8px;
+    max-width: calc(100% - 150px);
+  }
+  .pm-sk-sw {
+    width: 26px;
+    height: 26px;
+  }
+  .pm-sk-tool {
+    width: 34px;
+    height: 34px;
+  }
+  .pm-sk-hist button,
+  .pm-sk-close {
+    width: 34px;
+    height: 34px;
+  }
+  .pm-sk-sizer-wrap {
+    left: 10px;
+  }
+  .pm-sk-use {
+    width: 44px;
+    height: 44px;
+    right: 16px;
+    bottom: 18px;
+  }
+  .pm-sk-meta {
+    display: none;
+  }
+}

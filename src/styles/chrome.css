@@ -1,0 +1,51 @@
+/* ══ 组件样式 ══ */
+
+/* 浮岛基底 */
+.pm-island {
+  position: fixed;
+  z-index: 10;
+  background: var(--pm-panel);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid var(--pm-line);
+  border-radius: 12px;
+  box-shadow: var(--pm-shadow-lg);
+}
+
+/* 顶左导航 */
+.pm-nav {
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+}
+.pm-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 8px 0 6px;
+}
+.pm-brand-logo {
+  width: 17px;
+  height: 17px;
+}
+.pm-vr {
+  width: 1px;
+  height: 18px;
+  background: var(--pm-line);
+  margin: 0 4px;
+}
+/* HeroUI ghost 图标按钮对齐原型灰阶 */
+.pm-nav button,
+.pm-gen-pill button,
+.pm-drawer-h button {
+  color: var(--pm-text-2);
+}
+.pm-nav button:hover,
+.pm-gen-pill button:hover,
+.pm-drawer-h button:hover {
+  color: var(--pm-text-1);
+}

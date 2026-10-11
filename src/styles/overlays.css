@@ -1,0 +1,480 @@
+/* HeroUI 弹层覆写：遮罩不加 backdrop-filter（Chromium 模糊残留），用纯色压暗 */
+.modal__backdrop {
+  background: var(--pm-scrim);
+}
+/* 确认弹窗退出不挂动画：动画时钟停摆时 animation.finished 永不结算，遮罩会卡住 */
+.modal__backdrop.pm-confirm[data-exiting="true"],
+.pm-confirm .modal__container[data-exiting="true"] {
+  animation: none;
+}
+.pm-modal {
+  width: min(400px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--pm-panel-solid);
+  border: 1px solid var(--pm-line);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--pm-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  outline: none;
+}
+.pm-modal h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.pm-modal .sub {
+  font-size: 12px;
+  color: var(--pm-text-3);
+  line-height: 1.6;
+}
+.pm-modal label {
+  font-size: 11.5px;
+  color: var(--pm-text-2);
+  margin: 8px 0 2px;
+}
+.pm-mbtns {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.pm-mbtns > * {
+  flex: 1;
+}
+.pm-tconn {
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  min-height: 16px;
+  margin-top: 4px;
+}
+.pm-tconn.ok {
+  color: var(--pm-ok);
+}
+
+/* 灯箱 */
+.pm-lb {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--pm-scrim-strong);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+}
+.pm-lb-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 92vw;
+}
+.pm-lb-im {
+  /* 3:2 图在矮视口下会把底栏挤出屏幕（关不掉的根源），用 108vh 封顶宽度 */
+  width: min(76vw, 1100px, 108vh);
+  aspect-ratio: 3/2;
+  border-radius: 12px;
+  background-size: cover;
+  background-position: center;
+  cursor: zoom-out;
+  box-shadow:
+    var(--pm-shadow-lb),
+    0 0 0 1px var(--pm-line);
+}
+.pm-lb-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pm-lb-bar p {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--pm-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+/* 轮播：z 低于灯箱 */
+.pm-car {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: var(--pm-scrim-soft);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+}
+.pm-car-fig {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.pm-car-fig img {
+  max-width: min(78vw, 1100px);
+  max-height: 70vh;
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow:
+    var(--pm-shadow-lb),
+    0 0 0 1px var(--pm-line);
+}
+.pm-car-fig figcaption {
+  font-size: 12px;
+  color: var(--pm-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.pm-car-arrow,
+.pm-x-btn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  background: var(--pm-chip-float);
+  border: 1px solid var(--pm-line);
+  color: var(--pm-text-1);
+  transition: background 0.12s;
+}
+.pm-car-arrow:hover,
+.pm-x-btn:hover {
+  background: var(--pm-chip-float-hover);
+}
+.pm-car-arrow:focus-visible,
+.pm-x-btn:focus-visible {
+  outline: 2px solid var(--pm-accent);
+  outline-offset: 2px;
+}
+.pm-car-arrow {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+.pm-car-arrow.prev {
+  left: max(24px, 6vw);
+}
+.pm-car-arrow.next {
+  right: max(24px, 6vw);
+}
+/* 浮层右上角关闭钮（灯箱 / 轮播共用） */
+.pm-x-btn {
+  top: 22px;
+  right: 22px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+/* 历史抽屉（定位与滑入动画由 HeroUI Drawer 承担） */
+.pm-drawer-hd {
+  width: 280px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--pm-panel-solid);
+  border-right: 1px solid var(--pm-line);
+  padding: 0;
+  outline: none;
+}
+.pm-drawer-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--pm-line);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pm-dlist {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pm-scrollbar) transparent;
+}
+.pm-ditem {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px;
+  /* 右侧预留星标位（.pm-dstar），避免描述行省略号压到星标 */
+  padding-right: 28px;
+  border-radius: 10px;
+  align-items: center;
+}
+.pm-ditem:hover {
+  background: var(--pm-fill-hover);
+}
+.pm-ditem[aria-current="true"] {
+  background: var(--pm-fill-hover);
+  box-shadow: inset 0 0 0 1px var(--pm-line-2);
+}
+.pm-dthumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  flex: none;
+  background-size: cover;
+  background: var(--pm-fill);
+  box-shadow: 0 0 0 1px var(--pm-line);
+  background-size: cover;
+}
+.pm-dtxt {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pm-dtxt .p {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--pm-text-1);
+}
+.pm-dtxt .s {
+  font-size: 10.5px;
+  color: var(--pm-text-3);
+}
+.pm-dempty {
+  color: var(--pm-text-3);
+  font-size: 12.5px;
+  text-align: center;
+  padding: 40px 10px;
+  line-height: 2;
+}
+.pm-drawer-f {
+  border-top: 1px solid var(--pm-line);
+  padding: 9px 14px;
+  font-size: 10.5px;
+  color: var(--pm-text-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 历史筛选区 */
+.pm-dfilter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 11px;
+  border-bottom: 1px solid var(--pm-line);
+}
+.pm-dsearch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--pm-fill);
+  border: 1px solid var(--pm-line);
+  border-radius: 8px;
+  padding: 0 8px;
+  height: 30px;
+  transition: border-color 0.12s;
+}
+.pm-dsearch:focus-within {
+  border-color: var(--pm-line-2);
+}
+.pm-dsearch svg {
+  flex: none;
+  color: var(--pm-text-3);
+}
+.pm-dsearch input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: none;
+  border: 0;
+  outline: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--pm-text-1);
+}
+.pm-dsearch input::placeholder {
+  color: var(--pm-text-3);
+}
+.pm-dclear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--pm-fill-active);
+  color: var(--pm-text-2);
+}
+.pm-dclear:hover {
+  background: var(--pm-line-2);
+  color: var(--pm-text-1);
+}
+.pm-dfav {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--pm-line);
+  background: var(--pm-fill);
+  font-size: 11.5px;
+  color: var(--pm-text-3);
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    background 0.12s;
+}
+.pm-dfav:hover {
+  color: var(--pm-text-1);
+}
+.pm-pop-ratio button.on,
+.pm-pop-n button.on,
+.pm-dfav.on {
+  color: var(--pm-accent);
+  border-color: var(--pm-accent-border);
+  background: var(--pm-accent-soft);
+}
+.pm-dcount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px 4px;
+  border-bottom: 1px solid var(--pm-line);
+  font-size: 10.5px;
+  color: var(--pm-text-3);
+}
+.pm-dcount button {
+  font-size: 11px;
+  color: var(--pm-text-2);
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+.pm-dnone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pm-dnone .pm-dempty {
+  padding: 28px 10px 8px;
+}
+.pm-dnone-reset {
+  font-size: 12px;
+  color: var(--pm-text-2);
+  border: 1px solid var(--pm-line-2);
+  border-radius: 7px;
+  padding: 4px 12px;
+  margin-bottom: 24px;
+}
+
+/* 行星标：hover/聚焦/已收藏时常驻 */
+.pm-drow {
+  position: relative;
+}
+.pm-dstar {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--pm-text-3);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.pm-drow:hover .pm-dstar,
+.pm-dstar:focus-visible,
+.pm-dstar.on {
+  opacity: 1;
+}
+.pm-dstar.on {
+  color: var(--pm-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-stack,
+  .pm-dots i,
+  .pm-dots-wave,
+  .pm-gen-img,
+  .pm-bar,
+  .pm-bar-full,
+  .pm-bar-gen,
+  .pm-bar-done,
+  .pm-bar-row2 > *,
+  .pm-bar-donerow > *,
+  .pm-pop,
+  .pm-detail,
+  .pm-stage-swap,
+  .pm-shimmer::after,
+  .pm-dsearch,
+  .pm-dfav,
+  .pm-dstar,
+  .pm-sk-overlay,
+  .pm-sk-board,
+  .pm-sk-hint,
+  .pm-sk-sw,
+  .pm-sk-use,
+  .pm-sk-tool,
+  .pm-sk-close,
+  .pm-sk-hist button,
+  .pm-sk-size-dot {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* 确认中的加载指示为功能性反馈，reduced-motion 下保留 */
+}
+
+/* 输入图片预览弹窗 */
+.pm-input-preview {
+  padding: 24px;
+  width: min(900px, 92vw);
+  max-height: 90dvh;
+  overflow: auto;
+  background: var(--pm-bg);
+  border: 1px solid var(--pm-line);
+  border-radius: 12px;
+}
+.pm-input-preview h3 {
+  overflow-wrap: anywhere;
+  margin-bottom: 16px;
+}
+.pm-input-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 65dvh;
+  object-fit: contain;
+  margin: auto;
+}
+.pm-input-preview p {
+  text-align: center;
+  color: var(--pm-text-2);
+  margin: 12px 0;
+  font-size: 12px;
+}
+.pm-saving {
+  position: fixed;
+  bottom: 24px;
+  left: 30px;
+  z-index: 50;
+  background: var(--pm-bg);
+  padding: 12px;
+  border: 1px solid var(--pm-line);
+  border-radius: 8px;
+}
+
+.pm-input-preview-continue {
+  margin: 12px 0 8px;
+}
