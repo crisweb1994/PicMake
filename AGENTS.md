@@ -31,7 +31,8 @@ pnpm exec prettier --write <本次修改的文件>
 - **HeroUI v3**（`@heroui/react`）：
   - `Button` **没有 color prop**，用 `variant`（primary/secondary/tertiary/ghost/outline/danger/danger-soft）+ `size`（sm/md/lg）+ `fullWidth/isIconOnly/isDisabled`
   - `Chip` 用 `color`（accent/default/success/warning/danger）+ `variant`（primary/secondary/soft）
-  - 无需 Provider；react-aria 系 peers 已显式安装，升级时勿移除
+  - 无需全局 Provider；react-aria 系 peers 已显式安装，升级时勿移除
+  - `toast()` 只负责入队，靠 `src/main.tsx` 里挂载的 `<Toast.Provider />` 显示，勿删
 - **状态**：Zustand（`src/store/`），设置持久化 localStorage（key `PicMake-settings`）
 - **存储**：Dexie（`src/db/schema.ts`），IndexedDB 库名 `PicMake`，表 `images`（Blob）/ `history`（元信息）
 - **网络**：一律走 `src/api/client.ts`（原生 fetch 封装：`/v1` 归一化、错误归一化、单次流式请求——无自动降级/重试，见 PRD FR-4）。**不用** openai SDK / axios
