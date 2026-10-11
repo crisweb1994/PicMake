@@ -1,5 +1,5 @@
 /** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
 import { CreateBar } from "./components/bar/CreateBar";
@@ -16,13 +16,13 @@ import {
   SettingsModal,
 } from "./components/Overlays";
 import { useHistory } from "./hooks/useHistory";
-import { useForm } from "./hooks/useForm";
+import { useDraftImages } from "./hooks/useDraftImages";
 import { usePicmake } from "./hooks/usePicmake";
 import { useSketch } from "./hooks/useSketch";
 import { db } from "./db/schema";
 import { downloadName } from "./lib/download";
 import { fmtBytes } from "./lib/format";
-import { formSize } from "./lib/params";
+import { customOk, formSize } from "./lib/params";
 import { SKETCH_DEFAULT_SIZE } from "./lib/sketch";
 import {
   ERROR_HINTS,
@@ -33,28 +33,37 @@ import {
   canOpenDrawing,
   canWheelSwitch,
   hasUserWork,
+  inpaintBarInfo,
   shouldCollapseBar,
 } from "./lib/workspace-rules";
 import { useObjectUrl } from "./hooks/useObjectUrl";
+import { addFiles, removeInput, removeMask } from "./flows/draft";
 import { startHistorySync } from "./flows/history-sync";
 import { saveSettings, testConnection } from "./flows/settings";
 import { useSettings } from "./store/settings";
 import { useWorkspace } from "./store/workspace";
 import {
+  acceptSize,
+  appendExisting,
+  applyInpaintToDraft,
+  applySketchAttachment,
   clearDone,
   closeConfirm,
   closeDrawer,
   closeLightbox,
   closeSettings,
   closeViewMask,
+  initializeDraft,
   openBar,
   openDrawer,
   openLightbox,
   openSettings,
+  patchForm,
   resetView,
   setBarMode,
   setConfirm,
   setFocusIdx,
+  setInputFidelity,
   setPreviewId,
   showViewMask,
 } from "./store/workspace/actions";
@@ -78,7 +87,6 @@ function onDrawLimit(kind: "commands" | "points") {
 }
 
 export default function App() {
-  const form = useForm();
   const history = useHistory();
   const theme = useTheme();
   const baseUrl = useSettings((s) => s.baseUrl);
@@ -96,7 +104,15 @@ export default function App() {
   } = useWorkspace((s) => s.view);
   const confirm = useWorkspace((s) => s.confirm);
   const lastDoneId = useWorkspace((s) => s.nav.lastDoneId);
-  const pm = usePicmake({ history, form });
+  // 草稿在 store：读取中 = readId 非空；附件缩略图与重绘尺寸在这里投影
+  const draft = useWorkspace((s) => s.draft);
+  const reading = draft.readId !== null;
+  const draftImages = useDraftImages(draft.inputs, !!draft.inpaint);
+  const inpaintInfo = useMemo(
+    () => inpaintBarInfo(draft.inpaint, draft.sizeAccepted),
+    [draft.inpaint, draft.sizeAccepted],
+  );
+  const pm = usePicmake({ history });
   // 历史列表订阅：IndexedDB 变更回推到 store，卸载时退订
   useEffect(() => startHistorySync(), []);
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
@@ -106,11 +122,11 @@ export default function App() {
     history.display?.images.find((image) => image.id === lightboxId) ?? null;
   const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
 
-  // focusSeq 变化即聚焦描述框（展开创作条、草稿落位）；promptRef 引用稳定，只响应聚焦意图
-  const { promptRef } = form;
+  // focusSeq 变化即聚焦描述框（展开创作条、草稿落位、描述为空时提交）
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (focusSeq) requestAnimationFrame(() => promptRef.current?.focus());
-  }, [focusSeq, promptRef]);
+  }, [focusSeq]);
 
   /* ── 局部重绘：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
   // draft-input 入口被涂选的原输入 id（确认后重排为图1）
@@ -119,10 +135,10 @@ export default function App() {
     onApply: ({ base, mask, original, entry }) => {
       if (entry === "result") {
         // 仅带入该结果；确认后切到重绘草稿
-        form.initialize(undefined, [
+        initializeDraft(undefined, [
           { imageId: base.id, name: "底图", upload: base },
         ]);
-        form.applyInpaint({ base, mask, original, entry });
+        applyInpaintToDraft({ base, mask, original, entry });
         history.select(null);
         clearDone();
         resetView();
@@ -131,8 +147,12 @@ export default function App() {
       }
       if (entry === "draft-input") {
         const chosen = inpaintChosenRef.current;
-        const reorder = !!chosen && form.inputs.length > 1;
-        form.applyInpaint({ base, mask, original, entry }, chosen ?? undefined);
+        const reorder =
+          !!chosen && useWorkspace.getState().draft.inputs.length > 1;
+        applyInpaintToDraft(
+          { base, mask, original, entry },
+          chosen ?? undefined,
+        );
         inpaintChosenRef.current = null;
         openBar();
         toast(
@@ -142,7 +162,7 @@ export default function App() {
         );
       }
       if (entry === "reedit") {
-        form.applyInpaint({ base, mask, original, entry });
+        applyInpaintToDraft({ base, mask, original, entry });
         toast("选区已更新");
       }
     },
@@ -152,7 +172,7 @@ export default function App() {
   const workspaceFree = () =>
     canOpenDrawing({
       run: pm.currentRunPhase(),
-      reading: form.reading,
+      reading,
       confirming: !!confirm,
       drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
     });
@@ -182,7 +202,7 @@ export default function App() {
   /** 对草稿中的普通图发起；确认后重排为图1（✎ 按钮已保证草图走画板） */
   const startInpaintFromInput = (imageId: string) => {
     if (!workspaceFree()) return;
-    const input = form.inputs.find((item) => item.imageId === imageId);
+    const input = draft.inputs.find((item) => item.imageId === imageId);
     if (!input) return;
     void (async () => {
       const row = input.upload ?? (await db.images.get(imageId));
@@ -208,8 +228,9 @@ export default function App() {
 
   /** 重开已确认选区：底图缩略图 ✎（选区存在时 inputs[0] 恒为绑定底图） */
   const editMask = () => {
-    if (!workspaceFree() || !form.inpaint) return;
-    const baseInput = form.inputs[0];
+    const confirmed = draft.inpaint;
+    if (!workspaceFree() || !confirmed) return;
+    const baseInput = draft.inputs[0];
     void (async () => {
       const base = baseInput.upload ?? (await db.images.get(baseInput.imageId));
       if (!base) {
@@ -223,10 +244,8 @@ export default function App() {
         existing: { imageId: base.id },
         reedit: {
           base,
-          mask: form.inpaint!.mask,
-          ...(form.inpaint!.original
-            ? { original: form.inpaint!.original }
-            : {}),
+          mask: confirmed.mask,
+          ...(confirmed.original ? { original: confirmed.original } : {}),
         },
       });
       if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
@@ -274,27 +293,21 @@ export default function App() {
   /* ── 草图画板：只产出附件，确认落回创作条，不发请求 ── */
   const sketch = useSketch({
     onApply: ({ image, replaces }) => {
-      const wasEmpty = !replaces && form.inputs.length === 0;
-      const sizeBefore = formSize(form.form);
-      const promptEmpty = !form.form.prompt.trim();
-      if (!form.applySketch(image, replaces)) return false;
-      // 草图首次成为唯一输入且输出为 auto：设为草图尺寸
-      if (wasEmpty && sizeBefore === "auto") {
-        form.patchForm({ cw: String(image.width), ch: String(image.height) });
-        toast(`输出尺寸已设为草图尺寸 ${image.width} × ${image.height}`);
+      // 尺寸、描述补全与展开创作条都在 applySketchAttachment 里一次完成
+      const result = applySketchAttachment(image, replaces);
+      if (!result.ok) {
+        toast(ERROR_HINTS["too-many-images"]);
+        return false;
       }
-      // 首次添加草图且描述为空：填入起始文字（不覆盖已有）
-      if (!replaces && promptEmpty) {
-        form.patchForm({
-          prompt: `以图${form.inputs.length + 1}的草图为构图参考，保留主体的相对位置与比例，将粗略线条转成完整画面。`,
-        });
-      }
-      openBar();
+      if (result.sizeSetTo)
+        toast(
+          `输出尺寸已设为草图尺寸 ${result.sizeSetTo.w} × ${result.sizeSetTo.h}`,
+        );
       return true;
     },
   });
   /** 已确认草图的逻辑尺寸（比例不一致提示） */
-  const sketchInput = form.inputs.find((input) => input.upload?.sketch);
+  const sketchInput = draft.inputs.find((input) => input.upload?.sketch);
   const sketchSize = sketchInput?.upload
     ? { w: sketchInput.upload.width, h: sketchInput.upload.height }
     : null;
@@ -303,13 +316,13 @@ export default function App() {
   const openSketchNew = () => {
     if (!workspaceFree()) return;
     if (
-      !form.images.some((image) => image.isSketch) &&
-      form.inputs.length >= MAX_INPUT_IMAGES
+      !draft.inputs.some((input) => input.upload?.sketch) &&
+      draft.inputs.length >= MAX_INPUT_IMAGES
     ) {
       toast(ERROR_HINTS["too-many-images"]);
       return;
     }
-    const size = formSize(form.form);
+    const size = formSize(draft.form);
     sketch.openBlank(
       ...(size === "auto"
         ? ([SKETCH_DEFAULT_SIZE, SKETCH_DEFAULT_SIZE] as const)
@@ -319,8 +332,8 @@ export default function App() {
 
   const editAttachmentSketch = (imageId: string) => {
     if (!workspaceFree()) return;
-    const idx = form.inputs.findIndex((input) => input.imageId === imageId);
-    const doc = form.inputs[idx]?.upload?.sketch;
+    const idx = draft.inputs.findIndex((input) => input.imageId === imageId);
+    const doc = draft.inputs[idx]?.upload?.sketch;
     if (!doc) return;
     sketch.openEdit(doc, imageId, idx);
   };
@@ -408,8 +421,8 @@ export default function App() {
         return;
       if (
         shouldCollapseBar({
-          userWork: hasUserWork({ dirty: form.dirty, reading: form.reading }),
-          inputCount: form.images.length,
+          userWork: hasUserWork({ dirty: draft.dirty, reading }),
+          inputCount: draft.inputs.length,
           canReturn: pm.canReturn,
         })
       )
@@ -419,9 +432,9 @@ export default function App() {
     return () => document.removeEventListener("pointerdown", onDown);
   }, [
     barMode,
-    form.dirty,
-    form.reading,
-    form.images.length,
+    draft.dirty,
+    reading,
+    draft.inputs.length,
     pm.canReturn,
     sketch.session,
   ]);
@@ -438,8 +451,8 @@ export default function App() {
     if (!el) return;
     const enabled = canWheelSwitch({
       run: pm.currentRunPhase(),
-      userWork: hasUserWork({ dirty: form.dirty, reading: form.reading }),
-      inputCount: form.inputs.length,
+      userWork: hasUserWork({ dirty: draft.dirty, reading }),
+      inputCount: draft.inputs.length,
       overlayOpen:
         settingsOpen ||
         drawerOpen ||
@@ -478,11 +491,12 @@ export default function App() {
     const imageId = selectedImageId ?? history.display.images[0]?.id ?? null;
     if (!imageId) return;
     const idx = history.display.row.imageIds.indexOf(imageId);
-    form.appendExisting(
+    const added = appendExisting(
       imageId,
       history.display.row.id,
       `已有作品 · 第 ${idx + 1} 张`,
     );
+    if (added === "too-many") toast(ERROR_HINTS["too-many-images"]);
     clearDone();
     setBarMode("full");
     toast("已加入参考图，继续描述后生成");
@@ -555,27 +569,27 @@ export default function App() {
         generating={pm.phase === "generating"}
         done={doneGen}
         partialIndex={pm.partial?.index ?? 0}
-        form={form.form}
-        customValid={form.customValid}
-        images={form.images}
-        inputFidelity={form.inputFidelity}
-        reading={form.reading}
-        uploadError={form.uploadError}
+        form={draft.form}
+        customValid={customOk(draft.form)}
+        images={draftImages}
+        inputFidelity={draft.inputFidelity}
+        reading={reading}
+        uploadError={draft.uploadError}
         canReturn={pm.canReturn}
         sketchSize={sketchSize}
-        inpaint={form.inpaintInfo}
-        promptRef={form.promptRef}
-        onPatch={form.patchForm}
+        inpaint={inpaintInfo}
+        promptRef={promptRef}
+        onPatch={patchForm}
         onGenerate={pm.generate}
         onCancel={pm.cancelGenerate}
         onFiles={(files) => {
-          void form.addFiles(files);
+          void addFiles(files);
         }}
-        onRemove={(id) => form.removeInput(id)}
+        onRemove={removeInput}
         onPreview={setPreviewId}
         onOpenSketch={openSketchNew}
         onEditSketch={editAttachmentSketch}
-        onInputFidelity={form.setInputFidelity}
+        onInputFidelity={setInputFidelity}
         onExpand={expandBar}
         onReturn={pm.returnToResult}
         onAgain={() => doneGen && pm.regenerate(doneGen.row)}
@@ -586,8 +600,8 @@ export default function App() {
         onUseAsRef={useAsReference}
         onStartInpaint={startInpaintFromInput}
         onEditMask={editMask}
-        onRemoveMask={form.removeMask}
-        onAcceptSize={form.acceptSize}
+        onRemoveMask={removeMask}
+        onAcceptSize={acceptSize}
       />
 
       <HistoryDrawer
@@ -661,13 +675,13 @@ export default function App() {
       <InputPreview
         key={previewId ?? "closed"}
         image={
-          (history.display ? history.sourceImages : form.images).find(
+          (history.display ? history.sourceImages : draftImages).find(
             (image) => image.id === previewId,
           ) ?? null
         }
         onContinueSketch={
           previewId &&
-          (history.display ? history.sourceImages : form.images).some(
+          (history.display ? history.sourceImages : draftImages).some(
             (image) => image.id === previewId && image.isSketch,
           )
             ? () => continueHistorySketch(previewId)
