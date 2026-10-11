@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_FORM, type GenForm } from "./params";
-import type { InpaintDraft } from "./types";
+import type { InpaintDraft, SketchCommand } from "./types";
 import {
   canOpenDrawing,
   canWheelSwitch,
   draftToParams,
   hasUserWork,
   inpaintBarInfo,
+  isDrawingChanged,
   leaveDecision,
   nextSelection,
   shouldCollapseBar,
@@ -66,6 +67,46 @@ describe("canOpenDrawing", () => {
     expect(canOpenDrawing({ ...free, reading: true })).toBe(false);
     expect(canOpenDrawing({ ...free, confirming: true })).toBe(false);
     expect(canOpenDrawing({ ...free, drawing: true })).toBe(false);
+  });
+});
+
+describe("isDrawingChanged", () => {
+  const stroke = (x: number): SketchCommand => ({
+    type: "stroke",
+    tool: "pen",
+    color: "#000",
+    width: 3,
+    points: [{ x, y: x }],
+  });
+  const doc = (n: number) => ({
+    commands: Array.from({ length: n }, (_, i) => stroke(i)),
+  });
+  const openKeyOf = (n: number) => JSON.stringify(doc(n).commands);
+
+  it("新建：游标在 0 没有修改，画了一笔就有修改", () => {
+    expect(isDrawingChanged({ doc: doc(0), cursor: 0, openKey: "[]" })).toBe(
+      false,
+    );
+    expect(isDrawingChanged({ doc: doc(1), cursor: 1, openKey: "[]" })).toBe(
+      true,
+    );
+  });
+
+  it("撤销回打开时的状态视为没有修改，撤销一半仍有修改，重做回来又没有", () => {
+    const opened = { doc: doc(2), openKey: openKeyOf(2) };
+    expect(isDrawingChanged({ ...opened, cursor: 2 })).toBe(false);
+    expect(isDrawingChanged({ ...opened, cursor: 1 })).toBe(true);
+    expect(isDrawingChanged({ ...opened, cursor: 0 })).toBe(false);
+  });
+
+  it("打开后又画了新的一笔：即使条数相同也算修改", () => {
+    const opened = { doc: doc(2), openKey: openKeyOf(2) };
+    const replaced = {
+      commands: [...opened.doc.commands.slice(0, 1), stroke(9)],
+    };
+    expect(
+      isDrawingChanged({ doc: replaced, cursor: 2, openKey: opened.openKey }),
+    ).toBe(true);
   });
 });
 

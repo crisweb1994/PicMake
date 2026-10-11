@@ -6,7 +6,6 @@ import { CreateBar } from "./components/bar/CreateBar";
 import { DetailCard } from "./components/DetailCard";
 import { SketchModal } from "./components/SketchModal";
 import { InpaintModal, MaskViewModal } from "./components/InpaintModal";
-import { useInpaint } from "./hooks/useInpaint";
 import {
   InputPreview,
   Carousel,
@@ -17,6 +16,20 @@ import {
 } from "./components/Overlays";
 import { useWorkspaceAssets } from "./hooks/useWorkspaceAssets";
 import { useDraftImages } from "./hooks/useDraftImages";
+import {
+  adjustFromViewMask,
+  confirmInpaint,
+  confirmSketch,
+  continueHistorySketch,
+  editMask,
+  editSketchAttachment,
+  openSketchNew,
+  openViewMask,
+  requestCloseInpaint,
+  requestCloseSketch,
+  startInpaintFromInput,
+  startInpaintFromResult,
+} from "./flows/drawing";
 import { cancelGenerate, generate, regenerate } from "./flows/generate";
 import {
   addAsReference,
@@ -24,25 +37,15 @@ import {
   deleteRecord,
   editImage,
   newGeneration,
-  requestLeave,
   returnToResult,
   reuseParams,
   selectHistory,
   toggleStar,
 } from "./flows/navigation";
-import { useSketch } from "./hooks/useSketch";
-import { db } from "./db/schema";
 import { downloadName } from "./lib/download";
 import { fmtBytes } from "./lib/format";
-import { customOk, formSize } from "./lib/params";
-import { SKETCH_DEFAULT_SIZE } from "./lib/sketch";
+import { customOk } from "./lib/params";
 import {
-  ERROR_HINTS,
-  INPAINT_ISSUE_HINTS,
-  MAX_INPUT_IMAGES,
-} from "./lib/types";
-import {
-  canOpenDrawing,
   canWheelSwitch,
   hasUserWork,
   inpaintBarInfo,
@@ -60,28 +63,24 @@ import {
 } from "./store/workspace/selectors";
 import {
   acceptSize,
-  applyInpaintToDraft,
-  applySketchAttachment,
   clearDone,
   closeConfirm,
   closeDrawer,
   closeLightbox,
   closeSettings,
   closeViewMask,
-  initializeDraft,
   openBar,
   openDrawer,
   openLightbox,
   openSettings,
   patchForm,
-  resetView,
-  selectRecord,
+  redoDrawing,
   setBarMode,
-  setConfirm,
   setFocusIdx,
   setInputFidelity,
   setPreviewId,
-  showViewMask,
+  strokeDrawing,
+  undoDrawing,
 } from "./store/workspace/actions";
 import { useTheme } from "./hooks/useTheme";
 import { toast } from "@heroui/react";
@@ -143,6 +142,11 @@ export default function App() {
   const lightbox =
     display?.images.find((image) => image.id === lightboxId) ?? null;
   const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
+  // 画板在 store：草图与局部重绘共用一个槽位；重绘底图 URL 随会话生成与回收
+  const drawing = useWorkspace((s) => s.drawing);
+  const inpaintBaseUrl = useObjectUrl(
+    drawing?.kind === "inpaint" ? drawing.base.blob : null,
+  );
 
   // focusSeq 变化即聚焦描述框（展开创作条、草稿落位、描述为空时提交）
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -150,241 +154,11 @@ export default function App() {
     if (focusSeq) requestAnimationFrame(() => promptRef.current?.focus());
   }, [focusSeq]);
 
-  /* ── 局部重绘：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
-  // draft-input 入口被涂选的原输入 id（确认后重排为图1）
-  const inpaintChosenRef = useRef<string | null>(null);
-  const inpaint = useInpaint({
-    onApply: ({ base, mask, original, entry }) => {
-      if (entry === "result") {
-        // 仅带入该结果；确认后切到重绘草稿
-        initializeDraft(undefined, [
-          { imageId: base.id, name: "底图", upload: base },
-        ]);
-        applyInpaintToDraft({ base, mask, original, entry });
-        selectRecord(null);
-        clearDone();
-        resetView();
-        openBar();
-        toast("选区已应用：填写修改描述后生成");
-      }
-      if (entry === "draft-input") {
-        const chosen = inpaintChosenRef.current;
-        const reorder =
-          !!chosen && useWorkspace.getState().draft.inputs.length > 1;
-        applyInpaintToDraft(
-          { base, mask, original, entry },
-          chosen ?? undefined,
-        );
-        inpaintChosenRef.current = null;
-        openBar();
-        toast(
-          reorder
-            ? "底图已设为图1，图片编号已更新，请检查描述"
-            : "选区已应用：填写修改描述后生成",
-        );
-      }
-      if (entry === "reedit") {
-        applyInpaintToDraft({ base, mask, original, entry });
-        toast("选区已更新");
-      }
-    },
-  });
-
-  /** 各画板/重绘入口共用的可用判定（事件里调用），规则见 canOpenDrawing */
-  const workspaceFree = () =>
-    canOpenDrawing({
-      run: useWorkspace.getState().run.phase,
-      reading,
-      confirming: !!confirm,
-      drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
-    });
-
-  /** 对展示记录的某一张结果发起；打开前经放弃确认 */
-  const startInpaintFromResult = (imageId: string) => {
-    if (!workspaceFree() || !display) return;
-    requestLeave(() => {
-      void db.images.get(imageId).then(async (row) => {
-        if (!row) {
-          toast(ERROR_HINTS["source-unavailable"]);
-          return;
-        }
-        const result = await inpaint.open({
-          blob: row.blob,
-          name: `结果 · ${display.row.prompt.slice(0, 12)}…`,
-          entry: "result",
-          existing: { imageId, generationId: display.row.id },
-        });
-        if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
-      });
-    }, true);
-  };
-
-  /** 对草稿中的普通图发起；确认后重排为图1（✎ 按钮已保证草图走画板） */
-  const startInpaintFromInput = (imageId: string) => {
-    if (!workspaceFree()) return;
-    const input = draft.inputs.find((item) => item.imageId === imageId);
-    if (!input) return;
-    void (async () => {
-      const row = input.upload ?? (await db.images.get(imageId));
-      if (!row) {
-        toast(ERROR_HINTS["source-unavailable"]);
-        return;
-      }
-      inpaintChosenRef.current = imageId;
-      const result = await inpaint.open({
-        blob: row.blob,
-        name: input.name ?? "图片",
-        entry: "draft-input",
-        existing: input.generationId
-          ? { imageId, generationId: input.generationId }
-          : { imageId },
-      });
-      if (!result.ok) {
-        inpaintChosenRef.current = null;
-        toast(INPAINT_ISSUE_HINTS[result.issue]);
-      }
-    })();
-  };
-
-  /** 重开已确认选区：底图缩略图 ✎（选区存在时 inputs[0] 恒为绑定底图） */
-  const editMask = () => {
-    const confirmed = draft.inpaint;
-    if (!workspaceFree() || !confirmed) return;
-    const baseInput = draft.inputs[0];
-    void (async () => {
-      const base = baseInput.upload ?? (await db.images.get(baseInput.imageId));
-      if (!base) {
-        toast(ERROR_HINTS["source-unavailable"]);
-        return;
-      }
-      const result = await inpaint.open({
-        blob: base.blob,
-        name: baseInput.name ?? "底图",
-        entry: "reedit",
-        existing: { imageId: base.id },
-        reedit: {
-          base,
-          mask: confirmed.mask,
-          ...(confirmed.original ? { original: confirmed.original } : {}),
-        },
-      });
-      if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
-    })();
-  };
-
-  const requestCloseInpaint = () => {
-    if (inpaint.confirming) return;
-    if (inpaint.changed) {
-      setConfirm({
-        title: "放弃本次选区修改？",
-        desc: "未确认的涂选不会保存；已确认的选区保持不变。",
-        okLabel: "放弃修改",
-        cancelLabel: "继续编辑",
-        onOk: inpaint.close,
-      });
-      return;
-    }
-    inpaint.close();
-  };
-
-  /** 查看选区（只读），可发起「调整上次重绘」 */
-  const openViewMask = () => {
-    const row = display?.row;
-    const inp = row?.inpaint;
-    if (!row || !inp) return;
-    void (async () => {
-      const maskRow = await db.images.get(inp.maskImageId);
-      const baseRow = maskRow?.mask
-        ? await db.images.get(maskRow.mask.baseImageId)
-        : null;
-      if (!maskRow?.mask || !baseRow) {
-        toast("选区数据无法读取，请重新选择修改区域");
-        return;
-      }
-      showViewMask({
-        base: baseRow,
-        name: row.inputSources?.[0]?.name ?? "底图",
-        commands: maskRow.mask.commands,
-        rowId: row.id,
-      });
-    })();
-  };
-
-  /* ── 草图画板：只产出附件，确认落回创作条，不发请求 ── */
-  const sketch = useSketch({
-    onApply: ({ image, replaces }) => {
-      // 尺寸、描述补全与展开创作条都在 applySketchAttachment 里一次完成
-      const result = applySketchAttachment(image, replaces);
-      if (!result.ok) {
-        toast(ERROR_HINTS["too-many-images"]);
-        return false;
-      }
-      if (result.sizeSetTo)
-        toast(
-          `输出尺寸已设为草图尺寸 ${result.sizeSetTo.w} × ${result.sizeSetTo.h}`,
-        );
-      return true;
-    },
-  });
   /** 已确认草图的逻辑尺寸（比例不一致提示） */
   const sketchInput = draft.inputs.find((input) => input.upload?.sketch);
   const sketchSize = sketchInput?.upload
     ? { w: sketchInput.upload.width, h: sketchInput.upload.height }
     : null;
-
-  /** 新画布 = 当前输出尺寸，auto 时 1024×1024 */
-  const openSketchNew = () => {
-    if (!workspaceFree()) return;
-    if (
-      !draft.inputs.some((input) => input.upload?.sketch) &&
-      draft.inputs.length >= MAX_INPUT_IMAGES
-    ) {
-      toast(ERROR_HINTS["too-many-images"]);
-      return;
-    }
-    const size = formSize(draft.form);
-    sketch.openBlank(
-      ...(size === "auto"
-        ? ([SKETCH_DEFAULT_SIZE, SKETCH_DEFAULT_SIZE] as const)
-        : ([size.w, size.h] as const)),
-    );
-  };
-
-  const editAttachmentSketch = (imageId: string) => {
-    if (!workspaceFree()) return;
-    const idx = draft.inputs.findIndex((input) => input.imageId === imageId);
-    const doc = draft.inputs[idx]?.upload?.sketch;
-    if (!doc) return;
-    sketch.openEdit(doc, imageId, idx);
-  };
-
-  /** 历史来源草图：以新草稿打开，不改旧记录 */
-  const continueHistorySketch = (imageId: string) => {
-    if (!workspaceFree()) return;
-    setPreviewId(null);
-    void db.images.get(imageId).then((row) => {
-      if (!row) {
-        toast("来源图片不可用，无法继续编辑这张草图");
-        return;
-      }
-      sketch.openHistory(row.sketch);
-    });
-  };
-
-  const requestCloseSketch = () => {
-    if (sketch.confirming) return;
-    if (sketch.changed) {
-      setConfirm({
-        title: "放弃本次草图修改？",
-        desc: "未确认的笔画不会保存；已确认的草图附件保持不变。",
-        okLabel: "放弃修改",
-        cancelLabel: "继续画",
-        onOk: sketch.close,
-      });
-      return;
-    }
-    sketch.close();
-  };
 
   const [usageText, setUsageText] = useState("");
   useEffect(() => {
@@ -439,14 +213,7 @@ export default function App() {
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [
-    barMode,
-    draft.dirty,
-    reading,
-    draft.inputs.length,
-    canReturn,
-    sketch.session,
-  ]);
+  }, [barMode, draft.dirty, reading, draft.inputs.length, canReturn]);
 
   // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
   const detailVisible = !!display && !gen && detailClosedFor !== display.row.id;
@@ -465,7 +232,7 @@ export default function App() {
         !!lightbox ||
         !!viewMask ||
         focusIdx !== null,
-      drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
+      drawing: drawing !== null,
       confirming: !!confirm,
     });
     if (!enabled) return;
@@ -579,7 +346,7 @@ export default function App() {
         onRemove={removeInput}
         onPreview={setPreviewId}
         onOpenSketch={openSketchNew}
-        onEditSketch={editAttachmentSketch}
+        onEditSketch={editSketchAttachment}
         onInputFidelity={setInputFidelity}
         onExpand={expandBar}
         onReturn={returnToResult}
@@ -675,42 +442,44 @@ export default function App() {
         }
         onClose={() => setPreviewId(null)}
       />
-      {sketch.session && (
+      {drawing?.kind === "sketch" && (
         <SketchModal
-          doc={sketch.session.doc}
-          cursor={sketch.session.cursor}
-          meta={sketch.session.meta}
-          confirming={sketch.confirming}
-          onStroke={sketch.stroke}
-          onClear={sketch.clearAll}
-          onUndo={sketch.undo}
-          onRedo={sketch.redo}
-          onConfirm={sketch.confirm}
+          key={drawing.id}
+          doc={drawing.doc}
+          cursor={drawing.cursor}
+          meta={drawing.meta}
+          confirming={drawing.confirming}
+          onStroke={strokeDrawing}
+          onClear={() => strokeDrawing({ type: "clear" })}
+          onUndo={undoDrawing}
+          onRedo={redoDrawing}
+          onConfirm={confirmSketch}
           onRequestClose={requestCloseSketch}
           onLimit={onDrawLimit}
         />
       )}
-      {inpaint.session && (
+      {drawing?.kind === "inpaint" && inpaintBaseUrl && (
         <InpaintModal
-          baseUrl={inpaint.session.baseUrl}
-          name={inpaint.session.name}
-          baseW={inpaint.session.base.width}
-          baseH={inpaint.session.base.height}
-          normalized={inpaint.session.normalized}
-          doc={inpaint.session.doc}
-          cursor={inpaint.session.cursor}
-          confirming={inpaint.confirming}
-          error={inpaint.error}
-          onStroke={inpaint.stroke}
-          onClear={inpaint.clearAll}
-          onUndo={inpaint.undo}
-          onRedo={inpaint.redo}
-          onConfirm={inpaint.confirm}
+          key={drawing.id}
+          baseUrl={inpaintBaseUrl}
+          name={drawing.name}
+          baseW={drawing.base.width}
+          baseH={drawing.base.height}
+          normalized={drawing.normalized}
+          doc={drawing.doc}
+          cursor={drawing.cursor}
+          confirming={drawing.confirming}
+          error={drawing.error}
+          onStroke={strokeDrawing}
+          onClear={() => strokeDrawing({ type: "clear" })}
+          onUndo={undoDrawing}
+          onRedo={redoDrawing}
+          onConfirm={confirmInpaint}
           onRequestClose={requestCloseInpaint}
           onLimit={onDrawLimit}
         />
       )}
-      {inpaint.opening && (
+      {drawing?.kind === "opening" && (
         <p className="pm-saving" role="status">
           正在读取底图…
         </p>
@@ -722,10 +491,7 @@ export default function App() {
           baseW={viewMask.base.width}
           baseH={viewMask.base.height}
           commands={viewMask.commands}
-          onAdjust={() => {
-            closeViewMask();
-            adjustInpaint(viewMask.rowId);
-          }}
+          onAdjust={adjustFromViewMask}
           onClose={closeViewMask}
         />
       )}

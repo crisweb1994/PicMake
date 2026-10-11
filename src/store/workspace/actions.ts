@@ -3,6 +3,7 @@ import type { HistoryRow, ImageRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
 import { inpaintTargetSize } from "../../lib/inpaint";
 import { formSize, paramsToForm, type GenForm } from "../../lib/params";
+import { commitCommand, sketchSnapshotKey } from "../../lib/sketch";
 import {
   ERROR_HINTS,
   MAX_INPUT_IMAGES,
@@ -10,8 +11,13 @@ import {
   type GenParams,
   type InpaintDraft,
   type InpaintEntry,
+  type InpaintIssue,
   type InputImage,
+  type MaskCommand,
+  type MaskDocument,
   type MaskImage,
+  type SketchCommand,
+  type SketchDocument,
 } from "../../lib/types";
 import type { ConfirmState, GenPlan } from "../../lib/view-models";
 import { nextSelection } from "../../lib/workspace-rules";
@@ -144,42 +150,49 @@ export function removeDraftInput(id: string): "base-and-mask" | "renumbered" {
 export const removeDraftMask = () =>
   setDraft({ inpaint: null, sizeAccepted: false, dirty: true });
 
-/** 选区确认：draft-input 把底图重排为图1 并移除被选中的原图；result 由 initializeDraft 就位、reedit 底图已在位 */
-export function applyInpaintToDraft(
-  payload: {
-    base: ImageRow;
-    mask: MaskImage;
-    original?: InpaintDraft["original"];
-    entry: InpaintEntry;
-  },
+interface InpaintPayload {
+  base: ImageRow;
+  mask: MaskImage;
+  original?: InpaintDraft["original"];
+  entry: InpaintEntry;
+}
+
+/** 选区落进草稿（纯计算）：draft-input 把底图重排为图1 并移除被选中的原图；result 底图已由新草稿就位、reedit 底图已在位 */
+function withInpaint(
+  draft: WorkspaceState["draft"],
+  payload: InpaintPayload,
   chosenInputId?: string,
-) {
+): WorkspaceState["draft"] {
   const target =
     payload.entry === "reedit"
       ? undefined
       : inpaintTargetSize(payload.mask.width, payload.mask.height);
-  set((s) => ({
-    draft: {
-      ...s.draft,
-      inputs:
-        payload.entry === "draft-input"
-          ? [
-              { imageId: payload.base.id, name: "底图", upload: payload.base },
-              ...s.draft.inputs.filter(
-                (input) =>
-                  input.imageId !== chosenInputId &&
-                  input.imageId !== payload.base.id,
-              ),
-            ]
-          : s.draft.inputs,
-      ...(payload.entry === "reedit"
-        ? {}
-        : { sizeAccepted: target ? !target.suggested : false }),
-      inpaint: { mask: payload.mask, original: payload.original },
-      dirty: true,
-    },
-  }));
+  return {
+    ...draft,
+    inputs:
+      payload.entry === "draft-input"
+        ? [
+            { imageId: payload.base.id, name: "底图", upload: payload.base },
+            ...draft.inputs.filter(
+              (input) =>
+                input.imageId !== chosenInputId &&
+                input.imageId !== payload.base.id,
+            ),
+          ]
+        : draft.inputs,
+    ...(payload.entry === "reedit"
+      ? {}
+      : { sizeAccepted: target ? !target.suggested : false }),
+    inpaint: { mask: payload.mask, original: payload.original },
+    dirty: true,
+  };
 }
+
+/** 把选区放进草稿（恢复上次重绘时用）；画板确认走 applyInpaintSelection */
+export const applyInpaintToDraft = (
+  payload: InpaintPayload,
+  chosenInputId?: string,
+) => set((s) => ({ draft: withInpaint(s.draft, payload, chosenInputId) }));
 
 /** 设为参考图：追加已有结果为输入源，不打断当前草稿 */
 export function appendExisting(
@@ -324,6 +337,167 @@ export const resetWorkspace = (selectId?: string | null) =>
     draft: freshDraft(s.draft),
     view: { ...s.view, focusIdx: null, lightboxId: null, previewId: null },
   }));
+
+/* ── drawing ── */
+
+/** 打开草图画板：新建、编辑附件（replacesImageId）或继续历史草图；已有画板时忽略并返回 false */
+export function openSketch(
+  doc: SketchDocument,
+  meta: string,
+  replacesImageId: string | null,
+): boolean {
+  if (useWorkspace.getState().drawing) return false;
+  set({
+    drawing: {
+      kind: "sketch",
+      id: crypto.randomUUID(),
+      doc,
+      cursor: doc.commands.length,
+      replacesImageId,
+      meta,
+      openKey: sketchSnapshotKey(doc),
+      confirming: false,
+    },
+  });
+  return true;
+}
+
+/** 开始准备局部重绘底图：返回会话 id；已有画板时返回 null */
+export function beginInpaintOpening(): string | null {
+  if (useWorkspace.getState().drawing) return null;
+  const id = crypto.randomUUID();
+  set({ drawing: { kind: "opening", id } });
+  return id;
+}
+
+/** 底图准备完成：只在同一个 opening 会话仍在时生效（期间被关闭则忽略），返回是否已打开 */
+export function openInpaint(
+  id: string,
+  session: {
+    entry: InpaintEntry;
+    base: ImageRow;
+    original?: InpaintDraft["original"];
+    normalized: boolean;
+    doc: MaskDocument;
+    name: string;
+    chosenInputId: string | null;
+  },
+): boolean {
+  const current = useWorkspace.getState().drawing;
+  if (current?.kind !== "opening" || current.id !== id) return false;
+  set({
+    drawing: {
+      kind: "inpaint",
+      id,
+      ...session,
+      cursor: session.doc.commands.length,
+      openKey: sketchSnapshotKey(session.doc),
+      confirming: false,
+      error: null,
+    },
+  });
+  return true;
+}
+
+/** 提交一笔（或清空）：丢弃重做分支，超过上限静默拒绝；重绘同时清除就地错误 */
+export const strokeDrawing = (command: SketchCommand | MaskCommand) =>
+  set((s) => {
+    const d = s.drawing;
+    if (d?.kind === "sketch") {
+      const next = commitCommand(d.doc, d.cursor, command);
+      return next ? { drawing: { ...d, ...next } } : s;
+    }
+    if (d?.kind === "inpaint")
+      return {
+        drawing: {
+          ...d,
+          ...commitCommand(d.doc, d.cursor, command),
+          error: null,
+        },
+      };
+    return s;
+  });
+
+/** 撤销、重做：游标只在已提交的命令范围内移动；重绘同时清除就地错误 */
+const moveCursor = (delta: -1 | 1) =>
+  set((s) => {
+    const d = s.drawing;
+    if (d?.kind !== "sketch" && d?.kind !== "inpaint") return s;
+    const cursor = d.cursor + delta;
+    const moved = cursor >= 0 && cursor <= d.doc.commands.length;
+    if (d.kind === "sketch") return moved ? { drawing: { ...d, cursor } } : s;
+    return { drawing: { ...d, ...(moved ? { cursor } : {}), error: null } };
+  });
+export const undoDrawing = () => moveCursor(-1);
+export const redoDrawing = () => moveCursor(1);
+
+/** 确认导出中：防重复确认 */
+export const setDrawingConfirming = (confirming: boolean) =>
+  set((s) =>
+    s.drawing && s.drawing.kind !== "opening"
+      ? { drawing: { ...s.drawing, confirming } }
+      : s,
+  );
+
+/** 确认失败：回到可继续编辑，并在弹层内就地报错（仅局部重绘） */
+export const setDrawingError = (error: InpaintIssue) =>
+  set((s) =>
+    s.drawing?.kind === "inpaint"
+      ? { drawing: { ...s.drawing, confirming: false, error } }
+      : s,
+  );
+
+/** 关闭画板；传 id 时只关闭这个会话（确认框、异步回调持有的 id 可能已过期），进行中的导出随之失效 */
+export const closeDrawing = (id?: string) =>
+  set((s) =>
+    s.drawing && (id === undefined || s.drawing.id === id)
+      ? { drawing: null }
+      : s,
+  );
+
+/** 选区确认落回草稿，按入口分三种：
+ *  result 以该结果为唯一底图开新草稿并离开当前记录；draft-input 底图重排为图1；reedit 只替换选区。
+ *  reordered：draft-input 且还有其他图片，图片编号变了 */
+export function applyInpaintSelection(
+  payload: InpaintPayload & { chosenInputId: string | null },
+): { reordered: boolean } {
+  const { entry, chosenInputId } = payload;
+  const reordered =
+    entry === "draft-input" &&
+    !!chosenInputId &&
+    useWorkspace.getState().draft.inputs.length > 1;
+  set((s) => {
+    if (entry === "result")
+      return {
+        draft: withInpaint(
+          freshDraft(s.draft, undefined, [
+            { imageId: payload.base.id, name: "底图", upload: payload.base },
+          ]),
+          payload,
+        ),
+        nav: { ...s.nav, selectedId: null, lastDoneId: null },
+        view: {
+          ...s.view,
+          focusIdx: null,
+          lightboxId: null,
+          previewId: null,
+          barMode: "full",
+          focusSeq: s.view.focusSeq + 1,
+        },
+      };
+    if (entry === "draft-input")
+      return {
+        draft: withInpaint(s.draft, payload, chosenInputId ?? undefined),
+        view: {
+          ...s.view,
+          barMode: "full",
+          focusSeq: s.view.focusSeq + 1,
+        },
+      };
+    return { draft: withInpaint(s.draft, payload) };
+  });
+  return { reordered };
+}
 
 /* ── nav ── */
 
