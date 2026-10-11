@@ -168,6 +168,7 @@ export type ApiErrorKind =
   | "too-many-images"
   | "source-unavailable"
   | "save-failed"
+  | "history-unavailable" // 本地历史读取失败（liveQuery 出错）
   | "auth" // 401：Key 无效
   | "org-unverified" // 403：组织未完成资格验证
   | "rate-limit" // 429
@@ -195,6 +196,8 @@ export const ERROR_HINTS: Record<ApiErrorKind, string> = {
   "source-unavailable": "来源图片不可用，无法继续编辑",
   "save-failed":
     "图片已生成，但本地保存失败。结果暂存在内存，可查看或下载；离开前会再次确认。",
+  "history-unavailable":
+    "本地数据暂时无法读取，可刷新页面重试；在此期间新生成的结果可能无法保存。",
   auth: "API Key 无效或已失效，请在设置中检查。",
   "org-unverified":
     "组织尚未完成图片模型的资格验证（organization verification）。",
@@ -212,6 +215,7 @@ export const ERROR_TITLES: Record<ApiErrorKind, string> = {
   "too-many-images": "输入图片已达上限",
   "source-unavailable": "来源图片不可用",
   "save-failed": "本地保存失败",
+  "history-unavailable": "历史记录读取失败",
   auth: "API Key 无效",
   "org-unverified": "组织未完成验证",
   "rate-limit": "请求过于频繁",

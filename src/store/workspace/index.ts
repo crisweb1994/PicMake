@@ -1,6 +1,6 @@
 /** 工作区共享状态（会话内，不持久化）：只放数据与 Blob / ImageRow，不存 Object URL；写入只经 actions.ts 的命名迁移函数 */
 import { create } from "zustand";
-import type { ImageRow } from "../../db/schema";
+import type { HistoryRow, ImageRow } from "../../db/schema";
 import type { MaskCommand } from "../../lib/types";
 import type { ConfirmState } from "../../lib/view-models";
 
@@ -13,6 +13,8 @@ export interface ViewMask {
 }
 
 export interface WorkspaceState {
+  /** 只由 liveQuery 订阅（flows/history-sync）写入；null 表示尚未加载 */
+  history: { rows: HistoryRow[] | null };
   nav: {
     selectedId: string | null;
     /** "编辑此图"进入草稿前展示的记录，供"返回结果" */
@@ -36,6 +38,7 @@ export interface WorkspaceState {
 }
 
 export const initialWorkspace = (): WorkspaceState => ({
+  history: { rows: null },
   nav: { selectedId: null, returnId: null, lastDoneId: null },
   view: {
     barMode: "mini",

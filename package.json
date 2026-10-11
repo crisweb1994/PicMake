@@ -39,7 +39,6 @@
     "@react-aria/ssr": "~3.10.1",
     "@react-aria/utils": "~3.34.1",
     "dexie": "~4.4.6",
-    "dexie-react-hooks": "~4.4.0",
     "eventsource-parser": "~4.1.1",
     "lucide-react": "~1.47.0",
     "perfect-freehand": "~1.2.3",
