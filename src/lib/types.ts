@@ -115,6 +115,9 @@ export type MaskImage = import("../db/schema").ImageRow & {
   mask: MaskDocument;
 };
 
+/** 局部重绘的发起入口：结果图、草稿中的图、重开已确认选区 */
+export type InpaintEntry = "result" | "draft-input" | "reedit";
+
 /** 创作草稿 / 提交快照共用的局部重绘附件 */
 export interface InpaintDraft {
   mask: MaskImage;

@@ -4,9 +4,7 @@ import { toast } from "@heroui/react";
 import {
   customOk,
   DEFAULT_FORM,
-  formToParams,
   paramsToForm,
-  validateParams,
   type GenForm,
 } from "../lib/params";
 import {
@@ -16,6 +14,7 @@ import {
   type FidelityChoice,
   type GenParams,
   type InpaintDraft,
+  type InpaintEntry,
   type InputImage,
   type MaskImage,
 } from "../lib/types";
@@ -23,6 +22,7 @@ import { inpaintTargetSize } from "../lib/inpaint";
 import { readInputImage } from "../lib/input-images";
 import type { ImageRow } from "../db/schema";
 import { inputDisplay } from "../lib/view-models";
+import { draftToParams, inpaintBarInfo } from "../lib/workspace-rules";
 import { useImageAssets } from "./useImageAssets";
 
 export function useForm() {
@@ -60,21 +60,10 @@ export function useForm() {
       : ("candidate" as const),
   }));
   /** 输出目标与接受状态投影 */
-  const inpaintInfo = useMemo(() => {
-    if (!inpaint) return null;
-    const target = inpaintTargetSize(inpaint.mask.width, inpaint.mask.height);
-    if (!target) {
-      // 底图不合法：理论不可达（进入编辑器前已拦截），保守按需重新选择
-      return { tw: 0, th: 0, suggested: false, accepted: false, reason: "" };
-    }
-    return {
-      tw: target.w,
-      th: target.h,
-      suggested: target.suggested,
-      accepted: target.suggested ? sizeAccepted : true,
-      reason: target.reason,
-    };
-  }, [inpaint, sizeAccepted]);
+  const inpaintInfo = useMemo(
+    () => inpaintBarInfo(inpaint, sizeAccepted),
+    [inpaint, sizeAccepted],
+  );
   const stopReading = () => {
     readRef.current++;
     readingRef.current = false;
@@ -130,7 +119,7 @@ export function useForm() {
       base: ImageRow;
       mask: MaskImage;
       original?: InpaintDraft["original"];
-      entry: "result" | "draft-input" | "reedit";
+      entry: InpaintEntry;
     },
     /** draft-input 入口被选中的原输入（重排后移除） */
     chosenInputId?: string,
@@ -238,26 +227,9 @@ export function useForm() {
     setReading(false);
   };
   const focus = () => requestAnimationFrame(() => promptRef.current?.focus());
-  const getParams = () => {
-    if (readingRef.current) return null;
-    if (!(inpaint && inpaintInfo) && !customValid) {
-      toast(
-        "自定义尺寸无效：宽高须被 16 整除，比例 1:3 ～ 3:1，不超过 3840 × 2160",
-      );
-      return null;
-    }
-    const params = formToParams(form);
-    // 局部重绘：输出尺寸按目标尺寸，不开放任意比例
-    if (inpaint && inpaintInfo)
-      params.size = { w: inpaintInfo.tw, h: inpaintInfo.th };
-    const validation = validateParams(params);
-    if (validation.length) {
-      toast(validation[0]);
-      if (!params.prompt.trim()) focus();
-      return null;
-    }
-    return params;
-  };
+  /** 提交前检查：提示与聚焦由调用方按 reason 处理 */
+  const checkParams = () =>
+    draftToParams({ form, inpaint, sizeAccepted, reading: readingRef.current });
   return {
     form,
     inputs,
@@ -283,7 +255,7 @@ export function useForm() {
     patchForm,
     customValid,
     promptRef,
-    getParams,
+    checkParams,
     focus,
   };
 }
