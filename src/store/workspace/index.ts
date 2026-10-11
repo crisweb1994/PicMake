@@ -1,4 +1,4 @@
-/** 工作区共享状态（会话内，不持久化）：只放数据与 Blob / ImageRow，不存 Object URL；写入只经 actions.ts 的命名迁移函数 */
+/** 工作区共享状态（会话内，不持久化）：只放数据与 Blob / ImageRow，不存 Object URL；写入只经 actions/ 的命名迁移函数 */
 import { create } from "zustand";
 import type { HistoryRow, ImageRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
