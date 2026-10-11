@@ -1,7 +1,33 @@
+import { deflateSync, crc32 } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
 
 // 与 playwright.config.ts 的 MOCK_PORT 一致
 const MOCK = "http://localhost:8788";
+
+/** 纯色 PNG：用于上传底图，不依赖二进制夹具 */
+function solidPng(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const out = Buffer.alloc(8 + data.length + 4);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc32(body), 8 + data.length);
+    return out;
+  };
+  const row = Buffer.alloc(1 + width * 3, 200);
+  row[0] = 0;
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(Buffer.alloc(row.length * height, row))),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 const prompt = (page: Page) => page.getByRole("textbox", { name: "画面描述" });
 const generate = (page: Page) => page.getByRole("button", { name: "生成图片" });
@@ -91,4 +117,37 @@ test("画一张草图并确认：作为输入图落进创作条", async ({ page 
   await board.getByRole("button", { name: "使用草图" }).click();
   await expect(board).toBeHidden();
   await expect(page.getByRole("button", { name: "移除图1" })).toBeVisible();
+});
+
+test("局部重绘：上传底图、涂选、生成，并能查看保存的选区", async ({ page }) => {
+  await configure(page);
+  await expandBar(page);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "base.png",
+    mimeType: "image/png",
+    buffer: solidPng(256, 256),
+  });
+  await page.getByRole("button", { name: "对图1发起局部重绘" }).click();
+
+  const board = page.getByRole("dialog", { name: "选择修改区域" });
+  await expect(board).toBeVisible();
+  const box = (await board.locator("canvas").boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  await board.getByRole("button", { name: "使用选区" }).click();
+  await expect(board).toBeHidden();
+
+  await page.getByRole("textbox", { name: "修改描述" }).fill("把中间换成红色");
+  await page.getByRole("button", { name: "生成重绘结果" }).click();
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
+
+  await page.getByRole("button", { name: "查看选区" }).click();
+  const view = page.getByRole("dialog", { name: "查看选区" });
+  await expect(view).toBeVisible();
+  await view.getByRole("button", { name: "关闭" }).click();
+  await expect(view).toBeHidden();
 });
