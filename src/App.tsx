@@ -31,6 +31,12 @@ import {
   type MaskCommand,
 } from "./lib/types";
 import type { DisplayImage } from "./lib/view-models";
+import {
+  canOpenDrawing,
+  canWheelSwitch,
+  hasUserWork,
+  shouldCollapseBar,
+} from "./lib/workspace-rules";
 import { useSettingsModal } from "./hooks/useSettings";
 import { useSettings } from "./store/settings";
 import { useTheme } from "./hooks/useTheme";
@@ -139,23 +145,21 @@ export default function App() {
     },
   });
 
-  /** 各画板/重绘入口共用的可用判定：弹层互斥且不与生成/保存/读取并发 */
+  /** 各画板/重绘入口共用的可用判定（事件里调用），规则见 canOpenDrawing */
   const workspaceFree = () =>
-    pm.phase !== "generating" &&
-    !pm.saving &&
-    !form.reading &&
-    !history.pendingSave &&
-    !pm.confirmState &&
-    !sketch.session &&
-    !inpaint.session &&
-    !inpaint.opening;
+    canOpenDrawing({
+      run: pm.currentRunPhase(),
+      reading: form.reading,
+      confirming: !!pm.confirmState,
+      drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
+    });
 
   /** 对展示记录的某一张结果发起；打开前经放弃确认 */
   const startInpaintFromResult = (imageId: string) => {
     if (!workspaceFree()) return;
     const display = history.display;
     if (!display) return;
-    pm.confirmPendingLeave(() => {
+    pm.requestLeave(() => {
       void db.images.get(imageId).then(async (row) => {
         if (!row) {
           toast(ERROR_HINTS["source-unavailable"]);
@@ -169,7 +173,7 @@ export default function App() {
         });
         if (!result.ok) toast(INPAINT_ISSUE_HINTS[result.issue]);
       });
-    });
+    }, true);
   };
 
   /** 对草稿中的普通图发起；确认后重排为图1（✎ 按钮已保证草图走画板） */
@@ -390,7 +394,7 @@ export default function App() {
     openBar();
   };
 
-  // full 态点条外收起：仅在无草稿时；点击落在浮层上不收回
+  // full 态点条外收起：规则见 shouldCollapseBar；点击落在浮层上不收回
   useEffect(() => {
     if (barMode !== "full") return;
     const onDown = (e: PointerEvent) => {
@@ -405,12 +409,25 @@ export default function App() {
         t.closest(".pm-vm-backdrop")
       )
         return;
-      if (!form.dirty && !form.images.length && !pm.canReturn)
+      if (
+        shouldCollapseBar({
+          userWork: hasUserWork({ dirty: form.dirty, reading: form.reading }),
+          inputCount: form.images.length,
+          canReturn: pm.canReturn,
+        })
+      )
         setBarMode("mini");
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [barMode, form.dirty, form.images.length, pm.canReturn, sketch.session]);
+  }, [
+    barMode,
+    form.dirty,
+    form.reading,
+    form.images.length,
+    pm.canReturn,
+    sketch.session,
+  ]);
 
   // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
   const detailVisible =
@@ -418,26 +435,24 @@ export default function App() {
     pm.phase === "idle" &&
     detailClosedFor !== history.display.row.id;
 
-  // 舞台滚轮切换历史：仅无草稿、无未保存结果、无弹层且非生成中时挂监听
+  // 舞台滚轮切换历史：规则见 canWheelSwitch，不满足时不挂监听
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const blocked =
-      pm.phase === "generating" ||
-      pm.saving ||
-      !!pm.confirmState ||
-      !!history.pendingSave ||
-      form.dirty ||
-      form.inputs.length > 0 ||
-      settingsOpen ||
-      drawerOpen ||
-      !!lightbox ||
-      !!sketch.session ||
-      !!inpaint.session ||
-      !!inpaint.opening ||
-      !!viewMask ||
-      focusIdx !== null;
-    if (blocked) return;
+    const enabled = canWheelSwitch({
+      run: pm.currentRunPhase(),
+      userWork: hasUserWork({ dirty: form.dirty, reading: form.reading }),
+      inputCount: form.inputs.length,
+      overlayOpen:
+        settingsOpen ||
+        drawerOpen ||
+        !!lightbox ||
+        !!viewMask ||
+        focusIdx !== null,
+      drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
+      confirming: !!pm.confirmState,
+    });
+    if (!enabled) return;
     let last = 0;
     const onWheel = (e: WheelEvent) => {
       if (e.defaultPrevented) return;
@@ -462,7 +477,7 @@ export default function App() {
   });
 
   const useAsReference = () => {
-    if (!history.display) return;
+    if (pm.currentRunPhase() !== "idle" || !history.display) return;
     const imageId = selectedImageId ?? history.display.images[0]?.id ?? null;
     if (!imageId) return;
     const idx = history.display.row.imageIds.indexOf(imageId);

@@ -18,6 +18,11 @@ import {
   type MaskImage,
 } from "../lib/types";
 import type { ConfirmState } from "../lib/view-models";
+import {
+  hasUserWork,
+  leaveDecision,
+  type RunPhase,
+} from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { toast } from "@heroui/react";
 
@@ -55,25 +60,42 @@ export function usePicmake({
   /** 完整工作流锁：第一个 await 前同步锁住资源准备→请求→解码→保存 */
   const workflowBusyRef = useRef(false);
 
-  const confirmPendingLeave = (onLeave: () => void) => {
-    if (!pendingSave) {
-      if (form.dirty && !display) {
-        setConfirmState({
-          title: "放弃当前草稿？",
-          desc: "未提交的图片、描述和参数修改将被放弃。",
-          onOk: onLeave,
-        });
-      } else onLeave();
+  /** 当前生成阶段（事件里调用，含 ref）：准备期（锁已占、请求未发）也算 generating */
+  const currentRunPhase = (): RunPhase => {
+    if (savingRef.current) return "saving";
+    if (workflowBusyRef.current || generation.phase === "generating")
+      return "generating";
+    return pendingSave ? "unsaved" : "idle";
+  };
+
+  /** 离开或替换当前结果/草稿：规则见 leaveDecision；usesDisplayed = 以展示中的记录为来源 */
+  const requestLeave = (onLeave: () => void, usesDisplayed = false) => {
+    const decision = leaveDecision({
+      run: currentRunPhase(),
+      userWork: hasUserWork({ dirty: form.dirty, reading: form.reading }),
+      usesDisplayed,
+    });
+    if (decision === "blocked") return;
+    if (decision === "confirm-unsaved") {
+      setConfirmState({
+        title: "放弃未保存结果？",
+        desc: "图片已经生成，但尚未保存到本机。离开后这次结果会丢失。",
+        onOk: () => {
+          history.discardPending();
+          onLeave();
+        },
+      });
       return;
     }
-    setConfirmState({
-      title: "放弃未保存结果？",
-      desc: "图片已经生成，但尚未保存到本机。离开后这次结果会丢失。",
-      onOk: () => {
-        history.discardPending();
-        onLeave();
-      },
-    });
+    if (decision === "confirm-draft") {
+      setConfirmState({
+        title: "放弃当前草稿？",
+        desc: "未提交的修改将被放弃。",
+        onOk: onLeave,
+      });
+      return;
+    }
+    onLeave();
   };
 
   const savePrepared = async (prepared: PreparedGeneration): Promise<void> => {
@@ -222,9 +244,7 @@ export function usePicmake({
 
   /** 调整上次重绘：恢复为可编辑草稿，不生成 */
   const adjustInpaint = (row: HistoryRow) => {
-    if (generation.phase === "generating" || savingRef.current || pendingSave)
-      return;
-    confirmPendingLeave(async () => {
+    requestLeave(async () => {
       clearDone();
       generation.reset();
       const read = await readInpaintDraft(row);
@@ -246,7 +266,7 @@ export function usePicmake({
       onViewReset();
       onDraftReady();
       toast("已恢复上次重绘，可继续调整后生成");
-    });
+    }, true);
   };
 
   /** 再来一版：局部重绘记录复用同一底图与 mask 直接提交（尺寸按当前约束重算，恒合法） */
@@ -288,16 +308,14 @@ export function usePicmake({
   };
 
   const selectHistory = (row: HistoryRow) => {
-    if (generation.phase === "generating" || savingRef.current) return;
-    confirmPendingLeave(() => {
+    requestLeave(() => {
       history.select(row.id);
       resetWorkspace();
     });
   };
 
   const reuseParams = (row: HistoryRow) => {
-    if (generation.phase === "generating" || savingRef.current) return;
-    confirmPendingLeave(() => {
+    requestLeave(() => {
       clearDone();
       generation.reset();
       form.initialize(row.params);
@@ -311,41 +329,42 @@ export function usePicmake({
 
   const editImage = (imageId: string) => {
     if (!display) return;
-    clearDone();
-    form.initialize({ ...display.row.params, prompt: "" }, [
-      {
-        generationId: display.row.id,
-        imageId,
-        name: `已有作品 · 第 ${display.row.imageIds.indexOf(imageId) + 1} 张`,
-      },
-    ]);
-    setReturnId(display.row.id);
-    history.select(null);
-    onViewReset();
-    generation.reset();
-    onDraftReady();
+    // 请求时确定来源记录：确认框之后执行时不再重新推断
+    const row = display.row;
+    requestLeave(() => {
+      clearDone();
+      form.initialize({ ...row.params, prompt: "" }, [
+        {
+          generationId: row.id,
+          imageId,
+          name: `已有作品 · 第 ${row.imageIds.indexOf(imageId) + 1} 张`,
+        },
+      ]);
+      setReturnId(row.id);
+      history.select(null);
+      onViewReset();
+      generation.reset();
+      onDraftReady();
+    }, true);
   };
 
   const returnToResult = () => {
-    if (generation.phase === "generating" || savingRef.current || !returnId)
-      return;
-    confirmPendingLeave(() => {
+    if (!returnId) return;
+    requestLeave(() => {
       history.select(returnId);
       resetWorkspace();
     });
   };
 
   const newGeneration = () => {
-    if (generation.phase === "generating" || savingRef.current) return;
-    confirmPendingLeave(() => {
+    requestLeave(() => {
       history.select(null);
       resetWorkspace();
     });
   };
 
   const deleteGen = (row: HistoryRow) => {
-    if (generation.phase === "generating" || savingRef.current || pendingSave)
-      return;
+    if (currentRunPhase() !== "idle") return;
     setConfirmState({
       title: "删除这次生成？",
       desc: `包含 ${row.imageIds.length} 张图片，删除后无法恢复。`,
@@ -381,6 +400,7 @@ export function usePicmake({
     setConfirmState,
     lastDoneId,
     clearDone,
-    confirmPendingLeave,
+    currentRunPhase,
+    requestLeave,
   };
 }

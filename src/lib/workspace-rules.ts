@@ -4,6 +4,69 @@ import { customOk, formToParams, validateParams, type GenForm } from "./params";
 import type { GenParams, InpaintDraft } from "./types";
 import type { InpaintBarInfo } from "./view-models";
 
+/** 生成生命周期：saving = 请求成功、正在写库；unsaved = 保存失败，结果留在内存 */
+export type RunPhase = "idle" | "generating" | "saving" | "unsaved";
+
+/** 离开会丢失用户的修改：草稿改过，或上传正在读取 */
+export function hasUserWork(d: { dirty: boolean; reading: boolean }): boolean {
+  return d.dirty || d.reading;
+}
+
+export type LeaveDecision =
+  "blocked" | "confirm-unsaved" | "confirm-draft" | "ok";
+
+/** 离开或替换草稿的入口：切换记录、新建、返回结果、复用参数、编辑此图、调整上次重绘、从结果发起局部重绘 */
+export function leaveDecision(s: {
+  run: RunPhase;
+  userWork: boolean;
+  /** 入口以当前展示的记录为来源：未保存的结果不能作为来源，直接拦截 */
+  usesDisplayed: boolean;
+}): LeaveDecision {
+  if (s.run === "generating" || s.run === "saving") return "blocked";
+  if (s.run === "unsaved")
+    return s.usesDisplayed ? "blocked" : "confirm-unsaved";
+  return s.userWork ? "confirm-draft" : "ok";
+}
+
+/** 草图与局部重绘入口：空闲、不在读取、没有确认框和已打开的画板 */
+export function canOpenDrawing(s: {
+  run: RunPhase;
+  reading: boolean;
+  confirming: boolean;
+  drawing: boolean;
+}): boolean {
+  return s.run === "idle" && !s.reading && !s.confirming && !s.drawing;
+}
+
+/** 舞台滚轮切换记录：空闲、草稿未改动且无输入图、没有弹层、画板和确认框 */
+export function canWheelSwitch(s: {
+  run: RunPhase;
+  userWork: boolean;
+  inputCount: number;
+  /** 设置、抽屉、灯箱、选区查看、轮播任一打开 */
+  overlayOpen: boolean;
+  drawing: boolean;
+  confirming: boolean;
+}): boolean {
+  return (
+    s.run === "idle" &&
+    !s.userWork &&
+    s.inputCount === 0 &&
+    !s.overlayOpen &&
+    !s.drawing &&
+    !s.confirming
+  );
+}
+
+/** 点创作条外是否收起：草稿未改动、没有输入图、也没有可返回的结果 */
+export function shouldCollapseBar(s: {
+  userWork: boolean;
+  inputCount: number;
+  canReturn: boolean;
+}): boolean {
+  return !s.userWork && s.inputCount === 0 && !s.canReturn;
+}
+
 /** liveQuery 回推后的选中项：首次加载选最近一条；只有原选中项确实从列表中删除时才回退 */
 export function nextSelection(
   prev: readonly { id: string }[] | undefined,
