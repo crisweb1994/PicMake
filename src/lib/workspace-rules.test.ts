@@ -2,12 +2,111 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FORM, type GenForm } from "./params";
 import type { InpaintDraft } from "./types";
 import {
+  canOpenDrawing,
+  canWheelSwitch,
   draftToParams,
+  hasUserWork,
   inpaintBarInfo,
+  leaveDecision,
   nextSelection,
+  shouldCollapseBar,
+  type RunPhase,
 } from "./workspace-rules";
 
 const rows = (...ids: string[]) => ids.map((id) => ({ id }));
+
+describe("hasUserWork", () => {
+  it("草稿改过或上传读取中都算有修改", () => {
+    expect(hasUserWork({ dirty: true, reading: false })).toBe(true);
+    expect(hasUserWork({ dirty: false, reading: true })).toBe(true);
+    expect(hasUserWork({ dirty: false, reading: false })).toBe(false);
+  });
+});
+
+describe("leaveDecision", () => {
+  const decide = (run: RunPhase, userWork: boolean, usesDisplayed = false) =>
+    leaveDecision({ run, userWork, usesDisplayed });
+
+  it("生成中、保存中一律拦截", () => {
+    for (const run of ["generating", "saving"] as const) {
+      expect(decide(run, false)).toBe("blocked");
+      expect(decide(run, true, true)).toBe("blocked");
+    }
+  });
+
+  it("有未保存结果：普通离开先确认放弃，以展示记录为来源的入口直接拦截", () => {
+    expect(decide("unsaved", false)).toBe("confirm-unsaved");
+    expect(decide("unsaved", true)).toBe("confirm-unsaved");
+    expect(decide("unsaved", false, true)).toBe("blocked");
+  });
+
+  it("空闲时：有用户修改先确认放弃草稿，否则直接离开（与舞台是否有结果无关）", () => {
+    expect(decide("idle", true)).toBe("confirm-draft");
+    expect(decide("idle", true, true)).toBe("confirm-draft");
+    expect(decide("idle", false)).toBe("ok");
+    expect(decide("idle", false, true)).toBe("ok");
+  });
+});
+
+describe("canOpenDrawing", () => {
+  const free = {
+    run: "idle",
+    reading: false,
+    confirming: false,
+    drawing: false,
+  } as const;
+
+  it("空闲时可以打开", () => {
+    expect(canOpenDrawing(free)).toBe(true);
+  });
+
+  it("任一阻断条件成立都不能打开", () => {
+    for (const run of ["generating", "saving", "unsaved"] as const)
+      expect(canOpenDrawing({ ...free, run })).toBe(false);
+    expect(canOpenDrawing({ ...free, reading: true })).toBe(false);
+    expect(canOpenDrawing({ ...free, confirming: true })).toBe(false);
+    expect(canOpenDrawing({ ...free, drawing: true })).toBe(false);
+  });
+});
+
+describe("canWheelSwitch", () => {
+  const free = {
+    run: "idle",
+    userWork: false,
+    inputCount: 0,
+    overlayOpen: false,
+    drawing: false,
+    confirming: false,
+  } as const;
+
+  it("没有草稿、弹层和画板时可以切换", () => {
+    expect(canWheelSwitch(free)).toBe(true);
+  });
+
+  it("任一阻断条件成立都不切换", () => {
+    for (const run of ["generating", "saving", "unsaved"] as const)
+      expect(canWheelSwitch({ ...free, run })).toBe(false);
+    expect(canWheelSwitch({ ...free, userWork: true })).toBe(false);
+    expect(canWheelSwitch({ ...free, inputCount: 1 })).toBe(false);
+    expect(canWheelSwitch({ ...free, overlayOpen: true })).toBe(false);
+    expect(canWheelSwitch({ ...free, drawing: true })).toBe(false);
+    expect(canWheelSwitch({ ...free, confirming: true })).toBe(false);
+  });
+});
+
+describe("shouldCollapseBar", () => {
+  const empty = { userWork: false, inputCount: 0, canReturn: false };
+
+  it("空草稿时收起", () => {
+    expect(shouldCollapseBar(empty)).toBe(true);
+  });
+
+  it("有修改（含读取中）、有输入图或可返回时不收起", () => {
+    expect(shouldCollapseBar({ ...empty, userWork: true })).toBe(false);
+    expect(shouldCollapseBar({ ...empty, inputCount: 2 })).toBe(false);
+    expect(shouldCollapseBar({ ...empty, canReturn: true })).toBe(false);
+  });
+});
 
 /** 指定底图尺寸的选区附件 */
 function inpaintOf(width: number, height: number): InpaintDraft {
