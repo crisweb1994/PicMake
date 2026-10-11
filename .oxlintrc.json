@@ -96,6 +96,10 @@
                 "group": ["**/api/**", "**/db/**"],
                 "allowTypeImports": true,
                 "message": "容器不做 IO：请求与读写库放进 flows，资源读取放进 hooks"
+              },
+              {
+                "group": ["**/workspace/actions/internal"],
+                "message": "actions/internal 只给 actions 目录内部共用，外部经 actions 入口导入具名迁移函数"
               }
             ]
           }
@@ -123,6 +127,10 @@
                 ],
                 "allowTypeImports": true,
                 "message": "flows 不依赖 React 层，只经 store 的迁移函数写状态"
+              },
+              {
+                "group": ["**/workspace/actions/internal"],
+                "message": "actions/internal 只给 actions 目录内部共用，外部经 actions 入口导入具名迁移函数"
               }
             ]
           }
@@ -145,6 +153,10 @@
                 ],
                 "allowTypeImports": true,
                 "message": "hooks 只管理绑定 React 生命周期的资源，不做业务编排"
+              },
+              {
+                "group": ["**/workspace/actions/internal"],
+                "message": "actions/internal 只给 actions 目录内部共用，外部经 actions 入口导入具名迁移函数"
               }
             ]
           }

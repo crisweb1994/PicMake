@@ -74,7 +74,7 @@ containers/ ──► components/              展示组件
 
 1. **存什么**：业务数据和 Blob / ImageRow；不存 Object URL、DOM 句柄、AbortController。唯一例外是 `confirm.onOk` 回调。
 2. **不做 IO**：store 模块不调用 api、db、toast，也不使用 React API。
-3. **怎么写**：只通过 `store/workspace/actions.ts` 导出的命名迁移函数写入。迁移函数按事件命名，可以跨切片，一次 `set` 完成；flows 和 containers 不直接调用 `setState`。需要给用户反馈的迁移函数返回结果（例如图片数量超限），由 flow 决定弹什么 toast。
+3. **怎么写**：只通过 `store/workspace/actions/` 导出的命名迁移函数（按 history/draft/run/drawing/nav/view 分文件，从 `actions` 入口导入；`actions/internal.ts` 仅目录内部使用，lint 禁止外部导入）写入。迁移函数按事件命名，可以跨切片，一次 `set` 完成；flows 和 containers 不直接调用 `setState`。需要给用户反馈的迁移函数返回结果（例如图片数量超限），由 flow 决定弹什么 toast。
 4. **怎么读**：
    - 渲染时用 selector，返回原始值或 store 内已有的引用（zustand v5 的 selector 每次返回新引用会导致反复渲染）；读多个字段用 `useShallow`。
    - 禁止不带 selector 的 `useWorkspace()` / `useSettings()`。

@@ -2,7 +2,8 @@
  *  副作用：舞台滚轮监听只在 selectCanWheelSwitch 成立期间挂载，条件不满足即移除 */
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { DetailCard } from "../components/DetailCard";
-import { Carousel, Lightbox } from "../components/Overlays";
+import { Carousel } from "../components/overlays/Carousel";
+import { Lightbox } from "../components/overlays/Lightbox";
 import { Stage } from "../components/Stage";
 import { copyPrompt, downloadAll, downloadImage } from "../flows/export";
 import {

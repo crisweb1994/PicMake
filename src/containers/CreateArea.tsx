@@ -3,7 +3,7 @@
  *  回到 mini 即移除 */
 import { useEffect, useMemo, useRef } from "react";
 import { CreateBar } from "../components/bar/CreateBar";
-import { InputPreview } from "../components/Overlays";
+import { InputPreview } from "../components/overlays/InputPreview";
 import {
   continueHistorySketch,
   editMask,
