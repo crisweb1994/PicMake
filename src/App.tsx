@@ -15,9 +15,21 @@ import {
   Lightbox,
   SettingsModal,
 } from "./components/Overlays";
-import { useHistory } from "./hooks/useHistory";
+import { useWorkspaceAssets } from "./hooks/useWorkspaceAssets";
 import { useDraftImages } from "./hooks/useDraftImages";
-import { usePicmake } from "./hooks/usePicmake";
+import { cancelGenerate, generate, regenerate } from "./flows/generate";
+import {
+  addAsReference,
+  adjustInpaint,
+  deleteRecord,
+  editImage,
+  newGeneration,
+  requestLeave,
+  returnToResult,
+  reuseParams,
+  selectHistory,
+  toggleStar,
+} from "./flows/navigation";
 import { useSketch } from "./hooks/useSketch";
 import { db } from "./db/schema";
 import { downloadName } from "./lib/download";
@@ -43,8 +55,11 @@ import { saveSettings, testConnection } from "./flows/settings";
 import { useSettings } from "./store/settings";
 import { useWorkspace } from "./store/workspace";
 import {
+  selectCanReturn,
+  selectSelectedImageId,
+} from "./store/workspace/selectors";
+import {
   acceptSize,
-  appendExisting,
   applyInpaintToDraft,
   applySketchAttachment,
   clearDone,
@@ -60,6 +75,7 @@ import {
   openSettings,
   patchForm,
   resetView,
+  selectRecord,
   setBarMode,
   setConfirm,
   setFocusIdx,
@@ -87,7 +103,7 @@ function onDrawLimit(kind: "commands" | "points") {
 }
 
 export default function App() {
-  const history = useHistory();
+  const { rows, display, sourceImages, thumbnailUrls } = useWorkspaceAssets();
   const theme = useTheme();
   const baseUrl = useSettings((s) => s.baseUrl);
   const apiKey = useSettings((s) => s.apiKey);
@@ -112,14 +128,20 @@ export default function App() {
     () => inpaintBarInfo(draft.inpaint, draft.sizeAccepted),
     [draft.inpaint, draft.sizeAccepted],
   );
-  const pm = usePicmake({ history });
+  // 生成生命周期：只有 generating 显示生成态；saving、unsaved 时舞台展示内存里的结果
+  const run = useWorkspace((s) => s.run);
+  const gen = run.phase === "generating" ? run : null;
+  const pending = run.phase === "saving" || run.phase === "unsaved";
+  const partialUrl = useObjectUrl(gen?.partial?.blob);
+  const canReturn = useWorkspace(selectCanReturn);
+  const selectedImageId = useWorkspace(selectSelectedImageId);
   // 历史列表订阅：IndexedDB 变更回推到 store，卸载时退订
   useEffect(() => startHistorySync(), []);
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const lightbox =
-    history.display?.images.find((image) => image.id === lightboxId) ?? null;
+    display?.images.find((image) => image.id === lightboxId) ?? null;
   const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
 
   // focusSeq 变化即聚焦描述框（展开创作条、草稿落位、描述为空时提交）
@@ -139,7 +161,7 @@ export default function App() {
           { imageId: base.id, name: "底图", upload: base },
         ]);
         applyInpaintToDraft({ base, mask, original, entry });
-        history.select(null);
+        selectRecord(null);
         clearDone();
         resetView();
         openBar();
@@ -171,7 +193,7 @@ export default function App() {
   /** 各画板/重绘入口共用的可用判定（事件里调用），规则见 canOpenDrawing */
   const workspaceFree = () =>
     canOpenDrawing({
-      run: pm.currentRunPhase(),
+      run: useWorkspace.getState().run.phase,
       reading,
       confirming: !!confirm,
       drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
@@ -179,10 +201,8 @@ export default function App() {
 
   /** 对展示记录的某一张结果发起；打开前经放弃确认 */
   const startInpaintFromResult = (imageId: string) => {
-    if (!workspaceFree()) return;
-    const display = history.display;
-    if (!display) return;
-    pm.requestLeave(() => {
+    if (!workspaceFree() || !display) return;
+    requestLeave(() => {
       void db.images.get(imageId).then(async (row) => {
         if (!row) {
           toast(ERROR_HINTS["source-unavailable"]);
@@ -269,7 +289,7 @@ export default function App() {
 
   /** 查看选区（只读），可发起「调整上次重绘」 */
   const openViewMask = () => {
-    const row = history.display?.row;
+    const row = display?.row;
     const inp = row?.inpaint;
     if (!row || !inp) return;
     void (async () => {
@@ -371,33 +391,22 @@ export default function App() {
     void navigator.storage?.estimate?.().then((est) => {
       if (est?.usage != null) setUsageText(` · 已用 ${fmtBytes(est.usage)}`);
     });
-  }, [history.rows.length]);
+  }, [rows.length]);
 
   const downloadOne = (idx: number) => {
-    if (!history.display) return;
-    const im = history.display.images[idx];
-    downloadUrl(im.url, downloadName(history.display.row.id, idx, im.format));
+    if (!display) return;
+    const im = display.images[idx];
+    downloadUrl(im.url, downloadName(display.row.id, idx, im.format));
   };
-  const downloadAll = () =>
-    history.display?.images.forEach((_, i) => downloadOne(i));
+  const downloadAll = () => display?.images.forEach((_, i) => downloadOne(i));
 
-  const selectedImageId = history.display
-    ? history.display.images.length === 1
-      ? history.display.images[0].id
-      : focusIdx !== null
-        ? (history.display.images[focusIdx]?.id ?? null)
-        : null
-    : null;
   const editSelected = () => {
-    if (selectedImageId) pm.editImage(selectedImageId);
+    if (selectedImageId) editImage(selectedImageId);
   };
-  const totalImages = history.rows.reduce((s, r) => s + r.imageIds.length, 0);
+  const totalImages = rows.reduce((s, r) => s + r.imageIds.length, 0);
 
   /** complete 态只在展示的确实是刚保存的那次生成时成立 */
-  const doneGen =
-    lastDoneId && history.display?.row.id === lastDoneId
-      ? history.display
-      : null;
+  const doneGen = lastDoneId && display?.row.id === lastDoneId ? display : null;
 
   const expandBar = () => {
     clearDone();
@@ -423,7 +432,7 @@ export default function App() {
         shouldCollapseBar({
           userWork: hasUserWork({ dirty: draft.dirty, reading }),
           inputCount: draft.inputs.length,
-          canReturn: pm.canReturn,
+          canReturn,
         })
       )
         setBarMode("mini");
@@ -435,22 +444,19 @@ export default function App() {
     draft.dirty,
     reading,
     draft.inputs.length,
-    pm.canReturn,
+    canReturn,
     sketch.session,
   ]);
 
   // 详情浮卡可见性：展示记录存在、非生成中、且未被用户收起（按记录 id 记忆）
-  const detailVisible =
-    !!history.display &&
-    pm.phase === "idle" &&
-    detailClosedFor !== history.display.row.id;
+  const detailVisible = !!display && !gen && detailClosedFor !== display.row.id;
 
   // 舞台滚轮切换历史：规则见 canWheelSwitch，不满足时不挂监听
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
     const enabled = canWheelSwitch({
-      run: pm.currentRunPhase(),
+      run: run.phase,
       userWork: hasUserWork({ dirty: draft.dirty, reading }),
       inputCount: draft.inputs.length,
       overlayOpen:
@@ -470,9 +476,9 @@ export default function App() {
       const now = performance.now();
       if (now - last < 300 || Math.abs(e.deltaY) < 16) return;
       last = now;
-      const rows = history.rows;
       if (!rows.length) return;
-      const idx = rows.findIndex((r) => r.id === history.selectedId);
+      const { selectedId } = useWorkspace.getState().nav;
+      const idx = rows.findIndex((r) => r.id === selectedId);
       const next =
         idx === -1
           ? 0
@@ -480,44 +486,32 @@ export default function App() {
             ? Math.min(rows.length - 1, idx + 1)
             : Math.max(0, idx - 1);
       if (next === idx) return;
-      void pm.selectHistory(rows[next]);
+      selectHistory(rows[next].id);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   });
 
-  const useAsReference = () => {
-    if (pm.currentRunPhase() !== "idle" || !history.display) return;
-    const imageId = selectedImageId ?? history.display.images[0]?.id ?? null;
-    if (!imageId) return;
-    const idx = history.display.row.imageIds.indexOf(imageId);
-    const added = appendExisting(
-      imageId,
-      history.display.row.id,
-      `已有作品 · 第 ${idx + 1} 张`,
-    );
-    if (added === "too-many") toast(ERROR_HINTS["too-many-images"]);
-    clearDone();
-    setBarMode("full");
-    toast("已加入参考图，继续描述后生成");
-  };
-
   return (
     <>
       <div className="pm-stage-col" ref={stageRef}>
         <Stage
-          phase={pm.phase}
-          partial={pm.partial}
-          genPlan={pm.plan}
-          display={history.display}
+          phase={gen ? "generating" : "idle"}
+          partial={
+            gen?.partial && partialUrl
+              ? { url: partialUrl, index: gen.partial.index }
+              : null
+          }
+          genPlan={gen?.plan ?? null}
+          display={display}
           onFocus={setFocusIdx}
           onLightbox={openLightbox}
           onDownload={downloadOne}
           onDownloadAll={downloadAll}
-          onReuse={() => history.display && pm.reuseParams(history.display.row)}
-          onEdit={history.pendingSave ? undefined : editSelected}
-          onDelete={() => history.display && pm.deleteGen(history.display.row)}
-          onCancel={pm.cancelGenerate}
+          onReuse={() => display && reuseParams(display.row.id)}
+          onEdit={pending ? undefined : editSelected}
+          onDelete={() => display && deleteRecord(display.row.id)}
+          onCancel={cancelGenerate}
           onStart={expandBar}
         />
       </div>
@@ -529,59 +523,56 @@ export default function App() {
         onSettings={openSettings}
       />
 
-      {history.display && detailVisible && (
+      {display && detailVisible && (
         <DetailCard
-          display={history.display}
+          display={display}
           selectedImageId={selectedImageId}
-          canEdit={!history.pendingSave && !pm.saving}
-          sources={history.sourceImages}
+          canEdit={run.phase === "idle"}
+          sources={sourceImages}
           onViewSource={setPreviewId}
           onDownload={() => downloadOne(focusIdx ?? 0)}
           onCopyPrompt={() => {
-            if (history.display)
+            if (display)
               void navigator.clipboard
-                ?.writeText(history.display.row.prompt)
+                ?.writeText(display.row.prompt)
                 .then(() => toast("画面描述已复制"));
           }}
-          onReuse={() => history.display && pm.reuseParams(history.display.row)}
-          onEdit={pm.editImage}
+          onReuse={() => display && reuseParams(display.row.id)}
+          onEdit={editImage}
           onInpaint={startInpaintFromResult}
-          onViewMask={history.display.row.inpaint ? openViewMask : undefined}
+          onViewMask={display.row.inpaint ? openViewMask : undefined}
           onAdjustInpaint={
-            history.display.row.inpaint
-              ? () => pm.adjustInpaint(history.display!.row)
+            display.row.inpaint
+              ? () => adjustInpaint(display!.row.id)
               : undefined
           }
-          onDelete={() => history.display && pm.deleteGen(history.display.row)}
+          onDelete={() => display && deleteRecord(display.row.id)}
           onToggleStar={() => {
-            if (history.display)
-              void history.toggleStar(history.display.row.id);
+            if (display) toggleStar(display.row.id);
           }}
-          onNew={pm.newGeneration}
-          onClose={() =>
-            history.display && setDetailClosedFor(history.display.row.id)
-          }
+          onNew={newGeneration}
+          onClose={() => display && setDetailClosedFor(display.row.id)}
         />
       )}
 
       <CreateBar
         mode={barMode}
-        generating={pm.phase === "generating"}
+        generating={!!gen}
         done={doneGen}
-        partialIndex={pm.partial?.index ?? 0}
+        partialIndex={gen?.partial?.index ?? 0}
         form={draft.form}
         customValid={customOk(draft.form)}
         images={draftImages}
         inputFidelity={draft.inputFidelity}
         reading={reading}
         uploadError={draft.uploadError}
-        canReturn={pm.canReturn}
+        canReturn={canReturn}
         sketchSize={sketchSize}
         inpaint={inpaintInfo}
         promptRef={promptRef}
         onPatch={patchForm}
-        onGenerate={pm.generate}
-        onCancel={pm.cancelGenerate}
+        onGenerate={generate}
+        onCancel={cancelGenerate}
         onFiles={(files) => {
           void addFiles(files);
         }}
@@ -591,13 +582,13 @@ export default function App() {
         onEditSketch={editAttachmentSketch}
         onInputFidelity={setInputFidelity}
         onExpand={expandBar}
-        onReturn={pm.returnToResult}
-        onAgain={() => doneGen && pm.regenerate(doneGen.row)}
+        onReturn={returnToResult}
+        onAgain={() => doneGen && regenerate(doneGen.row.id)}
         onTweak={() => {
-          if (doneGen) pm.reuseParams(doneGen.row);
+          if (doneGen) reuseParams(doneGen.row.id);
         }}
         onDownloadAll={downloadAll}
-        onUseAsRef={useAsReference}
+        onUseAsRef={addAsReference}
         onStartInpaint={startInpaintFromInput}
         onEditMask={editMask}
         onRemoveMask={removeMask}
@@ -606,15 +597,14 @@ export default function App() {
 
       <HistoryDrawer
         open={drawerOpen}
-        rows={history.rows}
-        thumbnailUrls={history.thumbnailUrls}
-        currentId={history.display?.row.id ?? null}
+        rows={rows}
+        thumbnailUrls={thumbnailUrls}
+        currentId={display?.row.id ?? null}
         onSelect={(id) => {
-          const row = history.rows.find((row) => row.id === id);
-          if (row) void pm.selectHistory(row);
+          selectHistory(id);
           closeDrawer();
         }}
-        onToggleStar={(id) => void history.toggleStar(id)}
+        onToggleStar={toggleStar}
         onClose={closeDrawer}
       />
 
@@ -623,65 +613,61 @@ export default function App() {
         open={settingsOpen}
         baseUrl={baseUrl}
         apiKey={apiKey}
-        storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
+        storageText={`本地已存 ${rows.length} 次 · ${totalImages} 张${usageText}`}
         theme={theme.pref}
         onThemeChange={theme.setPref}
         onTest={testConnection}
         onSave={saveSettings}
         onClose={closeSettings}
       />
-      {history.display &&
-        pm.phase === "idle" &&
-        history.display.images.length > 1 &&
-        focusIdx !== null && (
-          <Carousel
-            img={history.display.images[focusIdx]}
-            prompt={history.display.row.prompt}
-            index={focusIdx}
-            total={history.display.images.length}
-            onPrev={() => {
-              const n = history.display!.images.length;
-              setFocusIdx((focusIdx! - 1 + n) % n);
-            }}
-            onNext={() => {
-              const n = history.display!.images.length;
-              setFocusIdx((focusIdx! + 1) % n);
-            }}
-            onClose={() => setFocusIdx(null)}
-            onZoom={() => openLightbox(history.display!.images[focusIdx!].id)}
-            onDownload={() => downloadOne(focusIdx!)}
-            onReuse={() => pm.reuseParams(history.display!.row)}
-            onEdit={history.pendingSave ? undefined : editSelected}
-            onDelete={() => pm.deleteGen(history.display!.row)}
-          />
-        )}
+      {display && !gen && display.images.length > 1 && focusIdx !== null && (
+        <Carousel
+          img={display.images[focusIdx]}
+          prompt={display.row.prompt}
+          index={focusIdx}
+          total={display.images.length}
+          onPrev={() => {
+            const n = display!.images.length;
+            setFocusIdx((focusIdx! - 1 + n) % n);
+          }}
+          onNext={() => {
+            const n = display!.images.length;
+            setFocusIdx((focusIdx! + 1) % n);
+          }}
+          onClose={() => setFocusIdx(null)}
+          onZoom={() => openLightbox(display!.images[focusIdx!].id)}
+          onDownload={() => downloadOne(focusIdx!)}
+          onReuse={() => reuseParams(display!.row.id)}
+          onEdit={pending ? undefined : editSelected}
+          onDelete={() => deleteRecord(display!.row.id)}
+        />
+      )}
       <ConfirmDialog state={confirm} onCancel={closeConfirm} />
       <Lightbox
         img={lightbox}
-        prompt={history.display?.row.prompt ?? ""}
+        prompt={display?.row.prompt ?? ""}
         onDownload={() => {
           const idx =
-            history.display?.images.findIndex(
-              (image) => image.id === lightbox?.id,
-            ) ?? -1;
+            display?.images.findIndex((image) => image.id === lightbox?.id) ??
+            -1;
           if (idx >= 0) downloadOne(idx);
         }}
         onReuse={() => {
           closeLightbox();
-          if (history.display) pm.reuseParams(history.display.row);
+          if (display) reuseParams(display.row.id);
         }}
         onClose={closeLightbox}
       />
       <InputPreview
         key={previewId ?? "closed"}
         image={
-          (history.display ? history.sourceImages : draftImages).find(
+          (display ? sourceImages : draftImages).find(
             (image) => image.id === previewId,
           ) ?? null
         }
         onContinueSketch={
           previewId &&
-          (history.display ? history.sourceImages : draftImages).some(
+          (display ? sourceImages : draftImages).some(
             (image) => image.id === previewId && image.isSketch,
           )
             ? () => continueHistorySketch(previewId)
@@ -737,14 +723,13 @@ export default function App() {
           baseH={viewMask.base.height}
           commands={viewMask.commands}
           onAdjust={() => {
-            const row = history.rows.find((r) => r.id === viewMask.rowId);
             closeViewMask();
-            if (row) pm.adjustInpaint(row);
+            adjustInpaint(viewMask.rowId);
           }}
           onClose={closeViewMask}
         />
       )}
-      {pm.saving && (
+      {run.phase === "saving" && (
         <p className="pm-saving" role="status">
           正在保存到本地…
         </p>

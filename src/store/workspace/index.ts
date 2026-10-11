@@ -1,6 +1,7 @@
 /** 工作区共享状态（会话内，不持久化）：只放数据与 Blob / ImageRow，不存 Object URL；写入只经 actions.ts 的命名迁移函数 */
 import { create } from "zustand";
 import type { HistoryRow, ImageRow } from "../../db/schema";
+import type { PreparedGeneration } from "../../lib/generation";
 import { DEFAULT_FORM, type GenForm } from "../../lib/params";
 import type {
   FidelityChoice,
@@ -8,7 +9,18 @@ import type {
   InputImage,
   MaskCommand,
 } from "../../lib/types";
-import type { ConfirmState } from "../../lib/view-models";
+import type { ConfirmState, GenPlan } from "../../lib/view-models";
+
+/** 生成生命周期；saving = 请求成功、正在写库，unsaved = 保存失败、结果留在内存（可查看、下载） */
+export type Run =
+  | { phase: "idle" }
+  | {
+      phase: "generating";
+      plan: GenPlan;
+      partial: { blob: Blob; index: number } | null;
+    }
+  | { phase: "saving"; prepared: PreparedGeneration }
+  | { phase: "unsaved"; prepared: PreparedGeneration };
 
 /** 只读查看选区：底图 URL 由页面从 base.blob 生成 */
 export interface ViewMask {
@@ -19,8 +31,13 @@ export interface ViewMask {
 }
 
 export interface WorkspaceState {
-  /** 只由 liveQuery 订阅（flows/history-sync）写入；null 表示尚未加载 */
-  history: { rows: HistoryRow[] | null };
+  history: {
+    /** 只由 liveQuery 订阅（flows/history-sync）写入；null 表示尚未加载 */
+    rows: HistoryRow[] | null;
+    /** 刚保存的那次生成：列表回推前用它过渡显示；展示它期间沿用同一组图片 URL，保存前后不闪空。下次开始生成时清空 */
+    recent: PreparedGeneration | null;
+  };
+  run: Run;
   /** 一次提交的草稿：文字、参数与输入图；局部重绘时底图恒为 inputs[0] */
   draft: {
     form: GenForm;
@@ -58,7 +75,8 @@ export interface WorkspaceState {
 }
 
 export const initialWorkspace = (): WorkspaceState => ({
-  history: { rows: null },
+  history: { rows: null, recent: null },
+  run: { phase: "idle" },
   draft: {
     form: DEFAULT_FORM,
     inputs: [],
