@@ -16,17 +16,19 @@ import {
   type InputImage,
   type MaskImage,
 } from "../lib/types";
-import { draftToParams } from "../lib/workspace-rules";
+import { draftToParams, leaveDecision } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import { findRow } from "../store/workspace/selectors";
 import {
   beginRun,
   beginSave,
+  discardUnsaved,
   endRun,
   finishSave,
   markUnsaved,
   requestPromptFocus,
+  setConfirm,
   setLastDoneId,
   setPartial,
 } from "../store/workspace/actions";
@@ -50,10 +52,16 @@ let abort: AbortController | null = null;
 
 export const cancelGenerate = () => abort?.abort();
 
-/** 提交当前草稿 */
+/** 提交当前草稿；生成中、保存中忽略，有未保存结果时先确认放弃 */
 export function generate() {
   const { run, draft } = useWorkspace.getState();
-  if (run.phase !== "idle") return;
+  // 草稿正是要提交的内容，不算被丢弃的修改（userWork = false）；会被替换的只有内存里的未保存结果
+  const decision = leaveDecision({
+    run: run.phase,
+    userWork: false,
+    usesDisplayed: false,
+  });
+  if (decision === "blocked") return;
   const checked = draftToParams({
     form: draft.form,
     inpaint: draft.inpaint,
@@ -71,16 +79,29 @@ export function generate() {
     if (checked.focusPrompt) requestPromptFocus();
     return;
   }
-  void runGeneration(
-    checked.params,
-    draft.inputs.length
-      ? {
-          inputs: draft.inputs,
-          inputFidelity: draft.inputFidelity,
-          ...(draft.inpaint ? { inpaint: draft.inpaint } : {}),
-        }
-      : null,
-  );
+  // 提交的内容在请求时确定，确认之后不再重新读草稿
+  const params = checked.params;
+  const edit = draft.inputs.length
+    ? {
+        inputs: draft.inputs,
+        inputFidelity: draft.inputFidelity,
+        ...(draft.inpaint ? { inpaint: draft.inpaint } : {}),
+      }
+    : null;
+  if (decision === "confirm-unsaved") {
+    setConfirm({
+      title: "放弃未保存结果？",
+      desc: "图片已经生成，但尚未保存到本机。重新生成后这次结果会丢失。",
+      onOk: () => {
+        // 确认期间状态可能已变：不再是未保存结果时不重复发起
+        if (useWorkspace.getState().run.phase !== "unsaved") return;
+        discardUnsaved();
+        void runGeneration(params, edit);
+      },
+    });
+    return;
+  }
+  void runGeneration(params, edit);
 }
 
 /** 再来一版：用记录的参数与输入源直接重发；局部重绘记录复用同一底图与 mask（仅 complete 态可达） */
