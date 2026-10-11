@@ -1,0 +1,318 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import type { ImageRow } from "../../db/schema";
+import { blankMask } from "../../lib/inpaint";
+import { blankSketch, SKETCH_MAX_COMMANDS } from "../../lib/sketch";
+import type { MaskCommand, MaskImage, SketchCommand } from "../../lib/types";
+import { initialWorkspace, useWorkspace } from "./index";
+import {
+  applyInpaintSelection,
+  beginInpaintOpening,
+  closeDrawing,
+  initializeDraft,
+  openDrawer,
+  openInpaint,
+  openSketch,
+  redoDrawing,
+  selectRecord,
+  setDrawingConfirming,
+  setDrawingError,
+  setFocusIdx,
+  setLastDoneId,
+  strokeDrawing,
+  undoDrawing,
+} from "./actions";
+
+const state = () => useWorkspace.getState();
+const drawing = () => state().drawing;
+const commands = () => {
+  const d = drawing();
+  return d && d.kind !== "opening" ? d.doc.commands : [];
+};
+
+const stroke = (x: number): SketchCommand => ({
+  type: "stroke",
+  tool: "pen",
+  color: "#000",
+  width: 3,
+  points: [{ x, y: x }],
+});
+const image = (id: string, width = 1024, height = 1024): ImageRow => ({
+  id,
+  blob: new Blob(),
+  width,
+  height,
+  format: "png",
+});
+const maskOf = (base: ImageRow): MaskImage => ({
+  ...image(`mask-${base.id}`, base.width, base.height),
+  mask: blankMask(base.id, base.width, base.height),
+});
+const inpaintSession = (base = image("b1")) => ({
+  entry: "result" as const,
+  base,
+  normalized: false,
+  doc: blankMask(base.id, base.width, base.height),
+  name: "底图",
+  chosenInputId: null,
+});
+
+beforeEach(() => {
+  useWorkspace.setState(initialWorkspace(), true);
+});
+
+describe("草图", () => {
+  it("openSketch：游标取已有命令数，openKey 是打开时的快照；已有画板时忽略", () => {
+    const doc = { ...blankSketch(800, 600), commands: [stroke(1), stroke(2)] };
+    expect(openSketch(doc, "800 × 600 · 图1 的草图", "img-1")).toBe(true);
+    expect(drawing()).toMatchObject({
+      kind: "sketch",
+      cursor: 2,
+      replacesImageId: "img-1",
+      meta: "800 × 600 · 图1 的草图",
+      confirming: false,
+      openKey: JSON.stringify(doc.commands),
+    });
+    const before = state();
+    expect(openSketch(blankSketch(1, 1), "x", null)).toBe(false);
+    expect(state()).toBe(before);
+  });
+
+  it("笔画、撤销、重做：游标只在已提交范围内移动，新笔画丢弃重做分支", () => {
+    openSketch(blankSketch(100, 100), "m", null);
+    strokeDrawing(stroke(1));
+    strokeDrawing(stroke(2));
+    expect(drawing()).toMatchObject({ cursor: 2 });
+    const atEnd = state();
+    redoDrawing();
+    expect(state()).toBe(atEnd);
+    undoDrawing();
+    undoDrawing();
+    const atStart = state();
+    undoDrawing();
+    expect(state()).toBe(atStart);
+    redoDrawing();
+    expect(drawing()).toMatchObject({ cursor: 1 });
+    strokeDrawing(stroke(3));
+    expect(commands()).toEqual([stroke(1), stroke(3)]);
+    expect(drawing()).toMatchObject({ cursor: 2 });
+  });
+
+  it("超过命令上限时静默拒绝", () => {
+    const full = Array.from({ length: SKETCH_MAX_COMMANDS }, () => stroke(1));
+    openSketch({ ...blankSketch(10, 10), commands: full }, "m", null);
+    const before = state();
+    strokeDrawing(stroke(2));
+    expect(state()).toBe(before);
+  });
+
+  it("没有画板或底图还在准备时，笔画、撤销、重做、确认中都不起作用", () => {
+    const noop = () => {
+      strokeDrawing(stroke(1));
+      undoDrawing();
+      redoDrawing();
+      setDrawingConfirming(true);
+      setDrawingError("empty-mask");
+    };
+    const before = state();
+    noop();
+    expect(state()).toBe(before);
+    beginInpaintOpening();
+    const opening = state();
+    noop();
+    expect(state()).toBe(opening);
+  });
+
+  it("setDrawingConfirming 只改确认中标记", () => {
+    openSketch(blankSketch(10, 10), "m", null);
+    setDrawingConfirming(true);
+    expect(drawing()).toMatchObject({ confirming: true, cursor: 0 });
+    setDrawingConfirming(false);
+    expect(drawing()).toMatchObject({ confirming: false });
+  });
+
+  it("closeDrawing：不传 id 关闭当前画板；过期的 id 关不掉新画板", () => {
+    openSketch(blankSketch(10, 10), "m", null);
+    const oldId = drawing()!.id;
+    closeDrawing();
+    expect(drawing()).toBeNull();
+    openSketch(blankSketch(10, 10), "m", null);
+    closeDrawing(oldId);
+    expect(drawing()).not.toBeNull();
+    closeDrawing(drawing()!.id);
+    expect(drawing()).toBeNull();
+  });
+});
+
+describe("局部重绘", () => {
+  it("beginInpaintOpening：占用槽位并返回会话 id；已有画板时返回 null", () => {
+    const id = beginInpaintOpening();
+    expect(drawing()).toEqual({ kind: "opening", id });
+    expect(beginInpaintOpening()).toBeNull();
+    expect(drawing()).toEqual({ kind: "opening", id });
+    closeDrawing();
+    openSketch(blankSketch(10, 10), "m", null);
+    expect(beginInpaintOpening()).toBeNull();
+  });
+
+  it("openInpaint：id 一致时才打开；准备期间被关闭或换了会话，结果被忽略", () => {
+    const stale = beginInpaintOpening()!;
+    closeDrawing(stale);
+    expect(openInpaint(stale, inpaintSession())).toBe(false);
+    expect(drawing()).toBeNull();
+
+    const current = beginInpaintOpening()!;
+    expect(openInpaint(stale, inpaintSession())).toBe(false);
+    expect(drawing()).toEqual({ kind: "opening", id: current });
+    expect(openInpaint(current, inpaintSession())).toBe(true);
+    expect(drawing()).toMatchObject({
+      kind: "inpaint",
+      id: current,
+      entry: "result",
+      cursor: 0,
+      confirming: false,
+      error: null,
+    });
+    expect(openInpaint(current, inpaintSession())).toBe(false);
+  });
+
+  it("重开已确认的选区：游标在已有命令末尾", () => {
+    const base = image("b1");
+    const existing: MaskCommand = {
+      type: "stroke",
+      tool: "pen",
+      width: 20,
+      points: [{ x: 1, y: 1 }],
+    };
+    const session = {
+      ...inpaintSession(base),
+      entry: "reedit" as const,
+      doc: { ...blankMask(base.id, 1024, 1024), commands: [existing] },
+    };
+    openInpaint(beginInpaintOpening()!, session);
+    expect(drawing()).toMatchObject({
+      cursor: 1,
+      openKey: JSON.stringify([existing]),
+    });
+  });
+
+  it("涂抹、撤销、重做都会清除就地错误；setDrawingError 同时结束确认中", () => {
+    openInpaint(beginInpaintOpening()!, inpaintSession());
+    setDrawingConfirming(true);
+    setDrawingError("empty-mask");
+    expect(drawing()).toMatchObject({ confirming: false, error: "empty-mask" });
+    strokeDrawing(stroke(1));
+    expect(drawing()).toMatchObject({ cursor: 1, error: null });
+    setDrawingError("canvas-failed");
+    undoDrawing();
+    expect(drawing()).toMatchObject({ cursor: 0, error: null });
+    setDrawingError("canvas-failed");
+    redoDrawing();
+    expect(drawing()).toMatchObject({ cursor: 1, error: null });
+  });
+});
+
+describe("applyInpaintSelection", () => {
+  it("result：以该结果为唯一底图开新草稿，离开当前记录并展开创作条", () => {
+    const base = image("base", 1024, 1024);
+    const mask = maskOf(base);
+    selectRecord("rec");
+    setLastDoneId("rec");
+    setFocusIdx(2);
+    openDrawer();
+    initializeDraft(undefined, [{ imageId: "old", name: "旧图" }]);
+    const seq = state().view.focusSeq;
+    expect(
+      applyInpaintSelection({
+        base,
+        mask,
+        entry: "result",
+        chosenInputId: null,
+      }),
+    ).toEqual({ reordered: false });
+    expect(state().draft).toMatchObject({
+      inputs: [{ imageId: "base", name: "底图", upload: base }],
+      inpaint: { mask },
+      dirty: true,
+      sizeAccepted: true,
+    });
+    expect(state().nav).toMatchObject({ selectedId: null, lastDoneId: null });
+    expect(state().view).toMatchObject({
+      barMode: "full",
+      focusSeq: seq + 1,
+      focusIdx: null,
+      drawerOpen: true,
+    });
+  });
+
+  it("result：目标尺寸与原图不同时，建议尺寸等用户接受", () => {
+    const base = image("base", 1000, 1000);
+    applyInpaintSelection({
+      base,
+      mask: maskOf(base),
+      entry: "result",
+      chosenInputId: null,
+    });
+    expect(state().draft.sizeAccepted).toBe(false);
+  });
+
+  it("draft-input：底图重排为图1并移除被选中的原图，其他图保留；区分编号是否变化", () => {
+    initializeDraft(undefined, [
+      { imageId: "other", name: "其他", upload: image("other") },
+      { imageId: "chosen", name: "图", upload: image("chosen") },
+    ]);
+    const base = image("base2");
+    const seq = state().view.focusSeq;
+    expect(
+      applyInpaintSelection({
+        base,
+        mask: maskOf(base),
+        entry: "draft-input",
+        chosenInputId: "chosen",
+      }),
+    ).toEqual({ reordered: true });
+    expect(state().draft.inputs.map((input) => input.imageId)).toEqual([
+      "base2",
+      "other",
+    ]);
+    expect(state().view).toMatchObject({ barMode: "full", focusSeq: seq + 1 });
+
+    initializeDraft(undefined, [
+      { imageId: "only", name: "唯一", upload: image("only") },
+    ]);
+    const base3 = image("base3");
+    expect(
+      applyInpaintSelection({
+        base: base3,
+        mask: maskOf(base3),
+        entry: "draft-input",
+        chosenInputId: "only",
+      }),
+    ).toEqual({ reordered: false });
+    expect(state().draft.inputs.map((input) => input.imageId)).toEqual([
+      "base3",
+    ]);
+  });
+
+  it("reedit：只替换选区，草稿其余部分、记录选择与查看状态不变", () => {
+    const base = image("base");
+    initializeDraft(undefined, [
+      { imageId: "base", name: "底图", upload: base },
+    ]);
+    selectRecord("rec");
+    const before = state();
+    const mask = maskOf(base);
+    expect(
+      applyInpaintSelection({
+        base,
+        mask,
+        entry: "reedit",
+        chosenInputId: null,
+      }),
+    ).toEqual({ reordered: false });
+    expect(state().draft.inpaint?.mask).toBe(mask);
+    expect(state().draft).toMatchObject({ dirty: true, sizeAccepted: false });
+    expect(state().draft.inputs).toBe(before.draft.inputs);
+    expect(state().nav).toBe(before.nav);
+    expect(state().view).toBe(before.view);
+  });
+});

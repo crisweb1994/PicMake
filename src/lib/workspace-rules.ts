@@ -1,7 +1,8 @@
 /** 工作区判定规则：纯函数，入参是最小快照，不依赖 store 或 hooks 的结构 */
 import { inpaintTargetSize } from "./inpaint";
 import { customOk, formToParams, validateParams, type GenForm } from "./params";
-import type { GenParams, InpaintDraft } from "./types";
+import { sketchSnapshotKey } from "./sketch";
+import type { GenParams, InpaintDraft, SketchDocument } from "./types";
 import type { InpaintBarInfo } from "./view-models";
 
 /** 生成生命周期：saving = 请求成功、正在写库；unsaved = 保存失败，结果留在内存 */
@@ -36,6 +37,17 @@ export function canOpenDrawing(s: {
   drawing: boolean;
 }): boolean {
   return s.run === "idle" && !s.reading && !s.confirming && !s.drawing;
+}
+
+/** 画板打开以来是否有修改：撤销回打开时的状态视为没有修改。
+ *  会序列化全部已提交命令，只在请求关闭画板时调用，不要放进 selector 或渲染路径 */
+export function isDrawingChanged(d: {
+  doc: Pick<SketchDocument, "commands">;
+  cursor: number;
+  /** 打开时的快照键 */
+  openKey: string;
+}): boolean {
+  return d.cursor > 0 && sketchSnapshotKey(d.doc, d.cursor) !== d.openKey;
 }
 
 /** 舞台滚轮切换记录：空闲、草稿未改动且无输入图、没有弹层、画板和确认框 */

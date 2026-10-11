@@ -6,8 +6,13 @@ import { DEFAULT_FORM, type GenForm } from "../../lib/params";
 import type {
   FidelityChoice,
   InpaintDraft,
+  InpaintEntry,
+  InpaintIssue,
   InputImage,
+  InputSource,
   MaskCommand,
+  MaskDocument,
+  SketchDocument,
 } from "../../lib/types";
 import type { ConfirmState, GenPlan } from "../../lib/view-models";
 
@@ -21,6 +26,43 @@ export type Run =
     }
   | { phase: "saving"; prepared: PreparedGeneration }
   | { phase: "unsaved"; prepared: PreparedGeneration };
+
+/** 画板：草图与局部重绘共用一个槽位，互斥由类型保证；opening = 局部重绘底图准备中。
+ *  id 在打开时生成，异步结果回来后与当前 id 比对，不一致就丢弃 */
+export type Drawing =
+  | { kind: "opening"; id: string }
+  | {
+      kind: "sketch";
+      id: string;
+      doc: SketchDocument;
+      cursor: number;
+      /** 编辑已有附件时的原位替换目标；新建、继续历史草图为 null */
+      replacesImageId: string | null;
+      meta: string;
+      /** 打开时的快照键：撤销回这个状态视为没有修改 */
+      openKey: string;
+      confirming: boolean;
+    }
+  | {
+      kind: "inpaint";
+      id: string;
+      entry: InpaintEntry;
+      /** 实际请求底图（方向归一后）；URL 由页面从 base.blob 生成 */
+      base: ImageRow;
+      /** 仅发生方向归一时存在：原文件与其来源身份 */
+      original?: { source: InputSource; image: ImageRow };
+      /** 发生了方向归一化：弹层里提示 */
+      normalized: boolean;
+      doc: MaskDocument;
+      cursor: number;
+      /** draft-input 入口被涂选的原输入 id：确认后移除并把底图重排为图1 */
+      chosenInputId: string | null;
+      name: string;
+      openKey: string;
+      confirming: boolean;
+      /** 就地错误（非 toast） */
+      error: InpaintIssue | null;
+    };
 
 /** 只读查看选区：底图 URL 由页面从 base.blob 生成 */
 export interface ViewMask {
@@ -59,6 +101,8 @@ export interface WorkspaceState {
     /** 最近保存成功的记录：与展示记录一致时底栏为 complete 态 */
     lastDoneId: string | null;
   };
+  /** 草图或局部重绘画板；null = 没有打开 */
+  drawing: Drawing | null;
   view: {
     barMode: "mini" | "full";
     /** 聚焦描述框的意图计数：变化时由页面聚焦 */
@@ -88,6 +132,7 @@ export const initialWorkspace = (): WorkspaceState => ({
     uploadError: "",
   },
   nav: { selectedId: null, returnId: null, lastDoneId: null },
+  drawing: null,
   view: {
     barMode: "mini",
     focusSeq: 0,
