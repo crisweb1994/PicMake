@@ -1,5 +1,25 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+/* HeroUI 样式按组件引入（整包 @heroui/styles 约 420 KB，实际只用下列组件）。
+   结构与 @heroui/styles/dist/index.css 一致；新增用到的 HeroUI 组件时，
+   须在此补对应的 components/<name>.css，否则组件无样式。
+   已用：Button Drawer Input Modal Spinner Toast（+ close-button/field-error/label/surface 依赖） */
+@layer theme, base, components, utilities;
+@import "tw-animate-css";
+@import "@heroui/styles/base/base.css" layer(base);
+@import "@heroui/styles/base/scrollbar.css" layer(base);
+@import "@heroui/styles/components/close-button.css" layer(components);
+@import "@heroui/styles/components/field-error.css" layer(components);
+@import "@heroui/styles/components/label.css" layer(components);
+@import "@heroui/styles/components/button.css" layer(components);
+@import "@heroui/styles/components/spinner.css" layer(components);
+@import "@heroui/styles/components/toast.css" layer(components);
+@import "@heroui/styles/components/input.css" layer(components);
+@import "@heroui/styles/components/surface.css" layer(components);
+@import "@heroui/styles/components/drawer.css" layer(components);
+@import "@heroui/styles/components/modal.css" layer(components);
+@import "@heroui/styles/themes/default" layer(theme);
+@import "@heroui/styles/utilities";
+@import "@heroui/styles/variants";
 
 /* Tailwind v4 preflight 移除了 button 默认 cursor: pointer，此处补回（base 层，可被覆写） */
 @layer base {

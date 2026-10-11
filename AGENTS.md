@@ -28,7 +28,7 @@ pnpm exec prettier --write <本次修改的文件>
 
 - **纯前端 SPA**：Vite 8 + React 19 + TypeScript 6。无后端、无路由（MVP 单页 + 弹层）、无 i18n
 - **TS 开启 `erasableSyntaxOnly`**：禁止构造器参数属性、禁止 enum 声明
-- **Tailwind CSS v4**：走 `@tailwindcss/vite` 插件，**没有 tailwind.config**；CSS 入口 `src/index.css`（`@import 'tailwindcss'` + `@import '@heroui/styles'`）；设计令牌 `--pm-*` 定义在 `:root`，勿在组件里写死色值
+- **Tailwind CSS v4**：走 `@tailwindcss/vite` 插件，**没有 tailwind.config**；CSS 入口 `src/index.css`（`@import 'tailwindcss'` + HeroUI 样式**按组件引入**，不整包 `@import '@heroui/styles'`；用到新的 HeroUI 组件时须在 `index.css` 补对应的 `components/<name>.css`）；设计令牌 `--pm-*` 定义在 `:root`，勿在组件里写死色值
 - **HeroUI v3**（`@heroui/react`）：
   - `Button` **没有 color prop**，用 `variant`（primary/secondary/tertiary/ghost/outline/danger/danger-soft）+ `size`（sm/md/lg）+ `fullWidth/isIconOnly/isDisabled`
   - `Chip` 用 `color`（accent/default/success/warning/danger）+ `variant`（primary/secondary/soft）
