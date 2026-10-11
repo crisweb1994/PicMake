@@ -29,6 +29,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "format": "prettier --write .",
+    "check": "oxlint && prettier --check . && vitest run && pnpm build",
     "test": "vitest run",
     "preview": "vite preview",
     "mock": "node scripts/mock-api.mjs"

@@ -58,7 +58,11 @@ describe("filterHistoryRows · 描述搜索", () => {
 
   it("关键词命中编辑链 originPrompt（原始描述可搜到编辑结果）", () => {
     const rows = [
-      row({ id: "a", prompt: "把天空调成晚霞色调", originPrompt: "山间小屋，清晨薄雾" }),
+      row({
+        id: "a",
+        prompt: "把天空调成晚霞色调",
+        originPrompt: "山间小屋，清晨薄雾",
+      }),
       row({ id: "b", prompt: "完全不相关的描述" }),
     ];
     const out = filterHistoryRows(rows, f({ query: "山间小屋" }), NOW);
@@ -67,12 +71,16 @@ describe("filterHistoryRows · 描述搜索", () => {
 
   it("首尾空白被忽略；空串等价于不过滤", () => {
     const rows = [row()];
-    expect(filterHistoryRows(rows, f({ query: "  山间小屋  " }), NOW)).toHaveLength(1);
+    expect(
+      filterHistoryRows(rows, f({ query: "  山间小屋  " }), NOW),
+    ).toHaveLength(1);
     expect(filterHistoryRows(rows, f({ query: "   " }), NOW)).toHaveLength(1);
   });
 
   it("不命中时返回空", () => {
-    expect(filterHistoryRows([row()], f({ query: "不存在的词" }), NOW)).toEqual([]);
+    expect(filterHistoryRows([row()], f({ query: "不存在的词" }), NOW)).toEqual(
+      [],
+    );
   });
 });
 
@@ -107,10 +115,7 @@ describe("filterHistoryRows · 日期预设档", () => {
 
 describe("filterHistoryRows · 收藏与组合", () => {
   it("只看收藏：仅 starred 行命中，未标星与缺字段行都排除", () => {
-    const rows = [
-      row({ id: "starred", starred: true }),
-      row({ id: "plain" }),
-    ];
+    const rows = [row({ id: "starred", starred: true }), row({ id: "plain" })];
     const out = filterHistoryRows(rows, f({ starredOnly: true }), NOW);
     expect(out.map((r) => r.id)).toEqual(["starred"]);
   });
@@ -119,7 +124,12 @@ describe("filterHistoryRows · 收藏与组合", () => {
     const rows = [
       row({ id: "hit", prompt: "海边日落", createdAt: NOW, starred: true }),
       row({ id: "no-star", prompt: "海边日出", createdAt: NOW }),
-      row({ id: "old", prompt: "海边栈桥", createdAt: NOW - 40 * DAY, starred: true }),
+      row({
+        id: "old",
+        prompt: "海边栈桥",
+        createdAt: NOW - 40 * DAY,
+        starred: true,
+      }),
       row({ id: "no-word", prompt: "雪山", createdAt: NOW, starred: true }),
     ];
     const out = filterHistoryRows(
