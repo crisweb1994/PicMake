@@ -1,7 +1,8 @@
 /** 页面框架：顶栏、历史抽屉与设置弹窗；主题与本机存储用量在这里投影 */
 import { useEffect, useState } from "react";
 import { TopNav } from "../components/TopNav";
-import { HistoryDrawer, SettingsModal } from "../components/Overlays";
+import { HistoryDrawer } from "../components/overlays/HistoryDrawer";
+import { SettingsModal } from "../components/overlays/SettingsModal";
 import { saveSettings, testConnection } from "../flows/settings";
 import { selectHistory, toggleStar } from "../flows/navigation";
 import { useTheme } from "../hooks/useTheme";

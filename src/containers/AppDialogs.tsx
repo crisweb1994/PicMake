@@ -1,5 +1,5 @@
 /** 全局确认框与保存中提示 */
-import { ConfirmDialog } from "../components/Overlays";
+import { ConfirmDialog } from "../components/overlays/ConfirmDialog";
 import { useWorkspace } from "../store/workspace";
 import { closeConfirm } from "../store/workspace/actions";
 
