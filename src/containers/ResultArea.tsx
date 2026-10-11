@@ -1,8 +1,7 @@
 /** 结果区：舞台、详情浮卡、轮播、灯箱与选区查看；把 store 与资源投影成展示组件的 props，操作交给 flows。
  *  副作用：舞台滚轮监听只在 selectCanWheelSwitch 成立期间挂载，条件不满足即移除 */
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { DetailCard } from "../components/DetailCard";
-import { MaskViewModal } from "../components/InpaintModal";
 import { Carousel, Lightbox } from "../components/Overlays";
 import { Stage } from "../components/Stage";
 import { copyPrompt, downloadAll, downloadImage } from "../flows/export";
@@ -37,6 +36,13 @@ import {
   selectCanWheelSwitch,
   selectSelectedImageId,
 } from "../store/workspace/selectors";
+
+// 选区查看弹层与局部重绘弹层同文件，按需加载，不进首屏 chunk
+const MaskViewModal = lazy(() =>
+  import("../components/InpaintModal").then((m) => ({
+    default: m.MaskViewModal,
+  })),
+);
 
 export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
   const { display, sourceImages } = assets;
@@ -165,15 +171,17 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
       />
 
       {viewMask && viewMaskUrl && (
-        <MaskViewModal
-          baseUrl={viewMaskUrl}
-          name={viewMask.name}
-          baseW={viewMask.base.width}
-          baseH={viewMask.base.height}
-          commands={viewMask.commands}
-          onAdjust={adjustFromViewMask}
-          onClose={closeViewMask}
-        />
+        <Suspense fallback={null}>
+          <MaskViewModal
+            baseUrl={viewMaskUrl}
+            name={viewMask.name}
+            baseW={viewMask.base.width}
+            baseH={viewMask.base.height}
+            commands={viewMask.commands}
+            onAdjust={adjustFromViewMask}
+            onClose={closeViewMask}
+          />
+        </Suspense>
       )}
     </>
   );
