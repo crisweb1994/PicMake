@@ -3,6 +3,11 @@ import { createRoot } from "react-dom/client";
 import { Toast } from "@heroui/react";
 import "./index.css";
 import App from "./App.tsx";
+import { useSettings } from "./store/settings";
+import { initWorkspace } from "./store/workspace/actions";
+
+// 首次引导：没有 apiKey 时打开设置（settings 已从 localStorage 同步恢复）
+initWorkspace({ settingsOpen: !useSettings.getState().apiKey });
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

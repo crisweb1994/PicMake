@@ -7,12 +7,14 @@ import type { PreparedGeneration } from "../lib/generation";
 import type { DisplayGen, DisplayImage } from "../lib/view-models";
 import { inputDisplay } from "../lib/view-models";
 import { nextSelection } from "../lib/workspace-rules";
+import { useWorkspace } from "../store/workspace";
+import { selectRecord } from "../store/workspace/actions";
 import { useImageAssets } from "./useImageAssets";
 
 const EMPTY_ROWS: HistoryRow[] = [];
 
 export function useHistory() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = useWorkspace((s) => s.nav.selectedId);
   const [pendingSave, setPendingSave] = useState<PreparedGeneration | null>(
     null,
   );
@@ -32,7 +34,7 @@ export function useHistory() {
     const previousRows = previousRowsRef.current;
     previousRowsRef.current = rawRows;
     const next = nextSelection(previousRows, rawRows, selectedId);
-    if (next !== selectedId) setSelectedId(next);
+    if (next !== selectedId) selectRecord(next);
   }, [rawRows, selectedId]);
 
   useEffect(() => {
@@ -93,14 +95,14 @@ export function useHistory() {
     setPendingSave(prepared);
     await saveGeneration(prepared);
     setPendingSave(null);
-    setSelectedId(prepared.row.id);
+    selectRecord(prepared.row.id);
   };
 
   return {
     rows,
     selectedId,
     selectedRow,
-    select: setSelectedId,
+    select: selectRecord,
     display,
     thumbnailUrls,
     sourceImages,

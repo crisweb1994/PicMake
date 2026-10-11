@@ -1,5 +1,5 @@
 /** 应用接线层：组合业务流程与查看状态，投影成各业务组件 props */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Stage } from "./components/Stage";
 import { CreateBar } from "./components/bar/CreateBar";
@@ -28,17 +28,35 @@ import {
   ERROR_HINTS,
   INPAINT_ISSUE_HINTS,
   MAX_INPUT_IMAGES,
-  type MaskCommand,
 } from "./lib/types";
-import type { DisplayImage } from "./lib/view-models";
 import {
   canOpenDrawing,
   canWheelSwitch,
   hasUserWork,
   shouldCollapseBar,
 } from "./lib/workspace-rules";
-import { useSettingsModal } from "./hooks/useSettings";
+import { useObjectUrl } from "./hooks/useObjectUrl";
+import { saveSettings, testConnection } from "./flows/settings";
 import { useSettings } from "./store/settings";
+import { useWorkspace } from "./store/workspace";
+import {
+  clearDone,
+  closeConfirm,
+  closeDrawer,
+  closeLightbox,
+  closeSettings,
+  closeViewMask,
+  openBar,
+  openDrawer,
+  openLightbox,
+  openSettings,
+  resetView,
+  setBarMode,
+  setConfirm,
+  setFocusIdx,
+  setPreviewId,
+  showViewMask,
+} from "./store/workspace/actions";
 import { useTheme } from "./hooks/useTheme";
 import { toast } from "@heroui/react";
 
@@ -59,58 +77,41 @@ function onDrawLimit(kind: "commands" | "points") {
 }
 
 export default function App() {
-  const {
-    settingsOpen,
-    saveSettings,
-    openSettings,
-    closeSettings,
-    runTestConnection,
-  } = useSettingsModal();
   const form = useForm();
   const history = useHistory();
   const theme = useTheme();
   const baseUrl = useSettings((s) => s.baseUrl);
   const apiKey = useSettings((s) => s.apiKey);
-  const [previewId, setPreviewId] = useState<string | null>(null);
-  // 底栏：mini 收起 / full 展开
-  const [barMode, setBarMode] = useState<"mini" | "full">("mini");
-  /* 轮播与灯箱的查看状态；何时清理由页面流程决定 */
-  const [focusIdx, setFocusIdx] = useState<number | null>(null);
-  const [lightbox, setLightbox] = useState<DisplayImage | null>(null);
-  const clearViewingState = useCallback(() => {
-    setFocusIdx(null);
-    setLightbox(null);
-  }, []);
-  /** 展开创作条并聚焦描述框（草稿落位与手动展开共用） */
-  const openBar = () => {
-    setBarMode("full");
-    form.focus();
-  };
-  const pm = usePicmake({
-    history,
-    form,
-    onViewReset: () => {
-      clearViewingState();
-      setPreviewId(null);
-    },
-    onDraftReady: openBar,
-  });
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // 查看与弹层状态在 store：这里只读，修改走迁移函数
+  const {
+    barMode,
+    focusSeq,
+    focusIdx,
+    lightboxId,
+    previewId,
+    drawerOpen,
+    settingsOpen,
+    viewMask,
+  } = useWorkspace((s) => s.view);
+  const confirm = useWorkspace((s) => s.confirm);
+  const lastDoneId = useWorkspace((s) => s.nav.lastDoneId);
+  const pm = usePicmake({ history, form });
   /** 详情浮卡的手动收起按记录 id 记忆：换记录后自动重新出现 */
   const [detailClosedFor, setDetailClosedFor] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const lightbox =
+    history.display?.images.find((image) => image.id === lightboxId) ?? null;
+  const viewMaskUrl = useObjectUrl(viewMask?.base.blob);
+
+  // focusSeq 变化即聚焦描述框（展开创作条、草稿落位）；promptRef 引用稳定，只响应聚焦意图
+  const { promptRef } = form;
+  useEffect(() => {
+    if (focusSeq) requestAnimationFrame(() => promptRef.current?.focus());
+  }, [focusSeq, promptRef]);
 
   /* ── 局部重绘：弹层涂选只产出草稿附件，确认回创作条，不发请求 ── */
   // draft-input 入口被涂选的原输入 id（确认后重排为图1）
   const inpaintChosenRef = useRef<string | null>(null);
-  const [viewMask, setViewMask] = useState<{
-    baseUrl: string;
-    name: string;
-    w: number;
-    h: number;
-    commands: MaskCommand[];
-    rowId: string;
-  } | null>(null);
   const inpaint = useInpaint({
     onApply: ({ base, mask, original, entry }) => {
       if (entry === "result") {
@@ -120,9 +121,8 @@ export default function App() {
         ]);
         form.applyInpaint({ base, mask, original, entry });
         history.select(null);
-        pm.clearDone();
-        clearViewingState();
-        setPreviewId(null);
+        clearDone();
+        resetView();
         openBar();
         toast("选区已应用：填写修改描述后生成");
       }
@@ -150,7 +150,7 @@ export default function App() {
     canOpenDrawing({
       run: pm.currentRunPhase(),
       reading: form.reading,
-      confirming: !!pm.confirmState,
+      confirming: !!confirm,
       drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
     });
 
@@ -233,7 +233,7 @@ export default function App() {
   const requestCloseInpaint = () => {
     if (inpaint.confirming) return;
     if (inpaint.changed) {
-      pm.setConfirmState({
+      setConfirm({
         title: "放弃本次选区修改？",
         desc: "未确认的涂选不会保存；已确认的选区保持不变。",
         okLabel: "放弃修改",
@@ -259,20 +259,14 @@ export default function App() {
         toast("选区数据无法读取，请重新选择修改区域");
         return;
       }
-      setViewMask({
-        baseUrl: URL.createObjectURL(baseRow.blob),
+      showViewMask({
+        base: baseRow,
         name: row.inputSources?.[0]?.name ?? "底图",
-        w: baseRow.width,
-        h: baseRow.height,
         commands: maskRow.mask.commands,
         rowId: row.id,
       });
     })();
   };
-  useEffect(() => {
-    if (!viewMask) return;
-    return () => URL.revokeObjectURL(viewMask.baseUrl);
-  }, [viewMask]);
 
   /* ── 草图画板：只产出附件，确认落回创作条，不发请求 ── */
   const sketch = useSketch({
@@ -344,7 +338,7 @@ export default function App() {
   const requestCloseSketch = () => {
     if (sketch.confirming) return;
     if (sketch.changed) {
-      pm.setConfirmState({
+      setConfirm({
         title: "放弃本次草图修改？",
         desc: "未确认的笔画不会保存；已确认的草图附件保持不变。",
         okLabel: "放弃修改",
@@ -385,12 +379,12 @@ export default function App() {
 
   /** complete 态只在展示的确实是刚保存的那次生成时成立 */
   const doneGen =
-    pm.lastDoneId && history.display?.row.id === pm.lastDoneId
+    lastDoneId && history.display?.row.id === lastDoneId
       ? history.display
       : null;
 
   const expandBar = () => {
-    pm.clearDone();
+    clearDone();
     openBar();
   };
 
@@ -450,7 +444,7 @@ export default function App() {
         !!viewMask ||
         focusIdx !== null,
       drawing: !!sketch.session || !!inpaint.session || inpaint.opening,
-      confirming: !!pm.confirmState,
+      confirming: !!confirm,
     });
     if (!enabled) return;
     let last = 0;
@@ -486,7 +480,7 @@ export default function App() {
       history.display.row.id,
       `已有作品 · 第 ${idx + 1} 张`,
     );
-    pm.clearDone();
+    clearDone();
     setBarMode("full");
     toast("已加入参考图，继续描述后生成");
   };
@@ -500,11 +494,7 @@ export default function App() {
           genPlan={pm.plan}
           display={history.display}
           onFocus={setFocusIdx}
-          onLightbox={(id) =>
-            setLightbox(
-              history.display?.images.find((image) => image.id === id) ?? null,
-            )
-          }
+          onLightbox={openLightbox}
           onDownload={downloadOne}
           onDownloadAll={downloadAll}
           onReuse={() => history.display && pm.reuseParams(history.display.row)}
@@ -518,7 +508,7 @@ export default function App() {
       <TopNav
         theme={theme.resolved}
         onToggleTheme={theme.toggle}
-        onHistory={() => setDrawerOpen(true)}
+        onHistory={openDrawer}
         onSettings={openSettings}
       />
 
@@ -605,10 +595,10 @@ export default function App() {
         onSelect={(id) => {
           const row = history.rows.find((row) => row.id === id);
           if (row) void pm.selectHistory(row);
-          setDrawerOpen(false);
+          closeDrawer();
         }}
         onToggleStar={(id) => void history.toggleStar(id)}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
       />
 
       <SettingsModal
@@ -619,7 +609,7 @@ export default function App() {
         storageText={`本地已存 ${history.rows.length} 次 · ${totalImages} 张${usageText}`}
         theme={theme.pref}
         onThemeChange={theme.setPref}
-        onTest={runTestConnection}
+        onTest={testConnection}
         onSave={saveSettings}
         onClose={closeSettings}
       />
@@ -641,17 +631,14 @@ export default function App() {
               setFocusIdx((focusIdx! + 1) % n);
             }}
             onClose={() => setFocusIdx(null)}
-            onZoom={() => setLightbox(history.display!.images[focusIdx!])}
+            onZoom={() => openLightbox(history.display!.images[focusIdx!].id)}
             onDownload={() => downloadOne(focusIdx!)}
             onReuse={() => pm.reuseParams(history.display!.row)}
             onEdit={history.pendingSave ? undefined : editSelected}
             onDelete={() => pm.deleteGen(history.display!.row)}
           />
         )}
-      <ConfirmDialog
-        state={pm.confirmState}
-        onCancel={() => pm.setConfirmState(null)}
-      />
+      <ConfirmDialog state={confirm} onCancel={closeConfirm} />
       <Lightbox
         img={lightbox}
         prompt={history.display?.row.prompt ?? ""}
@@ -663,10 +650,10 @@ export default function App() {
           if (idx >= 0) downloadOne(idx);
         }}
         onReuse={() => {
-          setLightbox(null);
+          closeLightbox();
           if (history.display) pm.reuseParams(history.display.row);
         }}
-        onClose={() => setLightbox(null)}
+        onClose={closeLightbox}
       />
       <InputPreview
         key={previewId ?? "closed"}
@@ -725,19 +712,19 @@ export default function App() {
           正在读取底图…
         </p>
       )}
-      {viewMask && (
+      {viewMask && viewMaskUrl && (
         <MaskViewModal
-          baseUrl={viewMask.baseUrl}
+          baseUrl={viewMaskUrl}
           name={viewMask.name}
-          baseW={viewMask.w}
-          baseH={viewMask.h}
+          baseW={viewMask.base.width}
+          baseH={viewMask.base.height}
           commands={viewMask.commands}
           onAdjust={() => {
             const row = history.rows.find((r) => r.id === viewMask.rowId);
-            setViewMask(null);
+            closeViewMask();
             if (row) pm.adjustInpaint(row);
           }}
-          onClose={() => setViewMask(null)}
+          onClose={closeViewMask}
         />
       )}
       {pm.saving && (

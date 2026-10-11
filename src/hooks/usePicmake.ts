@@ -17,13 +17,21 @@ import {
   type InputImage,
   type MaskImage,
 } from "../lib/types";
-import type { ConfirmState } from "../lib/view-models";
 import {
   hasUserWork,
   leaveDecision,
   type RunPhase,
 } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
+import { useWorkspace } from "../store/workspace";
+import {
+  clearDone,
+  openBar,
+  resetView,
+  setConfirm,
+  setLastDoneId,
+  setReturnId,
+} from "../store/workspace/actions";
 import { toast } from "@heroui/react";
 
 /** 错误反馈统一走 toast：标题 + 建议或原始信息 */
@@ -39,24 +47,15 @@ function toastError(error: unknown) {
 export function usePicmake({
   history,
   form,
-  onViewReset,
-  onDraftReady,
 }: {
   history: ReturnType<typeof useHistory>;
   form: ReturnType<typeof useForm>;
-  onViewReset: () => void;
-  /** 草稿落位后回调：页面据此展开创作条并聚焦 */
-  onDraftReady: () => void;
 }) {
   const { selectedId, display, pendingSave } = history;
-  const [returnId, setReturnId] = useState<string | null>(null);
+  const returnId = useWorkspace((s) => s.nav.returnId);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
-  /** 底栏 complete 态数据源：最近保存成功的结果 id */
-  const [lastDoneId, setLastDoneId] = useState<string | null>(null);
   const generation = useGeneration();
-  const clearDone = () => setLastDoneId(null);
   /** 完整工作流锁：第一个 await 前同步锁住资源准备→请求→解码→保存 */
   const workflowBusyRef = useRef(false);
 
@@ -77,7 +76,7 @@ export function usePicmake({
     });
     if (decision === "blocked") return;
     if (decision === "confirm-unsaved") {
-      setConfirmState({
+      setConfirm({
         title: "放弃未保存结果？",
         desc: "图片已经生成，但尚未保存到本机。离开后这次结果会丢失。",
         onOk: () => {
@@ -88,7 +87,7 @@ export function usePicmake({
       return;
     }
     if (decision === "confirm-draft") {
-      setConfirmState({
+      setConfirm({
         title: "放弃当前草稿？",
         desc: "未提交的修改将被放弃。",
         onOk: onLeave,
@@ -134,7 +133,7 @@ export function usePicmake({
     if (workflowBusyRef.current) return;
     workflowBusyRef.current = true;
     history.select(null);
-    onViewReset();
+    resetView();
     // 配置在发请求时读一次，不订阅 settings
     const { baseUrl, apiKey } = useSettings.getState();
     const config: ApiConfig = { baseUrl, apiKey };
@@ -263,8 +262,8 @@ export function usePicmake({
       form.acceptSize();
       history.select(null);
       setReturnId(null);
-      onViewReset();
-      onDraftReady();
+      resetView();
+      openBar();
       toast("已恢复上次重绘，可继续调整后生成");
     }, true);
   };
@@ -304,7 +303,7 @@ export function usePicmake({
     generation.reset();
     form.initialize();
     setReturnId(null);
-    onViewReset();
+    resetView();
   };
 
   const selectHistory = (row: HistoryRow) => {
@@ -321,8 +320,8 @@ export function usePicmake({
       form.initialize(row.params);
       history.select(null);
       setReturnId(null);
-      onViewReset();
-      onDraftReady();
+      resetView();
+      openBar();
       toast("参数已回填，可直接生成");
     });
   };
@@ -342,9 +341,9 @@ export function usePicmake({
       ]);
       setReturnId(row.id);
       history.select(null);
-      onViewReset();
+      resetView();
       generation.reset();
-      onDraftReady();
+      openBar();
     }, true);
   };
 
@@ -365,7 +364,7 @@ export function usePicmake({
 
   const deleteGen = (row: HistoryRow) => {
     if (currentRunPhase() !== "idle") return;
-    setConfirmState({
+    setConfirm({
       title: "删除这次生成？",
       desc: `包含 ${row.imageIds.length} 张图片，删除后无法恢复。`,
       onOk: () => {
@@ -396,10 +395,6 @@ export function usePicmake({
     canReturn: !!returnId && history.rows.some((row) => row.id === returnId),
     saving,
     newGeneration,
-    confirmState,
-    setConfirmState,
-    lastDoneId,
-    clearDone,
     currentRunPhase,
     requestLeave,
   };
