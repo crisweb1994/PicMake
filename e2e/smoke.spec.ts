@@ -1,0 +1,94 @@
+import { expect, test, type Page } from "@playwright/test";
+
+// 与 playwright.config.ts 的 MOCK_PORT 一致
+const MOCK = "http://localhost:8788";
+
+const prompt = (page: Page) => page.getByRole("textbox", { name: "画面描述" });
+const generate = (page: Page) => page.getByRole("button", { name: "生成图片" });
+
+/** 首次进入：没有 Key 时自动弹出设置；填入 mock 地址并保存 */
+async function configure(page: Page) {
+  await page.goto("/");
+  const dialog = page.getByRole("dialog", { name: "设置" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("API 地址").fill(MOCK);
+  await dialog.getByLabel("API Key").fill("mock-key");
+  await dialog.getByRole("button", { name: "保存" }).click();
+  await expect(dialog).toBeHidden();
+}
+
+/** 创作条初始是收起态：展开后才有描述框 */
+async function expandBar(page: Page) {
+  await page.getByRole("button", { name: "展开并生成" }).click();
+  await expect(prompt(page)).toBeVisible();
+}
+
+test("首次进入引导配置，保存后可以继续使用", async ({ page }) => {
+  await configure(page);
+  await expect(page.getByText("设置已保存")).toBeVisible();
+  await expandBar(page);
+});
+
+test("输入描述生成图片，完成后保存到本地历史", async ({ page }) => {
+  await configure(page);
+  await expandBar(page);
+  await prompt(page).fill("雪夜的山顶小屋");
+  await generate(page).click();
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeVisible();
+
+  await page.getByRole("button", { name: "历史" }).click();
+  const drawer = page.getByRole("dialog", { name: "生成历史" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText("雪夜的山顶小屋")).toBeVisible();
+});
+
+test("生成中可以取消，取消后回到可输入状态且草稿保留", async ({ page }) => {
+  await configure(page);
+  await expandBar(page);
+  await prompt(page).fill("慢速生成 [slow]");
+  await generate(page).click();
+  const cancel = page.getByRole("button", { name: "取消生成" });
+  await expect(cancel).toBeVisible();
+  await cancel.click();
+  await expect(cancel).toBeHidden();
+  await expect(prompt(page)).toHaveValue("慢速生成 [slow]");
+  await expect(page.getByText("生成完成 · 已保存本地")).toBeHidden();
+});
+
+test("服务端返回 401：提示 Key 问题，草稿保留，不产生历史", async ({
+  page,
+}) => {
+  await configure(page);
+  await expandBar(page);
+  await prompt(page).fill("错误场景 [401]");
+  await generate(page).click();
+  await expect(page.getByText(/API Key 无效/)).toBeVisible();
+  await expect(prompt(page)).toHaveValue("错误场景 [401]");
+
+  await page.getByRole("button", { name: "历史" }).click();
+  const drawer = page.getByRole("dialog", { name: "生成历史" });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText("错误场景 [401]")).toBeHidden();
+});
+
+test("画一张草图并确认：作为输入图落进创作条", async ({ page }) => {
+  await configure(page);
+  await expandBar(page);
+  await page.getByRole("button", { name: "添加输入" }).click();
+  await page.getByRole("button", { name: /画草图/ }).click();
+
+  const board = page.getByRole("dialog", { name: "草图画板" });
+  await expect(board).toBeVisible();
+  const canvas = board.locator("canvas");
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.5, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  await board.getByRole("button", { name: "使用草图" }).click();
+  await expect(board).toBeHidden();
+  await expect(page.getByRole("button", { name: "移除图1" })).toBeVisible();
+});

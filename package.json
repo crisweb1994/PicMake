@@ -33,7 +33,8 @@
     "check": "oxlint && prettier --check . && vitest run && pnpm build",
     "test": "vitest run",
     "preview": "vite preview",
-    "mock": "node scripts/mock-api.mjs"
+    "mock": "node scripts/mock-api.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@heroui/react": "~3.2.6",
@@ -52,6 +53,7 @@
     "zustand": "~5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "~1.64.0",
     "@tailwindcss/vite": "~4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",

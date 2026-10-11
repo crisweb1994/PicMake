@@ -20,6 +20,8 @@ pnpm dev            # 开发服务器（5173）
 pnpm build          # tsc -b && vite build
 pnpm lint           # oxlint（本项目不用 ESLint）
 pnpm test           # vitest run（node 环境：lib 纯函数、store 迁移函数与 selector）
+pnpm e2e            # Playwright 冒烟（专用端口 5273 / 8788，自带 mock；首次需 `pnpm exec playwright install chromium`）
+pnpm check          # lint + prettier --check + test + build（CI 同款）
 pnpm mock           # 本地 mock API（8787）：设置里 API 地址填 http://localhost:8787；描述里的 [401] [429] [slow] 等标记触发错误与慢速流，见 README
 pnpm exec prettier --write <本次修改的文件>
 ```
@@ -120,7 +122,7 @@ axios、openai SDK、ESLint（用 oxlint）、TanStack Query、Redux、react-rou
 
 - **代码改动**：执行 `pnpm lint` 和 `pnpm build`；格式使用 Prettier，仅处理本次修改的文件。
 - **纯函数与 store 迁移函数的行为改动**：执行 `pnpm test`，必要时补充边界用例。vitest 在 node 环境测 `src/**/*.test.ts`：`lib/` 纯函数，以及 `store/workspace/` 的迁移函数与 selector（不依赖 DOM），验证输入输出、状态变化与非法输入拦截；不为内部重构编写绑定实现细节的测试。flows 依赖 IndexedDB、网络与 toast，除非能用假实现隔离（如 `history-sync.test.ts`），否则按下一条在浏览器验证。
-- **UI 改动**：在浏览器验证受影响的交互与状态，包括键盘操作、错误与禁用状态；构建通过不能替代交互验证。生成、取消、报错路径可用 `pnpm mock` 覆盖。
+- **UI 改动**：先跑 `pnpm e2e` 确认主流程（配置、生成、取消、错误、草图）没被破坏；再在浏览器验证受影响的交互与状态，包括键盘操作、错误与禁用状态；构建通过不能替代交互验证。生成、取消、报错路径可用 `pnpm mock` 覆盖。
 - **仅文档改动**：检查内容、引用路径与格式，无需运行应用构建和测试。
 - **提交前**：检查最终 diff，执行 `git diff --check`，只提交本次任务的文件，保留用户已有改动。
 - **交付时**：说明改了什么、实际执行的检查及结果、尚未验证的部分。检查失败须说明原因；区分 Mock 验证与真实 API 验证。
