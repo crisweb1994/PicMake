@@ -100,7 +100,7 @@ describe("上传读取", () => {
     expect(draft()).toMatchObject({
       readId: null,
       dirty: true,
-      uploadError: "",
+      uploadIssues: [],
     });
     expect(draft().inputs.map((i) => i.imageId)).toEqual(["a"]);
     expect(draft().form).toMatchObject({ ratio: "auto", cw: "", ch: "" });
@@ -113,13 +113,14 @@ describe("上传读取", () => {
     finishRead(
       "r1",
       [input(image("x")), input(image("y")), input(image("z"))],
-      ["bad.png：请选择有效的 PNG、JPEG 或 WebP 图片。"],
+      [{ kind: "file", file: "bad.png", error: "invalid-image" }],
     );
     expect(draft().inputs).toHaveLength(16);
     expect(draft().form.ratio).toBe("16:9");
-    expect(draft().uploadError).toBe(
-      "bad.png：请选择有效的 PNG、JPEG 或 WebP 图片。\n最多添加 16 张输入图片。本次添加 1 张，2 张未添加。",
-    );
+    expect(draft().uploadIssues).toEqual([
+      { kind: "file", file: "bad.png", error: "invalid-image" },
+      { kind: "overflow", kept: 1, skipped: 2 },
+    ]);
   });
 });
 
@@ -194,22 +195,25 @@ describe("局部重绘落草稿", () => {
 
 describe("设为参考图", () => {
   it("第一张时比例改为 auto；重复与超限不添加", () => {
-    expect(appendExisting("x", "g1", "已有作品 · 第 1 张")).toBe("added");
+    expect(appendExisting("x", "g1")).toBe("added");
     expect(draft().form.ratio).toBe("auto");
-    expect(appendExisting("x", "g1", "已有作品 · 第 1 张")).toBe("duplicate");
+    expect(appendExisting("x", "g1")).toBe("duplicate");
     initializeDraft(undefined, inputs(16));
-    expect(appendExisting("y", "g2", "已有作品 · 第 1 张")).toBe("too-many");
+    expect(appendExisting("y", "g2")).toBe("too-many");
     expect(draft().inputs).toHaveLength(16);
   });
 });
 
 describe("草图附件", () => {
+  /** 起始文字由调用方按当前语言生成，store 只负责决定填不填、图序号是几 */
+  const seed = (index: number) => `起始文字 ${index}`;
+
   it("第一次加草图：尺寸为 auto 时改为草图尺寸，描述为空时填入起始文字，并展开创作条", () => {
     patchForm({ ratio: "auto" });
-    const result = applySketchAttachment(sketchImage("s1"), null);
+    const result = applySketchAttachment(sketchImage("s1"), null, seed);
     expect(result).toEqual({ ok: true, sizeSetTo: { w: 800, h: 600 } });
     expect(draft().form).toMatchObject({ cw: "800", ch: "600" });
-    expect(draft().form.prompt.startsWith("以图1的草图为构图参考")).toBe(true);
+    expect(draft().form.prompt).toBe("起始文字 1");
     expect(useWorkspace.getState().view).toMatchObject({
       barMode: "full",
       focusSeq: 1,
@@ -219,7 +223,7 @@ describe("草图附件", () => {
   it("已有草图时原位替换，描述不为空不覆盖", () => {
     initializeDraft(undefined, [input(image("a")), input(sketchImage("s1"))]);
     patchForm({ prompt: "保留这句" });
-    const result = applySketchAttachment(sketchImage("s2"), null);
+    const result = applySketchAttachment(sketchImage("s2"), null, seed);
     expect(result).toEqual({ ok: true, sizeSetTo: null });
     expect(draft().inputs.map((i) => i.imageId)).toEqual(["a", "s2"]);
     expect(draft().form.prompt).toBe("保留这句");
@@ -227,7 +231,7 @@ describe("草图附件", () => {
 
   it("已满 16 张且没有可替换的草图时拒绝", () => {
     initializeDraft(undefined, inputs(16));
-    expect(applySketchAttachment(sketchImage("s1"), null)).toEqual({
+    expect(applySketchAttachment(sketchImage("s1"), null, seed)).toEqual({
       ok: false,
     });
     expect(draft().inputs).toHaveLength(16);

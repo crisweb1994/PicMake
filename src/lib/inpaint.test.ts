@@ -64,12 +64,12 @@ describe("checkInpaintBase / inpaintTargetSize", () => {
   it("1920×1080 触发建议与原因文案", () => {
     const t = inpaintTargetSize(1920, 1080)!;
     expect(t).toMatchObject({ w: 1920, h: 1072, suggested: true });
-    expect(t.reason).toBe("高度向下取 16 的倍数");
+    expect(t.reason).toEqual({ floor: "h", scaled: false });
   });
 
   it("12MP 入框原因", () => {
     const t = inpaintTargetSize(4032, 3024)!;
-    expect(t.reason).toBe("等比放入 3840 × 2160 输出框");
+    expect(t.reason).toEqual({ floor: null, scaled: true });
   });
 
   it("超像素与超比例拦截（D2/Q10）", () => {
@@ -85,8 +85,12 @@ describe("checkInpaintBase / inpaintTargetSize", () => {
   });
 
   it("sizeReason 组合原因", () => {
-    expect(sizeReason(1920, 1080)).toBe("高度向下取 16 的倍数");
-    expect(sizeReason(1024, 1024)).toBe("原尺寸合法直出");
+    expect(sizeReason(1920, 1080)).toEqual({ floor: "h", scaled: false });
+    expect(sizeReason(1024, 1024)).toEqual({ floor: null, scaled: false });
+    expect(sizeReason(1000, 1000)).toEqual({ floor: "both", scaled: false });
+    expect(sizeReason(1001, 1024)).toEqual({ floor: "w", scaled: false });
+    expect(sizeReason(4096, 2304)).toEqual({ floor: null, scaled: true });
+    expect(sizeReason(4000, 3000)).toEqual({ floor: "h", scaled: true });
   });
 });
 

@@ -2,7 +2,8 @@
 import { liveQuery } from "dexie";
 import { toast } from "@heroui/react";
 import { db, ensurePersistentStorage, type HistoryRow } from "../db/schema";
-import { ERROR_HINTS, ERROR_TITLES } from "../lib/types";
+import { t } from "../i18n";
+import { kindMessage } from "../i18n/errors";
 import { rowsLoaded } from "../store/workspace/actions";
 
 /** 订阅源的最小接口，测试可替换 */
@@ -24,10 +25,7 @@ export function startHistorySync(
   void ensurePersistentStorage();
   const subscription = observe().subscribe({
     next: rowsLoaded,
-    error: () =>
-      toast(
-        `${ERROR_TITLES["history-unavailable"]}：${ERROR_HINTS["history-unavailable"]}`,
-      ),
+    error: () => toast(kindMessage("history-unavailable", t)),
   });
   return () => subscription.unsubscribe();
 }

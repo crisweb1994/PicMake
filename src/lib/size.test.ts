@@ -11,8 +11,8 @@ describe("validateSize", () => {
   });
 
   it("拒绝不能被 16 整除的宽高", () => {
-    expect(validateSize(1000, 1000)).toContain("宽高须能被 16 整除");
-    expect(validateSize(1024, 1080)).toContain("宽高须能被 16 整除");
+    expect(validateSize(1000, 1000)).toContain("not-multiple-16");
+    expect(validateSize(1024, 1080)).toContain("not-multiple-16");
   });
 
   it("拒绝超比例", () => {
@@ -21,9 +21,9 @@ describe("validateSize", () => {
   });
 
   it("按 D4 旋转归一 4K 框拒绝超上限（旧实现 3840×3840 误通过）", () => {
-    expect(validateSize(3840, 3840)).toContain("长宽上限 3840 × 2160");
-    expect(validateSize(2560, 2560)).toContain("长宽上限 3840 × 2160");
-    expect(validateSize(3856, 2160)).toContain("长宽上限 3840 × 2160");
-    expect(validateSize(2160, 3856)).toContain("长宽上限 3840 × 2160");
+    expect(validateSize(3840, 3840)).toContain("too-large");
+    expect(validateSize(2560, 2560)).toContain("too-large");
+    expect(validateSize(3856, 2160)).toContain("too-large");
+    expect(validateSize(2160, 3856)).toContain("too-large");
   });
 });

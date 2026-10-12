@@ -2,6 +2,7 @@
  *  有修改时关闭由接线层确认。
  *  副作用（随卸载清理）：ResizeObserver / 初始焦点 rAF / 指针捕获 */
 import { FocusScope } from "react-aria";
+import { useTranslation } from "react-i18next";
 import {
   useCallback,
   useEffect,
@@ -21,9 +22,11 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { sketchMeta } from "../i18n/labels";
 import type {
   SketchCommand,
   SketchDocument,
+  SketchOrigin,
   SketchPoint,
   SketchStroke,
 } from "../lib/types";
@@ -56,7 +59,8 @@ const SLIDER_TRACK = 168; // 滑杆可拖长度 = 184 - 上下 8px
 export function SketchModal(props: {
   doc: SketchDocument;
   cursor: number;
-  meta: string;
+  /** 打开的来源：决定右下角说明里除尺寸外的部分 */
+  origin: SketchOrigin;
   confirming: boolean;
   onStroke: (command: SketchCommand) => void;
   onClear: () => void;
@@ -67,6 +71,7 @@ export function SketchModal(props: {
   onRequestClose: () => void;
   onLimit: (kind: "commands" | "points") => void;
 }) {
+  const { t } = useTranslation();
   const { doc, cursor } = props;
   const zoneRef = useRef<HTMLDivElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
@@ -82,7 +87,7 @@ export function SketchModal(props: {
   const ptsWarnedRef = useRef(false);
   const [tool, setTool] = useState<"pen" | "eraser">("pen");
   const [colorIdx, setColorIdx] = useState(0);
-  const [colorHex, setColorHex] = useState(SKETCH_PALETTE[0].hex);
+  const [colorHex, setColorHex] = useState<string>(SKETCH_PALETTE[0].hex);
   const [sizeT, setSizeT] = useState(0.35);
   const [box, setBox] = useState<PaperBox | null>(null);
   const [hasInk, setHasInk] = useState(false);
@@ -266,7 +271,7 @@ export function SketchModal(props: {
           className="pm-sk-board"
           role="dialog"
           aria-modal="true"
-          aria-label="草图画板"
+          aria-label={t("sketch.board")}
         >
           <div className="pm-sk-zone" ref={zoneRef}>
             {box && (
@@ -297,7 +302,7 @@ export function SketchModal(props: {
                   style={{ opacity: hasInk ? 0 : 1 }}
                   aria-hidden={hasInk}
                 >
-                  在纸上画下构图：位置、轮廓、色块
+                  {t("sketch.hint")}
                 </p>
                 <div
                   className="pm-sk-ghost"
@@ -311,19 +316,23 @@ export function SketchModal(props: {
           <button
             type="button"
             className="pm-sk-close"
-            aria-label="关闭画板"
+            aria-label={t("sketch.close")}
             disabled={busy}
             onClick={props.onRequestClose}
           >
             <X size={20} />
           </button>
 
-          <div className="pm-sk-pill" role="toolbar" aria-label="绘画工具">
+          <div
+            className="pm-sk-pill"
+            role="toolbar"
+            aria-label={t("sketch.tools")}
+          >
             <button
               type="button"
               ref={penBtnRef}
               className={"pm-sk-tool pen" + (tool === "pen" ? " on" : "")}
-              aria-label="画笔"
+              aria-label={t("sketch.pen")}
               aria-pressed={tool === "pen"}
               onClick={() => setTool("pen")}
             >
@@ -332,8 +341,8 @@ export function SketchModal(props: {
             <button
               type="button"
               className="pm-sk-tool"
-              aria-label="文字（首版未提供）"
-              title="文字 · 首版未提供"
+              aria-label={t("sketch.textDisabled")}
+              title={t("sketch.textTitle")}
               disabled
             >
               <Type size={19} />
@@ -341,8 +350,8 @@ export function SketchModal(props: {
             <button
               type="button"
               className="pm-sk-tool"
-              aria-label="形状（首版未提供）"
-              title="形状 · 首版未提供"
+              aria-label={t("sketch.shapeDisabled")}
+              title={t("sketch.shapeTitle")}
               disabled
             >
               <Shapes size={19} />
@@ -350,7 +359,7 @@ export function SketchModal(props: {
             <button
               type="button"
               className={"pm-sk-tool" + (tool === "eraser" ? " on" : "")}
-              aria-label="橡皮"
+              aria-label={t("sketch.eraser")}
               aria-pressed={tool === "eraser"}
               onClick={() => setTool("eraser")}
             >
@@ -358,10 +367,14 @@ export function SketchModal(props: {
             </button>
           </div>
 
-          <div className="pm-sk-hist" role="group" aria-label="撤销重做与清空">
+          <div
+            className="pm-sk-hist"
+            role="group"
+            aria-label={t("sketch.history")}
+          >
             <button
               type="button"
-              aria-label="撤销"
+              aria-label={t("common.undo")}
               disabled={!canUndo || busy}
               onClick={props.onUndo}
             >
@@ -369,7 +382,7 @@ export function SketchModal(props: {
             </button>
             <button
               type="button"
-              aria-label="重做"
+              aria-label={t("common.redo")}
               disabled={!canRedo || busy}
               onClick={props.onRedo}
             >
@@ -377,7 +390,7 @@ export function SketchModal(props: {
             </button>
             <button
               type="button"
-              aria-label="清空"
+              aria-label={t("sketch.clear")}
               disabled={!hasInk || busy}
               onClick={props.onClear}
             >
@@ -390,7 +403,7 @@ export function SketchModal(props: {
               <input
                 className="pm-sk-size-input"
                 type="range"
-                aria-label="工具大小"
+                aria-label={t("sketch.size")}
                 min={0}
                 max={1}
                 step={0.01}
@@ -411,7 +424,11 @@ export function SketchModal(props: {
             />
           </div>
 
-          <div className="pm-sk-colors" role="group" aria-label="画笔颜色">
+          <div
+            className="pm-sk-colors"
+            role="group"
+            aria-label={t("sketch.colors")}
+          >
             {/* 原生取色输入保留 1px 布局盒（display:none 会让取色窗弹到视口左上角） */}
             <input
               ref={customColorRef}
@@ -427,7 +444,7 @@ export function SketchModal(props: {
             <button
               type="button"
               className="pm-sk-sw rainbow"
-              aria-label="自定义颜色"
+              aria-label={t("sketch.customColor")}
               aria-pressed={colorIdx === -1}
               onClick={() => {
                 setTool("pen");
@@ -440,8 +457,10 @@ export function SketchModal(props: {
                 type="button"
                 className={"pm-sk-sw" + (colorIdx === i ? " on" : "")}
                 style={{ background: c.hex }}
-                title={c.name}
-                aria-label={`颜色 · ${c.name}`}
+                title={t(`sketch.colorName.${c.id}`)}
+                aria-label={t("sketch.color", {
+                  name: t(`sketch.colorName.${c.id}`),
+                })}
                 aria-pressed={colorIdx === i}
                 onClick={() => {
                   setTool("pen");
@@ -459,15 +478,15 @@ export function SketchModal(props: {
               (hasInk && !busy ? " ready" : "") +
               (busy ? " busy" : "")
             }
-            aria-label={busy ? "正在准备" : "使用草图"}
-            title={busy ? "正在准备…" : "使用草图"}
+            aria-label={busy ? t("sketch.preparing") : t("sketch.use")}
+            title={busy ? t("sketch.preparingTitle") : t("sketch.use")}
             disabled={!hasInk || busy}
             onClick={props.onConfirm}
           >
             {busy ? <Loader2 size={21} /> : <Check size={21} />}
           </button>
 
-          <p className="pm-sk-meta">{props.meta}</p>
+          <p className="pm-sk-meta">{sketchMeta(doc, props.origin, t)}</p>
         </div>
       </div>
     </FocusScope>

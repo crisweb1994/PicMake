@@ -134,7 +134,7 @@ export interface InpaintHistory {
   originalSource?: InputSource;
 }
 
-/** 草稿校验错误码（非异常，就地展示文案） */
+/** 草稿校验错误码（非异常）；界面文案见 i18n 资源 inpaint.issue.* */
 export type InpaintIssue =
   | "empty-mask"
   | "invalid-mask"
@@ -143,18 +143,6 @@ export type InpaintIssue =
   | "unsupported-orientation"
   | "canvas-failed"
   | "mask-too-large";
-
-export const INPAINT_ISSUE_HINTS: Record<InpaintIssue, string> = {
-  "empty-mask": "请先涂选需要修改的区域",
-  "invalid-mask": "选区数据无法读取，请重新选择修改区域",
-  "pixel-limit":
-    "图片像素过多（超过 16,777,216 像素总量），请缩小后再使用局部重绘",
-  "ratio-limit":
-    "底图长宽比超出 1:3–3:1 的允许范围，请更换图片或自行裁剪后上传",
-  "unsupported-orientation": "无法正确处理这张图片的方向，请重新导出图片后再试",
-  "canvas-failed": "当前设备无法处理这张图片，请缩小图片后再试",
-  "mask-too-large": "选区文件超出当前限制，请调整后再试",
-};
 
 export interface ImageRequestResult {
   images: string[];
@@ -177,50 +165,75 @@ export type ApiErrorKind =
   | "network"
   | "unknown";
 
+/** 客户端自己产生的错误细节（服务端原文放 ApiError.message，不翻译）；界面文案见 i18n 资源 errors.detail.* */
+export const API_ERROR_DETAIL_CODES = [
+  "key-invalid",
+  "org-unverified",
+  "rate-limit",
+  "blocked",
+  "server-error",
+  "request-failed", // 其他状态码，参数 status
+  "generation-failed",
+  "unreachable",
+  "no-image",
+  "no-content",
+  "task-no-image",
+  "task-failed",
+  "task-timeout",
+  "download-failed",
+  "download-http", // 参数 status
+  "read-failed",
+  "source-missing", // 参数 index（从 1 起）
+] as const;
+export type ApiErrorDetailCode = (typeof API_ERROR_DETAIL_CODES)[number];
+
+export interface ApiErrorDetail {
+  code: ApiErrorDetailCode;
+  params?: Record<string, string | number>;
+}
+
+/** 展示文案 = message（服务端原文，可能为空）→ detail（客户端细节）→ 该 kind 的通用建议，见 i18n/errors.ts */
 export class ApiError extends Error {
   kind: ApiErrorKind;
   status?: number;
+  detail?: ApiErrorDetail;
 
-  constructor(kind: ApiErrorKind, message: string, status?: number) {
+  constructor(
+    kind: ApiErrorKind,
+    message: string,
+    status?: number,
+    detail?: ApiErrorDetail,
+  ) {
     super(message);
     this.name = "ApiError";
     this.kind = kind;
     this.status = status;
+    this.detail = detail;
   }
 }
 
-export const ERROR_HINTS: Record<ApiErrorKind, string> = {
-  "invalid-image": "请选择有效的 PNG、JPEG 或 WebP 图片。",
-  "image-too-large": "请选择小于 50 MiB 的非空图片。",
-  "too-many-images": "最多添加 16 张输入图片。",
-  "source-unavailable": "来源图片不可用，无法继续编辑",
-  "save-failed":
-    "图片已生成，但本地保存失败。结果暂存在内存，可查看或下载；离开前会再次确认。",
-  "history-unavailable":
-    "本地数据暂时无法读取，可刷新页面重试；在此期间新生成的结果可能无法保存。",
-  auth: "API Key 无效或已失效，请在设置中检查。",
-  "org-unverified":
-    "组织尚未完成图片模型的资格验证（organization verification）。",
-  "rate-limit": "请求过于频繁，稍等片刻再试。",
-  "content-policy": "画面描述可能包含受限制的内容，调整描述后重试。",
-  server: "服务端暂时不可用，请稍后重试。",
-  network: "网络错误：无法连接到 API 地址，请检查网络或中转站配置。",
-  unknown: "生成失败，请重试。",
-};
+/** 客户端自己产生的错误：没有服务端原文，只带细节码 */
+export function clientError(
+  kind: ApiErrorKind,
+  code: ApiErrorDetailCode,
+  params?: ApiErrorDetail["params"],
+  status?: number,
+): ApiError {
+  return new ApiError(kind, "", status, { code, params });
+}
 
-/** 错误提示标题 */
-export const ERROR_TITLES: Record<ApiErrorKind, string> = {
-  "invalid-image": "图片无法读取",
-  "image-too-large": "图片大小不符合要求",
-  "too-many-images": "输入图片已达上限",
-  "source-unavailable": "来源图片不可用",
-  "save-failed": "本地保存失败",
-  "history-unavailable": "历史记录读取失败",
-  auth: "API Key 无效",
-  "org-unverified": "组织未完成验证",
-  "rate-limit": "请求过于频繁",
-  "content-policy": "生成被内容政策拦截",
-  server: "服务端暂时不可用",
-  network: "无法连接到 API 地址",
-  unknown: "生成失败",
-};
+/** 上传读取阶段的提示：结构化存放，文案由界面按当前语言生成 */
+export type UploadIssue =
+  | { kind: "file"; file: string; error: ApiErrorKind }
+  | { kind: "overflow"; kept: number; skipped: number };
+
+/** 读取局部重绘记录时缺失的资源；文案由界面按当前语言生成 */
+export type MissingResource =
+  { kind: "mask" | "base" } | { kind: "reference"; name?: string };
+
+/** 草图画板的来源：决定弹层角落里的说明文字 */
+export type SketchOrigin =
+  | { kind: "new" }
+  /** 编辑创作条里的某张草图附件，index 从 1 起 */
+  | { kind: "attachment"; index: number }
+  | { kind: "history" };

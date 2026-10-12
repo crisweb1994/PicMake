@@ -52,7 +52,7 @@ const inpaintSession = (base = image("b1")) => ({
   base,
   normalized: false,
   doc: blankMask(base.id, base.width, base.height),
-  name: "底图",
+  naming: { kind: "base" as const },
   chosenInputId: null,
 });
 
@@ -63,22 +63,24 @@ beforeEach(() => {
 describe("草图", () => {
   it("openSketch：游标取已有命令数，openKey 是打开时的快照；已有画板时忽略", () => {
     const doc = { ...blankSketch(800, 600), commands: [stroke(1), stroke(2)] };
-    expect(openSketch(doc, "800 × 600 · 图1 的草图", "img-1")).toBe(true);
+    expect(openSketch(doc, { kind: "attachment", index: 1 }, "img-1")).toBe(
+      true,
+    );
     expect(drawing()).toMatchObject({
       kind: "sketch",
       cursor: 2,
       replacesImageId: "img-1",
-      meta: "800 × 600 · 图1 的草图",
+      origin: { kind: "attachment", index: 1 },
       confirming: false,
       openKey: JSON.stringify(doc.commands),
     });
     const before = state();
-    expect(openSketch(blankSketch(1, 1), "x", null)).toBe(false);
+    expect(openSketch(blankSketch(1, 1), { kind: "new" }, null)).toBe(false);
     expect(state()).toBe(before);
   });
 
   it("笔画、撤销、重做：游标只在已提交范围内移动，新笔画丢弃重做分支", () => {
-    openSketch(blankSketch(100, 100), "m", null);
+    openSketch(blankSketch(100, 100), { kind: "new" }, null);
     strokeDrawing(stroke(1));
     strokeDrawing(stroke(2));
     expect(drawing()).toMatchObject({ cursor: 2 });
@@ -99,7 +101,11 @@ describe("草图", () => {
 
   it("超过命令上限时静默拒绝", () => {
     const full = Array.from({ length: SKETCH_MAX_COMMANDS }, () => stroke(1));
-    openSketch({ ...blankSketch(10, 10), commands: full }, "m", null);
+    openSketch(
+      { ...blankSketch(10, 10), commands: full },
+      { kind: "new" },
+      null,
+    );
     const before = state();
     strokeDrawing(stroke(2));
     expect(state()).toBe(before);
@@ -123,7 +129,7 @@ describe("草图", () => {
   });
 
   it("setDrawingConfirming 只改确认中标记", () => {
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     setDrawingConfirming(true);
     expect(drawing()).toMatchObject({ confirming: true, cursor: 0 });
     setDrawingConfirming(false);
@@ -131,11 +137,11 @@ describe("草图", () => {
   });
 
   it("closeDrawing：不传 id 关闭当前画板；过期的 id 关不掉新画板", () => {
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     const oldId = drawing()!.id;
     closeDrawing();
     expect(drawing()).toBeNull();
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     closeDrawing(oldId);
     expect(drawing()).not.toBeNull();
     closeDrawing(drawing()!.id);
@@ -150,7 +156,7 @@ describe("局部重绘", () => {
     expect(beginInpaintOpening()).toBeNull();
     expect(drawing()).toEqual({ kind: "opening", id });
     closeDrawing();
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     expect(beginInpaintOpening()).toBeNull();
   });
 
@@ -230,7 +236,7 @@ describe("applyInpaintSelection", () => {
       }),
     ).toEqual({ reordered: false });
     expect(state().draft).toMatchObject({
-      inputs: [{ imageId: "base", name: "底图", upload: base }],
+      inputs: [{ imageId: "base", upload: base }],
       inpaint: { mask },
       dirty: true,
       sizeAccepted: true,

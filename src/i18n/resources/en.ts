@@ -1,0 +1,574 @@
+import type { LocaleResource } from "./index";
+
+/** English。结构必须与 zh-CN.ts 完全一致（缺 key、多 key 编译失败）；插值变量由 resources.test.ts 校验。 */
+export const en = {
+  common: {
+    cancel: "Cancel",
+    close: "Close",
+    continue: "Continue",
+    download: "Download",
+    downloadAll: "Download all",
+    save: "Save",
+    auto: "Auto",
+    unavailable: "Unavailable",
+    undo: "Undo",
+    redo: "Redo",
+    followSystem: "Follow system",
+  },
+
+  count: {
+    images_one: "{{count}} image",
+    images_other: "{{count}} images",
+    generations_one: "{{count}} generation",
+    generations_other: "{{count}} generations",
+  },
+
+  nav: {
+    label: "Main navigation",
+    toLight: "Switch to light mode",
+    toDark: "Switch to dark mode",
+    history: "History",
+    settings: "Settings",
+  },
+
+  settings: {
+    title: "Settings",
+    heading: "Connect your API",
+    subtitle: "Set it up once. Your data stays in this browser.",
+    appearance: "Appearance",
+    themeLight: "Light",
+    themeDark: "Dark",
+    language: "Language",
+    baseUrl: "API URL",
+    baseUrlHint:
+      "Use the official URL or a compatible relay, e.g. https://example.com/v1. A trailing /v1 is handled automatically.",
+    apiKey: "API Key",
+    keyHint:
+      "The key is stored only in this browser and is sent only to the URL above. If you use a relay, your image data passes through it.",
+    storage: "Stored locally: {{generations}} · {{images}}",
+    storageUsed: "Stored locally: {{generations}} · {{images}} · {{size}} used",
+    test: "Test connection",
+    testOkWith_one:
+      "Connected · {{count}} model available · includes the gpt-image-2.5 series",
+    testOkWith_other:
+      "Connected · {{count}} models available · includes the gpt-image-2.5 series",
+    testOkWithout_one:
+      "Connected · {{count}} model available · no gpt-image-2.5 series found",
+    testOkWithout_other:
+      "Connected · {{count}} models available · no gpt-image-2.5 series found",
+  },
+
+  history: {
+    dialog: "Generation history",
+    title: "History",
+    searchPlaceholder: "Search prompts…",
+    searchLabel: "Search history prompts",
+    clearSearch: "Clear search",
+    rangeLabel: "Filter by date",
+    range: {
+      all: "All",
+      today: "Today",
+      "7d": "7 days",
+      "30d": "30 days",
+    },
+    starredOnly: "Favorites only",
+    resultCount_one: "{{count}} result · {{total}} total",
+    resultCount_other: "{{count}} results · {{total}} total",
+    clearFilter: "Clear filters",
+    rowMeta: "{{time}} · {{images}}",
+    star: "Add to favorites",
+    unstar: "Remove from favorites",
+    empty:
+      "No creations yet. Generated images are saved automatically in this browser.",
+    noMatchTitle: "No matching history",
+    noMatchHint: "Try a different search or filter",
+    footer: "All data stays in this browser",
+  },
+
+  stage: {
+    emptyTitle: "Start with a sentence",
+    emptyHint: "Describe the picture you want. It will appear here in seconds.",
+    emptyCta: "Write the first line",
+    generating: "Generating",
+    cancel: "Cancel generation",
+    total_one: "{{count}} image",
+    total_other: "{{count}} images",
+    downloadAll: "Download all",
+    reuseAndRegenerate: "Reuse settings & regenerate",
+    zoomAria: "View larger",
+    result: "Result {{index}}",
+    zoom: "Enlarge",
+    download: "Download",
+    reuse: "Reuse settings",
+    edit: "Edit this image",
+    delete: "Delete",
+  },
+
+  detail: {
+    label: "Details of this generation",
+    heading: "This generation",
+    star: "Favorite this generation",
+    unstar: "Remove from favorites",
+    starTitle: "Favorite",
+    unstarTitle: "Remove from favorites",
+    collapse: "Hide details",
+    model: "Model",
+    size: "Size",
+    quality: "Quality",
+    count: "Images",
+    prompt: "Prompt",
+    copy: "Copy",
+    origin: "Original prompt",
+    previewSource: "Preview image {{index}}",
+    sourceInfo_one: "{{count}} input image · Keep original: {{fidelity}}",
+    sourceInfo_other: "{{count}} input images · Keep original: {{fidelity}}",
+    download: "Download",
+    reuse: "Reuse settings",
+    edit: "Edit this image",
+    viewMask: "View selection",
+    adjustInpaint: "Adjust last inpaint",
+    inpaint: "Inpaint",
+    pickBeforeInpaint:
+      "With several results, pick one in the carousel first, then inpaint that one.",
+    inpaintTarget: "Inpaint will apply to image {{index}}.",
+    maskNote:
+      "The selection is overlaid on the actual base image sent. “Regenerate” reuses the same selection.",
+    pickBeforeEdit:
+      "With several results, pick one in the carousel first, then edit that one.",
+    saveFirst: "You can keep editing once it has been saved locally.",
+    deleteRecord: "Delete this generation",
+    newGeneration: "New generation",
+    duration: "Took {{duration}}",
+  },
+
+  bar: {
+    label: "Create bar",
+    miniPlaceholder: "Describe the picture you want…",
+    miniExpandHint: "Click to show settings",
+    miniExpandAria: "Expand and generate",
+    miniMeta:
+      "Current: {{model}} · {{size}} · {{quality}} · ×{{n}} · {{format}} · {{background}}",
+    promptLabel: "Prompt",
+    editLabel: "Edit prompt",
+    placeholder:
+      "Describe the picture you want, e.g. a small cabin on a snowy mountaintop with a warm lamp",
+    placeholderEdit:
+      "e.g. Keep the product from Image 1 and use the background from Image 2",
+    placeholderSketch:
+      "Describe the picture you want based on the sketch in Image {{index}}, e.g. materials, lighting and style.",
+    placeholderInpaint:
+      "Describe how to change the selected area, e.g. turn the cup into a white ceramic mug",
+    send: "Generate image",
+    sendEdit: "Generate edit",
+    sendSketch: "Generate from sketch",
+    sendInpaint: "Generate inpaint result",
+    sizeBlocked: "Accept the suggested output size first",
+    sizeDiffers: "Output size differs from the original",
+    sizeAccepted: "Accepted",
+    acceptSize: "Accept and use",
+    inpaintNote:
+      "The selection guides the edit, and other areas of the result may change too · An unsubmitted selection stays on this page only",
+    returnToResult: "Back to result",
+    addInput: "Add input",
+    upload: "Upload image",
+    uploadDesc: "PNG / JPEG / WebP · up to {{max}} including sketches",
+    drawSketch: "Draw a sketch",
+    continueSketch: "Continue sketch",
+    drawSketchDesc:
+      "Sketch the composition, outlines and color blocks, then use it as input",
+    continueSketchDesc: "Reopen the confirmed sketch to keep editing",
+    atMax: "Reached the limit of {{max}} input images",
+    genStatus: "Generating · progressive preview",
+    genCancel: "Cancel",
+    genNote:
+      "Single streaming request · partial_images 3 · saved locally when done",
+    done: "Generation complete · saved locally",
+    duration: "Took",
+    dismiss: "Collapse and go back to input",
+    next: "Next",
+    again: "Regenerate",
+    tweak: "Tweak prompt",
+    useAsRef: "Use as reference",
+  },
+
+  params: {
+    model: "Model",
+    modelFast: "Fast",
+    modelDetailed: "Detailed",
+    modelFlare: "Flare · Fast",
+    modelFlareDesc: "About 10s per image, best for everyday iteration",
+    modelSunburst: "Sunburst · Detailed",
+    modelSunburstDesc: "Finer detail and text rendering, slower",
+    ratioAndBase: "Ratio and base resolution",
+    ratio: "Aspect ratio",
+    baseRes: "Base resolution",
+    custom: "Custom",
+    widthPlaceholder: "W",
+    heightPlaceholder: "H",
+    customWidth: "Custom width",
+    customHeight: "Custom height",
+    sizeHint:
+      "Divisible by 16 · ratio 1:3 – 3:1 · ≤ {{long}}\u00a0×\u00a0{{short}}",
+    sketchSizeHint:
+      "A new sketch uses the current output size; with “Auto” it is 1024 × 1024",
+    sketchMismatch:
+      "The output ratio differs from the sketch, so the composition may shift",
+    quality: "Quality",
+    qualityLevel: {
+      low: "Low",
+      medium: "Medium",
+      high: "High",
+      xhigh: "Extra high",
+      max: "Max",
+    },
+    qualityDesc: {
+      low: "Fastest, for sketching ideas",
+      medium: "Fast, slightly less detail",
+      high: "Default, balances speed and detail",
+      xhigh: "Much more detail, slower",
+      max: "Delivery quality, slowest",
+    },
+    count: "Number of images",
+    countHint:
+      "Generated in one request and saved one by one. With n>1 the stage shows a 2×2 grid.",
+    more: "More settings",
+    background: "Background",
+    backgroundLevel: {
+      auto: "Auto",
+      transparent: "Transparent",
+      opaque: "Solid",
+    },
+    backgroundLong: {
+      auto: "Auto background",
+      transparent: "Transparent background",
+      opaque: "Solid background",
+    },
+    format: "Output format",
+    keepOriginal: "Keep original",
+    fidelityLow: "Low",
+    fidelityHigh: "High",
+    fidelityHint:
+      "Auto sends no fidelity parameter and follows the server default. Some relays don't support an explicit low / high.",
+    fidelitySketchHint:
+      "A sketch is only a composition reference. “Keep original · High” won't reproduce the hand-drawn lines exactly.",
+  },
+
+  input: {
+    number: "Image {{index}}",
+    label: "{{number}} · {{name}}",
+    sketch: "Sketch",
+    base: "Base image",
+    work: "Existing work",
+    workIndexed: "Existing work · image {{index}}",
+    fallbackAlt: "Input image",
+    previewLabel: "Input image preview",
+    continueSketch: "Continue this sketch",
+    closePreview: "Close preview",
+    editSketch: "Edit sketch of Image {{index}}",
+    preview: "Preview Image {{index}}",
+    sketchAlt: "Image {{index}} sketch",
+    maskBadge: "Mask",
+    continueSketchAria: "Continue sketch of Image {{index}}",
+    continueSketchTitle: "Continue this sketch",
+    editMask: "Edit selection",
+    inpaintAria: "Inpaint Image {{index}}",
+    inpaintTitle: "Inpaint: paint the area of this image to change",
+    remove: "Remove Image {{index}}",
+    removeMask: "Remove selection",
+    removeMaskTitle:
+      "Keep the base image, prompt and settings, and switch to regular image editing",
+    uploadFile: "{{file}}: {{reason}}",
+    overflow: "{{limit}} Added {{kept}}; {{skipped}} not added.",
+  },
+
+  lightbox: {
+    label: "Full-size image",
+    close: "Close full-size image",
+  },
+
+  carousel: {
+    label: "View images",
+    close: "Close carousel",
+    prev: "Previous",
+    next: "Next",
+  },
+
+  sketch: {
+    board: "Sketch board",
+    hint: "Sketch the composition on the paper: positions, outlines, color blocks",
+    close: "Close board",
+    tools: "Drawing tools",
+    pen: "Pen",
+    textDisabled: "Text (not available yet)",
+    textTitle: "Text · not available yet",
+    shapeDisabled: "Shapes (not available yet)",
+    shapeTitle: "Shapes · not available yet",
+    eraser: "Eraser",
+    history: "Undo, redo and clear",
+    clear: "Clear",
+    size: "Tool size",
+    colors: "Pen color",
+    customColor: "Custom color",
+    color: "Color · {{name}}",
+    colorName: {
+      black: "Black",
+      gray: "Gray",
+      brown: "Brown",
+      red: "Red",
+      orange: "Orange",
+      amber: "Amber",
+      green: "Green",
+      teal: "Teal",
+      sky: "Sky blue",
+      blue: "Blue",
+      indigo: "Indigo",
+      purple: "Purple",
+      magenta: "Magenta",
+    },
+    preparing: "Preparing",
+    preparingTitle: "Preparing…",
+    use: "Use sketch",
+    meta: "{{w}} × {{h}}",
+    metaAttachment: "{{w}} × {{h}} · sketch of Image {{index}}",
+    metaHistory: "{{w}} × {{h}} · earlier sketch",
+    seedPrompt:
+      "Use the sketch in Image {{index}} as the composition reference. Keep the subject's relative position and proportions, and turn the rough lines into a finished picture.",
+  },
+
+  inpaint: {
+    board: "Select the area to change",
+    close: "Close",
+    normalized: "Image orientation corrected; the original file is kept",
+    history: "Undo, redo and visibility",
+    clearSelection: "Clear selection",
+    show: "Show selection",
+    hide: "Hide selection",
+    hideTitle:
+      "Hide selection (painting pauses while hidden; nothing is cleared)",
+    zoomGroup: "Zoom and pan",
+    zoomOut: "Zoom out",
+    zoomIn: "Zoom in",
+    fit: "Fit to window",
+    pan: "Drag canvas",
+    panTitle: "Drag to pan the view without affecting the selection",
+    tools: "Drawing tools",
+    brush: "Brush",
+    brushTitle: "Brush: expand the area to change",
+    erase: "Erase",
+    eraseTitle: "Erase: shrink the area to change, without erasing the image",
+    size: "Size",
+    sizeRange: "Brush size (base image pixels)",
+    sizeNumber: "Brush size value",
+    hint: "Paint the area you want to change first",
+    use: "Use selection",
+    busy: "Working…",
+    issue: {
+      "empty-mask": "Paint the area you want to change first",
+      "invalid-mask":
+        "Can't read the selection data. Please select the area again.",
+      "pixel-limit":
+        "This image has too many pixels (over 16,777,216 in total). Please shrink it before using inpaint.",
+      "ratio-limit":
+        "The base image's aspect ratio is outside the allowed 1:3–3:1 range. Use another image or crop it before uploading.",
+      "unsupported-orientation":
+        "Can't handle this image's orientation. Re-export the image and try again.",
+      "canvas-failed":
+        "This device can't process the image. Shrink it and try again.",
+      "mask-too-large":
+        "The selection file exceeds the current limit. Adjust it and try again.",
+    },
+    reason: {
+      floorWidth: "Width rounded down to a multiple of 16",
+      floorHeight: "Height rounded down to a multiple of 16",
+      floorBoth: "Width and height rounded down to multiples of 16",
+      scaled: "Scaled to fit the 3840 × 2160 output frame",
+      separator: " · ",
+      exact: "The original size is valid and used as is",
+    },
+  },
+
+  mask: {
+    label: "View selection",
+    title: "Selection used for this generation",
+    show: "Show selection",
+    hide: "Hide selection",
+    readonly: "Read-only. History and drafts are not changed.",
+    adjust: "Adjust last inpaint",
+    close: "Close",
+    header: "{{name}} · {{w}} × {{h}}",
+  },
+
+  status: {
+    saving: "Saving locally…",
+    openingBase: "Reading the base image…",
+  },
+
+  confirm: {
+    title: "Confirm",
+    unsavedGenerate: {
+      title: "Discard the unsaved result?",
+      desc: "The image was generated but hasn't been saved to this device. Regenerating will lose this result.",
+    },
+    unsavedLeave: {
+      title: "Discard the unsaved result?",
+      desc: "The image was generated but hasn't been saved to this device. Leaving will lose this result.",
+    },
+    draft: {
+      title: "Discard the current draft?",
+      desc: "Changes you haven't submitted will be discarded.",
+    },
+    delete: {
+      title: "Delete this generation?",
+      desc_one: "It contains {{count}} image. This can't be undone.",
+      desc_other: "It contains {{count}} images. This can't be undone.",
+    },
+    sketch: {
+      title: "Discard these sketch changes?",
+      desc: "Unconfirmed strokes won't be saved. Sketches you already confirmed stay as they are.",
+      ok: "Discard changes",
+      cancel: "Keep drawing",
+    },
+    mask: {
+      title: "Discard these selection changes?",
+      desc: "Unconfirmed painting won't be saved. A selection you already confirmed stays as it is.",
+      ok: "Discard changes",
+      cancel: "Keep editing",
+    },
+  },
+
+  toast: {
+    settingsSaved: "Settings saved",
+    generated: "Generation complete",
+    cancelled: "Generation cancelled",
+    promptCopied: "Prompt copied",
+    paramsRestored: "Settings restored. Ready to generate.",
+    referenceAdded:
+      "Added as a reference. Describe your change, then generate.",
+    deleted: "Deleted",
+    inpaintRestored: "Last inpaint restored. Adjust it and generate.",
+    cantRegenerate: "{{what}} unavailable. Can't regenerate.",
+    cantRestore: "{{what}} unavailable. Can't restore the last inpaint.",
+    sketchUnreadable: "Can't read the sketch data. Please draw a new one.",
+    sketchSourceUnavailable:
+      "Source image unavailable. Can't continue editing this sketch.",
+    sketchExportFailed: "Couldn't export the sketch. Please try again.",
+    sizeSetToSketch: "Output size set to the sketch size, {{w}} × {{h}}",
+    drawLimitCommands:
+      "Drawing limit reached ({{max}} steps). Undo or clear to continue.",
+    drawLimitPoints: "Point limit reached. This stroke ends here.",
+    maskUpdated: "Selection updated",
+    maskBaseReordered:
+      "The base image is now Image 1. Image numbers changed, so check your prompt.",
+    maskApplied: "Selection applied. Describe your edit, then generate.",
+    inputRemovedBaseAndMask:
+      "Base image and selection removed. The remaining images were renumbered, so check your prompt.",
+    inputRemoved:
+      "Image numbers changed. Check the image numbers in your prompt.",
+    maskRemoved:
+      "Selection removed. The base image and prompt are kept, switched to regular image editing.",
+  },
+
+  missing: {
+    mask: "Selection",
+    base: "Base image",
+    reference: "Reference image",
+    referenceNamed: "Reference image “{{name}}”",
+  },
+
+  errors: {
+    toast: "{{title}}: {{detail}}",
+    "invalid-image": {
+      title: "Can't read the image",
+      hint: "Choose a valid PNG, JPEG or WebP image.",
+    },
+    "image-too-large": {
+      title: "Image size not allowed",
+      hint: "Choose a non-empty image smaller than {{maxMiB}} MiB.",
+    },
+    "too-many-images": {
+      title: "Input image limit reached",
+      hint: "You can add at most {{max}} input images.",
+    },
+    "source-unavailable": {
+      title: "Source image unavailable",
+      hint: "The source image is unavailable, so editing can't continue",
+    },
+    "save-failed": {
+      title: "Couldn't save locally",
+      hint: "The image was generated, but saving it locally failed. The result is kept in memory so you can view or download it; you'll be asked again before leaving.",
+    },
+    "history-unavailable": {
+      title: "Couldn't load history",
+      hint: "Local data is temporarily unreadable. Try refreshing the page. Results generated in the meantime may not be saved.",
+    },
+    auth: {
+      title: "Invalid API key",
+      hint: "The API key is invalid or expired. Check it in Settings.",
+    },
+    "org-unverified": {
+      title: "Organization not verified",
+      hint: "Your organization hasn't completed verification for image models (organization verification).",
+    },
+    "rate-limit": {
+      title: "Too many requests",
+      hint: "Requests are too frequent. Wait a moment and try again.",
+    },
+    "content-policy": {
+      title: "Blocked by content policy",
+      hint: "The prompt may contain restricted content. Adjust it and try again.",
+    },
+    server: {
+      title: "Service temporarily unavailable",
+      hint: "The server is temporarily unavailable. Please try again later.",
+    },
+    network: {
+      title: "Can't reach the API URL",
+      hint: "Network error: can't reach the API URL. Check your network or relay settings.",
+    },
+    unknown: {
+      title: "Generation failed",
+      hint: "Generation failed. Please try again.",
+    },
+    detail: {
+      "key-invalid": "Invalid key",
+      "org-unverified": "Organization not verified",
+      "rate-limit": "Too many requests",
+      blocked: "Content blocked",
+      "server-error": "Server error",
+      "request-failed": "Request failed ({{status}})",
+      "generation-failed": "Generation failed",
+      unreachable: "Can't reach the API URL",
+      "no-image": "The response contains no image data",
+      "no-content": "The response is empty",
+      "task-no-image":
+        "The task finished but the response contains no image data",
+      "task-failed": "The task failed",
+      "task-timeout": "The task timed out (5 minutes)",
+      "download-failed":
+        "Couldn't download the result image. Please try again.",
+      "download-http": "Couldn't download the result image (HTTP {{status}})",
+      "read-failed": "Couldn't read the result image",
+      "source-missing":
+        "Image {{index}}: the source image is unavailable, so editing can't continue",
+    },
+  },
+
+  issues: {
+    "empty-prompt": "Write a short prompt first",
+    "not-integer": "Width and height must be whole numbers",
+    "not-multiple-16": "Width and height must be divisible by 16",
+    ratio: "Aspect ratio must be between 1:3 and 3:1",
+    "too-large": "Maximum size is {{long}} × {{short}}",
+    "not-positive": "Width and height must be positive",
+    "size-not-accepted":
+      "The output size differs from the original. Accept the suggested size first.",
+    "custom-size":
+      "Invalid custom size: width and height must be divisible by 16, the aspect ratio between 1:3 and 3:1, and no larger than {{long}} × {{short}}",
+  },
+
+  time: {
+    justNow: "Just now",
+    today: "Today {{time}}",
+    dateTime: "{{date}}, {{time}}",
+  },
+} satisfies LocaleResource;

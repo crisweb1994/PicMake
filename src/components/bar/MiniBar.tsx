@@ -1,17 +1,15 @@
 /** 创作条 mini 态：迷你条 + 配置摘要 */
+import { useTranslation } from "react-i18next";
 import { ArrowUp } from "lucide-react";
-import {
-  MODEL_LABELS,
-  QUALITY_LABELS,
-  sizeChipValue,
-  type GenForm,
-} from "../../lib/params";
+import { sizeChipValue } from "../../i18n/labels";
+import { MODEL_LABELS, type GenForm } from "../../lib/params";
 
 export function MiniBar(props: {
   form: GenForm;
   disabled: boolean;
   onExpand: () => void;
 }) {
+  const { t } = useTranslation();
   const f = props.form;
   return (
     <div className="pm-bar-mini">
@@ -22,13 +20,13 @@ export function MiniBar(props: {
           onClick={props.onExpand}
           disabled={props.disabled}
         >
-          描述你想要的画面…
-          <i>点此展开参数</i>
+          {t("bar.miniPlaceholder")}
+          <i>{t("bar.miniExpandHint")}</i>
         </button>
         <button
           type="button"
           className="pm-bar-go"
-          aria-label="展开并生成"
+          aria-label={t("bar.miniExpandAria")}
           onClick={props.onExpand}
           disabled={props.disabled}
         >
@@ -36,13 +34,14 @@ export function MiniBar(props: {
         </button>
       </div>
       <p className="pm-bar-mini-meta">
-        当前 {MODEL_LABELS[f.model]} · {sizeChipValue(f)} ·{" "}
-        {QUALITY_LABELS[f.quality]} · ×{f.n} · {f.fmt.toUpperCase()} ·{" "}
-        {f.bg === "auto"
-          ? "自动背景"
-          : f.bg === "transparent"
-            ? "透明背景"
-            : "纯色背景"}
+        {t("bar.miniMeta", {
+          model: MODEL_LABELS[f.model],
+          size: sizeChipValue(f, t),
+          quality: t(`params.qualityLevel.${f.quality}`),
+          n: f.n,
+          format: f.fmt.toUpperCase(),
+          background: t(`params.backgroundLong.${f.bg}`),
+        })}
       </p>
     </div>
   );

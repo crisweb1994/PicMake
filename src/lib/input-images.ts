@@ -1,10 +1,5 @@
 import type { ImageRow } from "../db/schema";
-import {
-  ApiError,
-  ERROR_HINTS,
-  MAX_INPUT_BYTES,
-  type OutputFormat,
-} from "./types";
+import { ApiError, MAX_INPUT_BYTES, type OutputFormat } from "./types";
 
 export function imageFormat(bytes: Uint8Array): OutputFormat | null {
   if ([137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v))
@@ -20,12 +15,11 @@ export function imageFormat(bytes: Uint8Array): OutputFormat | null {
 
 export async function readInputImage(file: File): Promise<ImageRow> {
   if (!file.size || file.size >= MAX_INPUT_BYTES)
-    throw new ApiError("image-too-large", ERROR_HINTS["image-too-large"]);
+    throw new ApiError("image-too-large", "");
   const format = imageFormat(
     new Uint8Array(await file.slice(0, 12).arrayBuffer()),
   );
-  if (!format)
-    throw new ApiError("invalid-image", ERROR_HINTS["invalid-image"]);
+  if (!format) throw new ApiError("invalid-image", "");
   const blob = file.slice(0, file.size, `image/${format}`);
   try {
     const bitmap = await createImageBitmap(blob);
@@ -33,6 +27,6 @@ export async function readInputImage(file: File): Promise<ImageRow> {
     bitmap.close();
     return { id: crypto.randomUUID(), blob, width, height, format };
   } catch {
-    throw new ApiError("invalid-image", ERROR_HINTS["invalid-image"]);
+    throw new ApiError("invalid-image", "");
   }
 }

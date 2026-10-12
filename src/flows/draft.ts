@@ -1,7 +1,8 @@
 /** 草稿流程：上传读取、移除图片与选区（提示在这里发） */
 import { toast } from "@heroui/react";
+import { t } from "../i18n";
 import { readInputImage } from "../lib/input-images";
-import { ApiError, ERROR_HINTS, type InputImage } from "../lib/types";
+import { ApiError, type InputImage, type UploadIssue } from "../lib/types";
 import { useWorkspace } from "../store/workspace";
 import {
   beginRead,
@@ -18,30 +19,32 @@ export async function addFiles(files: File[]) {
   const readId = crypto.randomUUID();
   beginRead(readId);
   const added: InputImage[] = [];
-  const errors: string[] = [];
+  const issues: UploadIssue[] = [];
   for (const file of files) {
     if (currentReadId() !== readId) return;
     try {
       const image = await readInputImage(file);
       added.push({ imageId: image.id, name: file.name, upload: image });
     } catch (error) {
-      errors.push(
-        `${file.name}：${error instanceof ApiError ? error.message : ERROR_HINTS["invalid-image"]}`,
-      );
+      issues.push({
+        kind: "file",
+        file: file.name,
+        error: error instanceof ApiError ? error.kind : "invalid-image",
+      });
     }
   }
-  finishRead(readId, added, errors);
+  finishRead(readId, added, issues);
 }
 
 export function removeInput(id: string) {
   toast(
     removeDraftInput(id) === "base-and-mask"
-      ? "已移除底图与选区，剩余图片重新编号，请检查描述"
-      : "图片编号已更新，请检查描述中的图序号",
+      ? t("toast.inputRemovedBaseAndMask")
+      : t("toast.inputRemoved"),
   );
 }
 
 export function removeMask() {
   removeDraftMask();
-  toast("已移除选区：保留底图与描述，切换为普通图片编辑");
+  toast(t("toast.maskRemoved"));
 }

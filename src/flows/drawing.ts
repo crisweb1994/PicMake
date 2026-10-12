@@ -1,6 +1,9 @@
 /** 画板流程：草图与局部重绘的入口、底图准备、确认导出与关闭确认，以及查看选区；状态只经迁移函数写入 */
 import { toast } from "@heroui/react";
 import { db, type ImageRow } from "../db/schema";
+import { t } from "../i18n";
+import { errorHint } from "../i18n/errors";
+import { inpaintIssueText } from "../i18n/labels";
 import { prepareInpaintBase, readImageMeta } from "../lib/image-orientation";
 import {
   blankMask,
@@ -14,13 +17,12 @@ import {
   blankSketch,
   freezeSketch,
   SKETCH_DEFAULT_SIZE,
+  SKETCH_MAX_COMMANDS,
   sketchSnapshotKey,
   validateSketchDocument,
 } from "../lib/sketch";
 import { exportSketchPng } from "../lib/sketch-canvas";
 import {
-  ERROR_HINTS,
-  INPAINT_ISSUE_HINTS,
   MAX_INPUT_IMAGES,
   type InpaintDraft,
   type InpaintEntry,
@@ -28,6 +30,7 @@ import {
   type InputSource,
   type MaskImage,
 } from "../lib/types";
+import { inputNaming, workIndexOf, type InputNaming } from "../lib/view-models";
 import { canOpenDrawing, isDrawingChanged } from "../lib/workspace-rules";
 import { useWorkspace } from "../store/workspace";
 import {
@@ -44,7 +47,7 @@ import {
   setPreviewId,
   showViewMask,
 } from "../store/workspace/actions";
-import { selectDisplayRow } from "../store/workspace/selectors";
+import { selectDisplayRow, selectRows } from "../store/workspace/selectors";
 import { adjustInpaint, requestLeave } from "./navigation";
 
 /** 各画板/重绘入口共用的可用判定，规则见 canOpenDrawing；await 之后要重新调用 */
@@ -65,8 +68,8 @@ const sameDrawing = (id: string) => useWorkspace.getState().drawing?.id === id;
 export function notifyDrawLimit(kind: "commands" | "points") {
   toast(
     kind === "commands"
-      ? "已达绘制上限（2000 步），请撤销或清空后再继续"
-      : "已达采样点上限，本笔到此为止",
+      ? t("toast.drawLimitCommands", { max: SKETCH_MAX_COMMANDS })
+      : t("toast.drawLimitPoints"),
   );
 }
 
@@ -80,7 +83,7 @@ export function openSketchNew() {
     !draft.inputs.some((input) => input.upload?.sketch) &&
     draft.inputs.length >= MAX_INPUT_IMAGES
   ) {
-    toast(ERROR_HINTS["too-many-images"]);
+    toast(errorHint("too-many-images", t));
     return;
   }
   const size = formSize(draft.form);
@@ -88,7 +91,7 @@ export function openSketchNew() {
     size === "auto"
       ? [SKETCH_DEFAULT_SIZE, SKETCH_DEFAULT_SIZE]
       : [size.w, size.h];
-  openSketch(blankSketch(width, height), `${width} × ${height}`, null);
+  openSketch(blankSketch(width, height), { kind: "new" }, null);
 }
 
 /** 编辑草稿里已确认的草图附件：确认后原位替换 */
@@ -100,14 +103,10 @@ export function editSketchAttachment(imageId: string) {
   if (!raw) return;
   const doc = validateSketchDocument(raw);
   if (!doc) {
-    toast("草图数据无法读取，请重新画一张");
+    toast(t("toast.sketchUnreadable"));
     return;
   }
-  openSketch(
-    doc,
-    `${doc.width} × ${doc.height} · 图${index + 1} 的草图`,
-    imageId,
-  );
+  openSketch(doc, { kind: "attachment", index: index + 1 }, imageId);
 }
 
 /** 历史来源草图：以新草稿打开，不改旧记录 */
@@ -119,10 +118,10 @@ export function continueHistorySketch(imageId: string) {
     if (!workspaceFree()) return;
     const doc = validateSketchDocument(row?.sketch);
     if (!doc) {
-      toast("来源图片不可用，无法继续编辑这张草图");
+      toast(t("toast.sketchSourceUnavailable"));
       return;
     }
-    openSketch(doc, `${doc.width} × ${doc.height} · 历史草图`, null);
+    openSketch(doc, { kind: "history" }, null);
   })();
 }
 
@@ -143,7 +142,7 @@ export function confirmSketch() {
     if (!sameDrawing(id)) return;
     if (!blob) {
       setDrawingConfirming(false);
-      toast("草图导出失败，请重试");
+      toast(t("toast.sketchExportFailed"));
       return;
     }
     const image: ImageRow = {
@@ -155,16 +154,21 @@ export function confirmSketch() {
       sketch: frozen,
     };
     // 尺寸、描述补全与展开创作条都在 applySketchAttachment 里一次完成
-    const result = applySketchAttachment(image, replacesImageId);
+    const result = applySketchAttachment(image, replacesImageId, (index) =>
+      t("sketch.seedPrompt", { index }),
+    );
     if (!result.ok) {
       setDrawingConfirming(false);
-      toast(ERROR_HINTS["too-many-images"]);
+      toast(errorHint("too-many-images", t));
       return;
     }
     closeDrawing(id);
     if (result.sizeSetTo)
       toast(
-        `输出尺寸已设为草图尺寸 ${result.sizeSetTo.w} × ${result.sizeSetTo.h}`,
+        t("toast.sizeSetToSketch", {
+          w: result.sizeSetTo.w,
+          h: result.sizeSetTo.h,
+        }),
       );
   })();
 }
@@ -175,10 +179,10 @@ export function requestCloseSketch() {
   if (drawing?.kind !== "sketch" || drawing.confirming) return;
   if (isDrawingChanged(drawing)) {
     setConfirm({
-      title: "放弃本次草图修改？",
-      desc: "未确认的笔画不会保存；已确认的草图附件保持不变。",
-      okLabel: "放弃修改",
-      cancelLabel: "继续画",
+      title: t("confirm.sketch.title"),
+      desc: t("confirm.sketch.desc"),
+      okLabel: t("confirm.sketch.ok"),
+      cancelLabel: t("confirm.sketch.cancel"),
       onOk: () => closeDrawing(drawing.id),
     });
     return;
@@ -190,7 +194,10 @@ export function requestCloseSketch() {
 
 interface OpenInpaintParams {
   blob: Blob;
-  name: string;
+  /** 用户文件名（有才传）：归一化时写进保留的原文件来源 */
+  name?: string;
+  /** 画板标题与 alt 用的名字种类 */
+  naming: InputNaming;
   entry: InpaintEntry;
   /** 已在库中的来源身份：归一化时原文件引用它而非新建行 */
   existing?: InputSource;
@@ -211,7 +218,7 @@ async function openInpaintSession(params: OpenInpaintParams) {
   const fail = (issue: InpaintIssue) => {
     if (!sameDrawing(id)) return;
     closeDrawing(id);
-    toast(INPAINT_ISSUE_HINTS[issue]);
+    toast(inpaintIssueText(issue, t));
   };
   const chosenInputId = params.chosenInputId ?? null;
 
@@ -240,7 +247,7 @@ async function openInpaintSession(params: OpenInpaintParams) {
       original,
       normalized: false,
       doc: structuredClone(validated.doc),
-      name: params.name,
+      naming: params.naming,
       chosenInputId,
     });
     return;
@@ -264,7 +271,7 @@ async function openInpaintSession(params: OpenInpaintParams) {
     original,
     normalized: !!original,
     doc: blankMask(base.id, base.width, base.height),
-    name: params.name,
+    naming: params.naming,
     chosenInputId,
   });
 }
@@ -279,12 +286,15 @@ export function startInpaintFromResult(imageId: string) {
       const image = await db.images.get(imageId);
       if (!workspaceFree()) return;
       if (!image) {
-        toast(ERROR_HINTS["source-unavailable"]);
+        toast(errorHint("source-unavailable", t));
         return;
       }
       await openInpaintSession({
         blob: image.blob,
-        name: `结果 · ${row.prompt.slice(0, 12)}…`,
+        naming: {
+          kind: "work",
+          workIndex: workIndexOf([row], row.id, imageId),
+        },
         entry: "result",
         existing: { imageId, generationId: row.id },
       });
@@ -303,12 +313,21 @@ export function startInpaintFromInput(imageId: string) {
     const row = input.upload ?? (await db.images.get(imageId));
     if (!workspaceFree()) return;
     if (!row) {
-      toast(ERROR_HINTS["source-unavailable"]);
+      toast(errorHint("source-unavailable", t));
       return;
     }
     await openInpaintSession({
       blob: row.blob,
-      name: input.name ?? "图片",
+      name: input.name,
+      naming: inputNaming(input, {
+        sketch: false,
+        base: false,
+        workIndex: workIndexOf(
+          selectRows(useWorkspace.getState()),
+          input.generationId,
+          imageId,
+        ),
+      }),
       entry: "draft-input",
       existing: input.generationId
         ? { imageId, generationId: input.generationId }
@@ -328,12 +347,13 @@ export function editMask() {
     const base = baseInput.upload ?? (await db.images.get(baseInput.imageId));
     if (!workspaceFree()) return;
     if (!base) {
-      toast(ERROR_HINTS["source-unavailable"]);
+      toast(errorHint("source-unavailable", t));
       return;
     }
     await openInpaintSession({
       blob: base.blob,
-      name: baseInput.name ?? "底图",
+      name: baseInput.name,
+      naming: { kind: "base" },
       entry: "reedit",
       existing: { imageId: base.id },
       reedit: {
@@ -385,10 +405,10 @@ export function confirmInpaint() {
     closeDrawing(id);
     toast(
       entry === "reedit"
-        ? "选区已更新"
+        ? t("toast.maskUpdated")
         : reordered
-          ? "底图已设为图1，图片编号已更新，请检查描述"
-          : "选区已应用：填写修改描述后生成",
+          ? t("toast.maskBaseReordered")
+          : t("toast.maskApplied"),
     );
   })();
 }
@@ -399,10 +419,10 @@ export function requestCloseInpaint() {
   if (drawing?.kind !== "inpaint" || drawing.confirming) return;
   if (isDrawingChanged(drawing)) {
     setConfirm({
-      title: "放弃本次选区修改？",
-      desc: "未确认的涂选不会保存；已确认的选区保持不变。",
-      okLabel: "放弃修改",
-      cancelLabel: "继续编辑",
+      title: t("confirm.mask.title"),
+      desc: t("confirm.mask.desc"),
+      okLabel: t("confirm.mask.ok"),
+      cancelLabel: t("confirm.mask.cancel"),
       onOk: () => closeDrawing(drawing.id),
     });
     return;
@@ -422,12 +442,11 @@ export function openViewMask() {
       ? await db.images.get(maskRow.mask.baseImageId)
       : null;
     if (!maskRow?.mask || !baseRow) {
-      toast("选区数据无法读取，请重新选择修改区域");
+      toast(inpaintIssueText("invalid-mask", t));
       return;
     }
     showViewMask({
       base: baseRow,
-      name: row.inputSources?.[0]?.name ?? "底图",
       commands: maskRow.mask.commands,
       rowId: row.id,
     });

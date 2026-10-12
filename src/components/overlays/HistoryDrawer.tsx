@@ -1,5 +1,6 @@
 /** 历史抽屉：纯展示的受控弹层 */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Drawer,
@@ -8,7 +9,7 @@ import {
   DrawerDialog,
 } from "@heroui/react";
 import { Search, Settings2, Star, X } from "lucide-react";
-import { fmtTime } from "../../lib/format";
+import { fmtTime } from "../../i18n/format";
 import type { HistoryRow } from "../../db/schema";
 import {
   DEFAULT_HISTORY_FILTER,
@@ -29,6 +30,7 @@ export function HistoryDrawer(props: {
   onToggleStar: (id: string) => void;
   onClose: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const [filter, setFilter] = useState<HistoryFilter>(DEFAULT_HISTORY_FILTER);
   const close = () => {
     props.onClose();
@@ -44,14 +46,17 @@ export function HistoryDrawer(props: {
     >
       <DrawerBackdrop isKeyboardDismissDisabled>
         <DrawerContent placement="left">
-          <DrawerDialog aria-label="生成历史" className="pm-drawer-hd">
+          <DrawerDialog
+            aria-label={t("history.dialog")}
+            className="pm-drawer-hd"
+          >
             <div className="pm-drawer-h">
-              历史
+              {t("history.title")}
               <Button
                 variant="ghost"
                 isIconOnly
                 size="sm"
-                aria-label="关闭"
+                aria-label={t("common.close")}
                 onPress={close}
               >
                 <X size={14} />
@@ -63,8 +68,8 @@ export function HistoryDrawer(props: {
                 <input
                   type="text"
                   value={filter.query}
-                  placeholder="搜索描述…"
-                  aria-label="搜索历史描述"
+                  placeholder={t("history.searchPlaceholder")}
+                  aria-label={t("history.searchLabel")}
                   autoComplete="off"
                   spellCheck={false}
                   onChange={(e) =>
@@ -75,7 +80,7 @@ export function HistoryDrawer(props: {
                   <button
                     type="button"
                     className="pm-dclear"
-                    aria-label="清除搜索词"
+                    aria-label={t("history.clearSearch")}
                     onClick={() => setFilter({ ...filter, query: "" })}
                   >
                     <X size={10} />
@@ -85,12 +90,12 @@ export function HistoryDrawer(props: {
               <Segmented<HistoryRange>
                 full
                 mini
-                ariaLabel="按日期筛选"
+                ariaLabel={t("history.rangeLabel")}
                 options={[
-                  { value: "all", label: "全部" },
-                  { value: "today", label: "今天" },
-                  { value: "7d", label: "近7天" },
-                  { value: "30d", label: "近30天" },
+                  { value: "all", label: t("history.range.all") },
+                  { value: "today", label: t("history.range.today") },
+                  { value: "7d", label: t("history.range.7d") },
+                  { value: "30d", label: t("history.range.30d") },
                 ]}
                 value={filter.range}
                 onChange={(range) => setFilter({ ...filter, range })}
@@ -108,19 +113,22 @@ export function HistoryDrawer(props: {
                   aria-hidden="true"
                   fill={filter.starredOnly ? "currentColor" : "none"}
                 />
-                只看收藏
+                {t("history.starredOnly")}
               </button>
             </div>
             {isHistoryFilterActive(filter) && list.length > 0 && (
               <div className="pm-dcount">
                 <span>
-                  {list.length} 条结果 · 共 {props.rows.length} 条
+                  {t("history.resultCount", {
+                    count: list.length,
+                    total: props.rows.length,
+                  })}
                 </span>
                 <button
                   type="button"
                   onClick={() => setFilter(DEFAULT_HISTORY_FILTER)}
                 >
-                  清除筛选
+                  {t("history.clearFilter")}
                 </button>
               </div>
             )}
@@ -147,7 +155,12 @@ export function HistoryDrawer(props: {
                     <span className="pm-dtxt">
                       <span className="p">{r.prompt}</span>
                       <span className="s">
-                        {fmtTime(r.createdAt)} · {r.imageIds.length} 张
+                        {t("history.rowMeta", {
+                          time: fmtTime(r.createdAt, i18n),
+                          images: t("count.images", {
+                            count: r.imageIds.length,
+                          }),
+                        })}
                       </span>
                     </span>
                   </button>
@@ -155,7 +168,9 @@ export function HistoryDrawer(props: {
                     type="button"
                     className={"pm-dstar" + (r.starred ? " on" : "")}
                     aria-pressed={!!r.starred}
-                    aria-label={r.starred ? "取消收藏" : "收藏"}
+                    aria-label={
+                      r.starred ? t("history.unstar") : t("history.star")
+                    }
                     onClick={() => props.onToggleStar(r.id)}
                   >
                     <Star
@@ -167,30 +182,28 @@ export function HistoryDrawer(props: {
                 </div>
               ))}
               {props.rows.length === 0 ? (
-                <p className="pm-dempty">
-                  还没有作品，生成的图片会自动保存在本机
-                </p>
+                <p className="pm-dempty">{t("history.empty")}</p>
               ) : (
                 list.length === 0 && (
                   <div className="pm-dnone">
                     <p className="pm-dempty">
-                      没有匹配的历史记录
+                      {t("history.noMatchTitle")}
                       <br />
-                      调整搜索词或筛选条件试试
+                      {t("history.noMatchHint")}
                     </p>
                     <button
                       type="button"
                       className="pm-dnone-reset"
                       onClick={() => setFilter(DEFAULT_HISTORY_FILTER)}
                     >
-                      清除筛选
+                      {t("history.clearFilter")}
                     </button>
                   </div>
                 )
               )}
             </div>
             <div className="pm-drawer-f">
-              <Settings2 size={11} /> 全部数据仅保存在本机浏览器
+              <Settings2 size={11} /> {t("history.footer")}
             </div>
           </DrawerDialog>
         </DrawerContent>

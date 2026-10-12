@@ -3,6 +3,7 @@ import { createParser } from "eventsource-parser";
 import { apiUrl } from "../lib/url";
 import {
   ApiError,
+  clientError,
   MODEL_NAMES,
   type ApiConfig,
   type GenParams,
@@ -10,23 +11,32 @@ import {
   type EditSubmission,
 } from "../lib/types";
 
+/** HTTP 状态 → 错误。message 是服务端原文（可能为空），原样保留不翻译；
+ *  没有原文时 detail 给出客户端兜底说明，文案由界面按当前语言生成 */
 function mapStatus(
   status: number,
   code: string | undefined,
   message: string,
 ): ApiError {
   if (status === 401)
-    return new ApiError("auth", message || "Key 无效", status);
+    return new ApiError("auth", message, status, { code: "key-invalid" });
   if (status === 403)
-    return new ApiError("org-unverified", message || "组织未验证", status);
+    return new ApiError("org-unverified", message, status, {
+      code: "org-unverified",
+    });
   if (status === 429)
-    return new ApiError("rate-limit", message || "请求过于频繁", status);
+    return new ApiError("rate-limit", message, status, { code: "rate-limit" });
   if (status === 400 && /content|policy/i.test(code ?? "")) {
-    return new ApiError("content-policy", message || "内容被拦截", status);
+    return new ApiError("content-policy", message, status, {
+      code: "blocked",
+    });
   }
   if (status >= 500)
-    return new ApiError("server", message || "服务端错误", status);
-  return new ApiError("unknown", message || `请求失败（${status}）`, status);
+    return new ApiError("server", message, status, { code: "server-error" });
+  return new ApiError("unknown", message, status, {
+    code: "request-failed",
+    params: { status },
+  });
 }
 
 async function toApiError(res: Response): Promise<ApiError> {
@@ -59,7 +69,7 @@ async function fetchJson<T>(
     });
   } catch (e) {
     if (init?.signal?.aborted) throw e;
-    throw new ApiError("network", "无法连接到 API 地址");
+    throw clientError("network", "unreachable");
   }
   if (!res.ok) throw await toApiError(res);
   return (await res.json()) as T;
@@ -106,7 +116,7 @@ function bodyFields(
 export function parseGenResponse(j: any): ImageRequestResult {
   const images: string[] = (j.data ?? []).map((d: any) => d.b64_json);
   if (!images.length || images.some((b64) => typeof b64 !== "string" || !b64))
-    throw new ApiError("unknown", "响应中没有图片数据");
+    throw clientError("unknown", "no-image");
   return { images, usage: j.usage ?? null };
 }
 
@@ -155,15 +165,15 @@ async function urlToB64(url: string, signal?: AbortSignal): Promise<string> {
     res = await fetch(url, { signal });
   } catch (e) {
     if (signal?.aborted) throw e;
-    throw new ApiError("network", "结果图片下载失败，请重试");
+    throw clientError("network", "download-failed");
   }
   if (!res.ok)
-    throw new ApiError("unknown", `结果图片下载失败（HTTP ${res.status}）`);
+    throw clientError("unknown", "download-http", { status: res.status });
   const blob = await res.blob();
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new ApiError("unknown", "结果图片读取失败"));
+    reader.onerror = () => reject(clientError("unknown", "read-failed"));
     reader.readAsDataURL(blob);
   });
   return dataUrl.slice(dataUrl.indexOf(",") + 1);
@@ -188,20 +198,16 @@ async function resolveTaskResult(
       const urls: string[] = (d.result.images ?? []).flatMap(
         (im: any) => im.url ?? [],
       );
-      if (!urls.length)
-        throw new ApiError("unknown", "任务完成但响应中没有图片数据");
+      if (!urls.length) throw clientError("unknown", "task-no-image");
       const b64s = await Promise.all(urls.map((u) => urlToB64(u, signal)));
       return { images: b64s, usage: d.usage ?? null };
     }
     if (status === "failed" || status === "error" || status === "cancelled") {
       const msg = d?.error?.message ?? d?.message ?? j?.error?.message;
-      throw new ApiError(
-        "server",
-        typeof msg === "string" && msg ? msg : "任务执行失败",
-      );
+      if (typeof msg === "string" && msg) throw new ApiError("server", msg);
+      throw clientError("server", "task-failed");
     }
-    if (Date.now() > deadline)
-      throw new ApiError("server", "任务超时未完成（5 分钟）");
+    if (Date.now() > deadline) throw clientError("server", "task-timeout");
     await sleep(TASK_POLL_INTERVAL_MS, signal);
   }
 }
@@ -257,11 +263,15 @@ export function createImageParser(
       const type = d.type ?? ev.event;
       if (type === "error" || d.error) {
         const error = d.error ?? d;
-        throw mapStatus(
+        const mapped = mapStatus(
           error.status ?? 400,
           error.code,
-          error.message ?? "生成失败",
+          error.message ?? "",
         );
+        // 事件里完全没有 message：统一说「生成失败」，不按状态码细分
+        if (error.message == null)
+          mapped.detail = { code: "generation-failed" };
+        throw mapped;
       }
       if (/^image_(generation|edit)\.partial_image$/.test(type) && d.b64_json) {
         handlers.onPartial?.(d.b64_json, d.partial_image_index ?? 0);
@@ -304,7 +314,7 @@ export async function requestImages(
     });
   } catch (e) {
     if (handlers.signal?.aborted) throw e;
-    throw new ApiError("network", "无法连接到 API 地址");
+    throw clientError("network", "unreachable");
   }
   if (!res.ok) throw await toApiError(res);
   // 中转对 stream 请求回 JSON（普通响应或任务单）时就地解析，
@@ -316,7 +326,7 @@ export async function requestImages(
       ? resolveTaskResult(taskId, config, handlers.signal)
       : parseGenResponse(j);
   }
-  if (!res.body) throw new ApiError("unknown", "响应没有内容");
+  if (!res.body) throw clientError("unknown", "no-content");
   const result: ImageRequestResult = { images: [], usage: null };
   const parser = createImageParser(handlers, result);
   const reader = res.body.getReader();
@@ -338,7 +348,6 @@ export async function requestImages(
   }
   handlers.signal?.throwIfAborted();
   if (streamError) throw streamError;
-  if (!result.images.length)
-    throw new ApiError("unknown", "响应中没有图片数据");
+  if (!result.images.length) throw clientError("unknown", "no-image");
   return result;
 }

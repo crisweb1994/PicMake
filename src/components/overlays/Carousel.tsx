@@ -1,4 +1,5 @@
 /** 轮播：多图点选浮层：纯展示的受控弹层 */
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { StageToolbar } from "../Stage";
 import type { DisplayImage } from "../../lib/view-models";
@@ -18,17 +19,18 @@ export function Carousel(props: {
   onEdit?: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="pm-car"
       role="dialog"
-      aria-label="查看图片"
+      aria-label={t("carousel.label")}
       onClick={(e) => e.target === e.currentTarget && props.onClose()}
     >
       <button
         type="button"
         className="pm-x-btn"
-        aria-label="关闭轮播"
+        aria-label={t("carousel.close")}
         onClick={props.onClose}
       >
         <X size={15} />
@@ -36,7 +38,7 @@ export function Carousel(props: {
       <button
         type="button"
         className="pm-car-arrow prev"
-        aria-label="上一张"
+        aria-label={t("carousel.prev")}
         onClick={props.onPrev}
       >
         <ChevronLeft size={19} />
@@ -50,7 +52,7 @@ export function Carousel(props: {
       <button
         type="button"
         className="pm-car-arrow next"
-        aria-label="下一张"
+        aria-label={t("carousel.next")}
         onClick={props.onNext}
       >
         <ChevronRight size={19} />

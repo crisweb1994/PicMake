@@ -1,5 +1,6 @@
 /** 画板层：草图与局部重绘弹层，以及底图准备中的提示；重绘底图 URL 随会话生成与回收 */
 import { Suspense, lazy, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   confirmInpaint,
   confirmSketch,
@@ -26,6 +27,7 @@ const SketchModal = lazy(() =>
 );
 
 export function DrawingLayer() {
+  const { t } = useTranslation();
   const drawing = useWorkspace((s) => s.drawing);
   const inpaintBaseUrl = useObjectUrl(
     drawing?.kind === "inpaint" ? drawing.base.blob : null,
@@ -52,7 +54,7 @@ export function DrawingLayer() {
           key={drawing.id}
           doc={drawing.doc}
           cursor={drawing.cursor}
-          meta={drawing.meta}
+          origin={drawing.origin}
           confirming={drawing.confirming}
           onStroke={strokeDrawing}
           onClear={() => strokeDrawing({ type: "clear" })}
@@ -67,7 +69,7 @@ export function DrawingLayer() {
         <InpaintModal
           key={drawing.id}
           baseUrl={inpaintBaseUrl}
-          name={drawing.name}
+          naming={drawing.naming}
           baseW={drawing.base.width}
           baseH={drawing.base.height}
           normalized={drawing.normalized}
@@ -86,7 +88,7 @@ export function DrawingLayer() {
       )}
       {drawing?.kind === "opening" && (
         <p className="pm-saving" role="status">
-          正在读取底图…
+          {t("status.openingBase")}
         </p>
       )}
     </Suspense>

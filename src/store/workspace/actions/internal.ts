@@ -32,7 +32,7 @@ export function freshDraft(
     inputFidelity: "auto",
     dirty: false,
     readId: null,
-    uploadError: "",
+    uploadIssues: [],
   };
 }
 
@@ -58,7 +58,7 @@ export function withInpaint(
     inputs:
       payload.entry === "draft-input"
         ? [
-            { imageId: payload.base.id, name: "底图", upload: payload.base },
+            { imageId: payload.base.id, upload: payload.base },
             ...draft.inputs.filter(
               (input) =>
                 input.imageId !== chosenInputId &&

@@ -175,7 +175,6 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
         <Suspense fallback={null}>
           <MaskViewModal
             baseUrl={viewMaskUrl}
-            name={viewMask.name}
             baseW={viewMask.base.width}
             baseH={viewMask.base.height}
             commands={viewMask.commands}

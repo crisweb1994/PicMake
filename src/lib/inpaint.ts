@@ -50,19 +50,22 @@ export function suggestInpaintSize(w: number, h: number): SuggestResult {
   return result;
 }
 
-/** 建议尺寸的人类可读原因 */
-export function sizeReason(w: number, h: number): string {
-  const parts: string[] = [];
+/** 建议尺寸的原因：哪些边向下取了 16 的倍数、是否等比放入输出框；文案由界面按当前语言生成。
+ *  两项都不成立即原尺寸合法直出 */
+export interface SizeReason {
+  floor: "w" | "h" | "both" | null;
+  scaled: boolean;
+}
+
+export function sizeReason(w: number, h: number): SizeReason {
   const floor16 = (n: number) => Math.floor(n / 16) * 16;
-  if (floor16(w) !== w || floor16(h) !== h) {
-    const seg: string[] = [];
-    if (floor16(w) !== w) seg.push("宽度");
-    if (floor16(h) !== h) seg.push("高度");
-    parts.push(`${seg.join("与")}向下取 16 的倍数`);
-  }
+  const floorW = floor16(w) !== w;
+  const floorH = floor16(h) !== h;
   const frame = Math.min(1, 3840 / Math.max(w, h), 2160 / Math.min(w, h));
-  if (frame < 1) parts.push("等比放入 3840 × 2160 输出框");
-  return parts.join("，") || "原尺寸合法直出";
+  return {
+    floor: floorW && floorH ? "both" : floorW ? "w" : floorH ? "h" : null,
+    scaled: frame < 1,
+  };
 }
 
 /** 输出目标：能原尺寸直出则原尺寸，否则建议尺寸 */
@@ -73,7 +76,7 @@ export function inpaintTargetSize(
   w: number;
   h: number;
   suggested: boolean;
-  reason: string;
+  reason: SizeReason;
 } | null {
   const out = suggestInpaintSize(w, h);
   if ("err" in out) return null;

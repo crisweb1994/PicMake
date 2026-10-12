@@ -1,5 +1,6 @@
 /** 设置弹窗：纯展示的受控弹层 */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Input,
@@ -9,8 +10,13 @@ import {
   ModalDialog,
   Spinner,
 } from "@heroui/react";
-import { Segmented } from "../controls";
+import { LOCALE_NAMES } from "../../i18n/resources/locale-names";
+import { errorHint } from "../../i18n/errors";
+import { fmtBytes } from "../../lib/format";
+import { LOCALES, type LocalePref } from "../../lib/locale";
 import type { ThemePref } from "../../lib/theme";
+import type { ApiErrorKind } from "../../lib/types";
+import { Segmented } from "../controls";
 
 interface TestResult {
   ok: true;
@@ -19,24 +25,53 @@ interface TestResult {
 type TestConn = (
   baseUrl: string,
   apiKey: string,
-) => Promise<TestResult | { ok: false; message: string }>;
+) => Promise<TestResult | { ok: false; kind: ApiErrorKind }>;
+
+/** 连接测试的结果：存数据，文案渲染时按当前语言生成 */
+type Outcome =
+  | { ok: true; models: number; series: boolean }
+  | { ok: false; kind: ApiErrorKind };
 
 /* ── 设置弹窗 ── */
 export function SettingsModal(props: {
   open: boolean;
   baseUrl: string;
   apiKey: string;
-  storageText: string;
+  /** 本机存储统计：记录数、图片数、已用字节（浏览器不支持估算时为 null） */
+  storage: { generations: number; images: number; usageBytes: number | null };
   theme: ThemePref;
   onThemeChange: (theme: ThemePref) => void;
+  locale: LocalePref;
+  onLocaleChange: (locale: LocalePref) => void;
   onTest: TestConn;
   onSave: (baseUrl: string, apiKey: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [baseUrl, setBaseUrl] = useState(props.baseUrl);
   const [apiKey, setApiKey] = useState(props.apiKey);
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+
+  const { generations, images, usageBytes } = props.storage;
+  const storageParts = {
+    generations: t("count.generations", { count: generations }),
+    images: t("count.images", { count: images }),
+  };
+  const storageText =
+    usageBytes == null
+      ? t("settings.storage", storageParts)
+      : t("settings.storageUsed", {
+          ...storageParts,
+          size: fmtBytes(usageBytes),
+        });
+  const resultText = !outcome
+    ? null
+    : !outcome.ok
+      ? errorHint(outcome.kind, t)
+      : t(outcome.series ? "settings.testOkWith" : "settings.testOkWithout", {
+          count: outcome.models,
+        });
 
   return (
     <Modal
@@ -47,34 +82,45 @@ export function SettingsModal(props: {
     >
       <ModalBackdrop>
         <ModalContainer placement="center">
-          <ModalDialog aria-label="设置" className="pm-modal">
+          <ModalDialog aria-label={t("settings.title")} className="pm-modal">
             <Modal.CloseTrigger />
-            <h3>连接你的 API</h3>
-            <p className="sub">配置一次即可，数据只保存在本机浏览器。</p>
-            <label>外观</label>
+            <h3>{t("settings.heading")}</h3>
+            <p className="sub">{t("settings.subtitle")}</p>
+            <label>{t("settings.appearance")}</label>
             <Segmented
               full
-              ariaLabel="外观"
+              ariaLabel={t("settings.appearance")}
               options={[
-                { value: "light", label: "浅色" },
-                { value: "dark", label: "深色" },
-                { value: "system", label: "跟随系统" },
+                { value: "light", label: t("settings.themeLight") },
+                { value: "dark", label: t("settings.themeDark") },
+                { value: "system", label: t("common.followSystem") },
               ]}
               value={props.theme}
               onChange={props.onThemeChange}
             />
-            <label htmlFor="s-base">API 地址</label>
+            <label>{t("settings.language")}</label>
+            <Segmented<LocalePref>
+              full
+              ariaLabel={t("settings.language")}
+              options={[
+                { value: "system", label: t("common.followSystem") },
+                ...LOCALES.map((locale) => ({
+                  value: locale,
+                  label: LOCALE_NAMES[locale],
+                })),
+              ]}
+              value={props.locale}
+              onChange={props.onLocaleChange}
+            />
+            <label htmlFor="s-base">{t("settings.baseUrl")}</label>
             <Input
               id="s-base"
               autoComplete="off"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
             />
-            <p className="pm-hint">
-              支持官方地址或兼容中转站，如 https://example.com/v1；末尾 /v1
-              会自动处理。
-            </p>
-            <label htmlFor="s-key">API Key</label>
+            <p className="pm-hint">{t("settings.baseUrlHint")}</p>
+            <label htmlFor="s-key">{t("settings.apiKey")}</label>
             <Input
               id="s-key"
               type="password"
@@ -82,48 +128,43 @@ export function SettingsModal(props: {
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
-            {result && (
-              <p
-                className={
-                  "pm-tconn" + (result.startsWith("连接成功") ? " ok" : "")
-                }
-              >
-                {result}
+            {resultText && (
+              <p className={"pm-tconn" + (outcome?.ok ? " ok" : "")}>
+                {resultText}
               </p>
             )}
-            <p className="pm-hint">
-              Key
-              仅保存在本机浏览器，只发往上面配置的地址；使用中转站时，画面数据会经过中转方。
-            </p>
-            <p className="pm-hint">{props.storageText}</p>
+            <p className="pm-hint">{t("settings.keyHint")}</p>
+            <p className="pm-hint">{storageText}</p>
             <div className="pm-mbtns">
               <Button
                 variant="secondary"
                 isDisabled={testing}
                 onPress={() => {
                   setTesting(true);
-                  setResult(null);
+                  setOutcome(null);
                   void props.onTest(baseUrl, apiKey).then((r) => {
                     setTesting(false);
-                    setResult(
+                    setOutcome(
                       r.ok
-                        ? `连接成功 · ${r.models.length} 个模型可用 · ${
-                            r.models.some((m) => m.includes("gpt-image-2.5"))
-                              ? "含"
-                              : "未含"
-                          } gpt-image-2.5 系列`
-                        : r.message,
+                        ? {
+                            ok: true,
+                            models: r.models.length,
+                            series: r.models.some((m) =>
+                              m.includes("gpt-image-2.5"),
+                            ),
+                          }
+                        : r,
                     );
                   });
                 }}
               >
-                {testing ? <Spinner size="sm" /> : "测试连接"}
+                {testing ? <Spinner size="sm" /> : t("settings.test")}
               </Button>
               <Button
                 variant="primary"
                 onPress={() => props.onSave(baseUrl, apiKey)}
               >
-                保存
+                {t("common.save")}
               </Button>
             </div>
           </ModalDialog>

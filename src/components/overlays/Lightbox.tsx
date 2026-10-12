@@ -1,4 +1,5 @@
 /** 灯箱：纯展示的受控弹层 */
+import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
 import { X } from "lucide-react";
 import type { DisplayImage } from "../../lib/view-models";
@@ -11,18 +12,19 @@ export function Lightbox(props: {
   onReuse?: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   if (!props.img) return null;
   return (
     <div
       className="pm-lb"
       role="dialog"
-      aria-label="查看大图"
+      aria-label={t("lightbox.label")}
       onClick={(e) => e.target === e.currentTarget && props.onClose()}
     >
       <button
         type="button"
         className="pm-x-btn"
-        aria-label="关闭大图"
+        aria-label={t("lightbox.close")}
         onClick={props.onClose}
       >
         <X size={15} />
@@ -38,15 +40,15 @@ export function Lightbox(props: {
         <div className="pm-lb-bar">
           <p>{props.prompt}</p>
           <Button variant="secondary" onPress={props.onDownload}>
-            下载
+            {t("common.download")}
           </Button>
           {props.onReuse && (
             <Button variant="primary" onPress={props.onReuse}>
-              复用参数
+              {t("stage.reuse")}
             </Button>
           )}
           <Button variant="secondary" onPress={props.onClose}>
-            关闭
+            {t("common.close")}
           </Button>
         </div>
       </div>

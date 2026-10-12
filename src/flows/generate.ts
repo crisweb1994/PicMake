@@ -3,18 +3,20 @@ import { toast } from "@heroui/react";
 import { requestImages } from "../api/client";
 import { db, type HistoryRow } from "../db/schema";
 import { saveGeneration } from "../db/history";
+import { t } from "../i18n";
+import { errorMessage, kindMessage } from "../i18n/errors";
+import { issueText, missingText } from "../i18n/labels";
 import { b64ToBlob } from "../lib/blob";
 import { prepareGeneration } from "../lib/generation";
 import { inpaintTargetSize } from "../lib/inpaint";
 import {
-  ApiError,
-  ERROR_HINTS,
-  ERROR_TITLES,
+  clientError,
   type EditDraft,
   type EditSubmission,
   type GenParams,
   type InputImage,
   type MaskImage,
+  type MissingResource,
 } from "../lib/types";
 import { draftToParams, leaveDecision } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
@@ -39,12 +41,7 @@ export function isAbortError(error: unknown): boolean {
 
 /** 错误反馈统一走 toast：标题 + 服务端信息或建议 */
 export function toastError(error: unknown) {
-  const kind = error instanceof ApiError ? error.kind : "unknown";
-  const detail =
-    error instanceof ApiError && error.message
-      ? error.message
-      : ERROR_HINTS[kind];
-  toast(`${ERROR_TITLES[kind]}：${detail}`);
+  toast(errorMessage(error, t));
 }
 
 /** 进行中请求的取消句柄：同一时间最多一个（由 beginRun 保证） */
@@ -70,12 +67,12 @@ export function generate() {
   });
   // 目标尺寸未接受时不发生成请求
   if (!checked.ok && checked.reason === "size-not-accepted") {
-    if (checked.message) toast(checked.message);
+    if (checked.issue) toast(issueText(checked.issue, t));
     return;
   }
   setLastDoneId(null);
   if (!checked.ok) {
-    if (checked.message) toast(checked.message);
+    if (checked.issue) toast(issueText(checked.issue, t));
     if (checked.focusPrompt) requestPromptFocus();
     return;
   }
@@ -90,8 +87,8 @@ export function generate() {
     : null;
   if (decision === "confirm-unsaved") {
     setConfirm({
-      title: "放弃未保存结果？",
-      desc: "图片已经生成，但尚未保存到本机。重新生成后这次结果会丢失。",
+      title: t("confirm.unsavedGenerate.title"),
+      desc: t("confirm.unsavedGenerate.desc"),
       onOk: () => {
         // 确认期间状态可能已变：不再是未保存结果时不重复发起
         if (useWorkspace.getState().run.phase !== "unsaved") return;
@@ -129,7 +126,7 @@ export function regenerate(id: string) {
 async function regenerateInpaint(row: HistoryRow) {
   const read = await readInpaintDraft(row);
   if (!read.ok) {
-    toast(`${read.missing}不可用，无法再来一版`);
+    toast(t("toast.cantRegenerate", { what: missingText(read.missing, t) }));
     return;
   }
   await runGeneration(read.params, read.draft);
@@ -174,15 +171,15 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
       await saveGeneration(prepared);
     } catch {
       markUnsaved();
-      toast(`${ERROR_TITLES["save-failed"]}：${ERROR_HINTS["save-failed"]}`);
+      toast(kindMessage("save-failed", t));
       return;
     }
     finishSave(prepared);
-    toast("生成完成");
+    toast(t("toast.generated"));
   } catch (caught) {
     endRun();
     if (isAbortError(caught)) {
-      toast("已取消生成");
+      toast(t("toast.cancelled"));
       return;
     }
     toastError(caught);
@@ -210,10 +207,9 @@ async function loadEditSubmission(
     draft.inputs.map(async (input, index) => {
       const image = input.upload ?? (await db.images.get(input.imageId));
       if (!image)
-        throw new ApiError(
-          "source-unavailable",
-          `图${index + 1}：${ERROR_HINTS["source-unavailable"]}`,
-        );
+        throw clientError("source-unavailable", "source-missing", {
+          index: index + 1,
+        });
       const { upload: _upload, ...source } = input;
       return { source, image };
     }),
@@ -246,20 +242,20 @@ export async function readInpaintDraft(
   row: HistoryRow,
 ): Promise<
   | { ok: true; draft: EditDraft; mask: MaskImage; params: GenParams }
-  | { ok: false; missing: string }
+  | { ok: false; missing: MissingResource }
 > {
   const inp = row.inpaint;
   const sources = row.inputSources ?? [];
-  if (!inp || !sources.length) return { ok: false, missing: "选区" };
+  if (!inp || !sources.length) return { ok: false, missing: { kind: "mask" } };
   const maskRow = await db.images.get(inp.maskImageId);
-  if (!maskRow?.mask) return { ok: false, missing: "选区" };
+  if (!maskRow?.mask) return { ok: false, missing: { kind: "mask" } };
   const baseRow = await db.images.get(maskRow.mask.baseImageId);
-  if (!baseRow) return { ok: false, missing: "底图" };
+  if (!baseRow) return { ok: false, missing: { kind: "base" } };
   const inputs: InputImage[] = [
     {
       imageId: baseRow.id,
       generationId: sources[0]?.generationId,
-      name: sources[0]?.name ?? "底图",
+      name: sources[0]?.name,
       upload: baseRow,
     },
   ];
@@ -269,7 +265,7 @@ export async function readInpaintDraft(
     if (!image)
       return {
         ok: false,
-        missing: source.name ? `参考图「${source.name}」` : "参考图",
+        missing: { kind: "reference", name: source.name },
       };
     inputs.push({
       imageId: source.imageId,
@@ -285,7 +281,7 @@ export async function readInpaintDraft(
   };
   // 目标尺寸按当前约束复核
   const target = inpaintTargetSize(baseRow.width, baseRow.height);
-  if (!target) return { ok: false, missing: "底图" };
+  if (!target) return { ok: false, missing: { kind: "base" } };
   const params: GenParams = {
     ...row.params,
     size: { w: target.w, h: target.h },

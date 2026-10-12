@@ -9,7 +9,7 @@ vi.mock("../store/settings", () => ({
 
 import { toast } from "@heroui/react";
 import { testConnection as requestModels } from "../api/client";
-import { ApiError, ERROR_HINTS } from "../lib/types";
+import { ApiError } from "../lib/types";
 import { initialWorkspace, useWorkspace } from "../store/workspace";
 import { openSettings } from "../store/workspace/actions";
 import { saveSettings, testConnection } from "./settings";
@@ -38,14 +38,14 @@ describe("testConnection", () => {
     await expect(testConnection("u", "k")).resolves.toEqual(ok);
   });
 
-  it("失败：返回该错误类型对应的统一文案，不泄露原始错误", async () => {
+  it("失败：只返回错误种类，不泄露原始错误", async () => {
     vi.mocked(requestModels).mockResolvedValue({
       ok: false,
       error: new ApiError("auth", "raw secret detail"),
     } as never);
     await expect(testConnection("u", "k")).resolves.toEqual({
       ok: false,
-      message: ERROR_HINTS["auth"],
+      kind: "auth",
     });
   });
 });

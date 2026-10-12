@@ -1,5 +1,5 @@
 /** 生成表单 ↔ API 参数映射（纯函数） */
-import { validateSize } from "./size";
+import { validateSize, type SizeIssue } from "./size";
 import type {
   Background,
   GenParams,
@@ -12,44 +12,22 @@ import type {
 export type RatioId =
   "1:1" | "4:3" | "3:4" | "3:2" | "2:3" | "16:9" | "9:16" | "auto";
 
+/** 模型显示名是品牌名，不随语言变化 */
 export const MODEL_LABELS: Record<ModelId, string> = {
   flare: "Flare",
   sunburst: "Sunburst",
 };
 
-export const QUALITY_LABELS: Record<Quality, string> = {
-  low: "低",
-  medium: "中",
-  high: "高",
-  xhigh: "超高",
-  max: "最高",
-};
-
-/** 展示用尺寸文本，如 "1536 × 1024" / "自动" */
-export function sizeText(size: SizeSpec): string {
-  return size === "auto" ? "自动" : `${size.w} × ${size.h}`;
-}
-
-/** chip 上的尺寸值文本：自定义宽高 / 比例·基准 / 自动（MiniBar 与比例 chip 共用） */
-export function sizeChipValue(
-  f: Pick<GenForm, "ratio" | "base" | "cw" | "ch">,
-) {
-  return isCustomActive(f)
-    ? `${f.cw}×${f.ch}`
-    : f.ratio === "auto"
-      ? "自动"
-      : `${f.ratio} · ${BASE_LABELS.find((b) => b.id === f.base)?.label}`;
-}
-
-export const RATIO_CHIPS: ReadonlyArray<{ id: RatioId; label: string }> = [
-  { id: "1:1", label: "1:1" },
-  { id: "4:3", label: "4:3" },
-  { id: "3:4", label: "3:4" },
-  { id: "3:2", label: "3:2" },
-  { id: "2:3", label: "2:3" },
-  { id: "16:9", label: "16:9" },
-  { id: "9:16", label: "9:16" },
-  { id: "auto", label: "自动" },
+/** 比例 chip 的顺序；「auto」的显示名随语言，见 i18n/labels.ts */
+export const RATIOS: ReadonlyArray<RatioId> = [
+  "1:1",
+  "4:3",
+  "3:4",
+  "3:2",
+  "2:3",
+  "16:9",
+  "9:16",
+  "auto",
 ];
 
 /** 各比例的基准像素 */
@@ -172,9 +150,12 @@ export function paramsToForm(p: GenParams): GenForm {
   };
 }
 
-export function validateParams(p: GenParams): string[] {
-  const errors: string[] = [];
-  if (!p.prompt.trim()) errors.push("先写一句画面描述");
-  if (p.size !== "auto") errors.push(...validateSize(p.size.w, p.size.h));
-  return [...new Set(errors)];
+/** 请求参数的问题码；界面文案见 i18n 资源 issues.* */
+export type ParamIssue = "empty-prompt" | SizeIssue;
+
+export function validateParams(p: GenParams): ParamIssue[] {
+  const issues: ParamIssue[] = [];
+  if (!p.prompt.trim()) issues.push("empty-prompt");
+  if (p.size !== "auto") issues.push(...validateSize(p.size.w, p.size.h));
+  return [...new Set(issues)];
 }

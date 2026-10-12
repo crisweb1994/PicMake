@@ -1,4 +1,5 @@
 /** 结果舞台：空 / 生成中 / 单张 / 网格 四形态，纯展示 */
+import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
 import {
   Download,
@@ -9,12 +10,14 @@ import {
   X,
 } from "lucide-react";
 import { DotsWave } from "./DotsWave";
-import { fmtTime } from "../lib/format";
-import { MODEL_LABELS, QUALITY_LABELS, sizeText } from "../lib/params";
+import { fmtTime } from "../i18n/format";
+import { sizeText } from "../i18n/labels";
+import { MODEL_LABELS } from "../lib/params";
 import type { SizeSpec } from "../lib/types";
 import type { DisplayGen, DisplayImage, GenPlan } from "../lib/view-models";
 
 export function StageEmpty(props: { onStart: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="pm-empty">
       <div className="pm-empty-glow" aria-hidden="true" />
@@ -26,8 +29,8 @@ export function StageEmpty(props: { onStart: () => void }) {
           <path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z" />
         </svg>
       </div>
-      <h2>从一句描述开始</h2>
-      <p>写下你想要的画面，几秒后它会出现在这里</p>
+      <h2>{t("stage.emptyTitle")}</h2>
+      <p>{t("stage.emptyHint")}</p>
       <Button
         variant="outline"
         className="pm-ghost-cta"
@@ -36,7 +39,7 @@ export function StageEmpty(props: { onStart: () => void }) {
         <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z" />
         </svg>
-        写下第一句
+        {t("stage.emptyCta")}
       </Button>
     </div>
   );
@@ -44,6 +47,7 @@ export function StageEmpty(props: { onStart: () => void }) {
 
 /** 生成占位卡：点阵在卡内波动；渐进预览到达后在原位淡入，替掉该卡的点阵 */
 function GenTile(props: { partialUrl: string | null }) {
+  const { t } = useTranslation();
   return (
     <>
       <div
@@ -53,7 +57,11 @@ function GenTile(props: { partialUrl: string | null }) {
         <DotsWave />
       </div>
       {props.partialUrl && (
-        <img src={props.partialUrl} alt="正在生成" className="pm-gen-img" />
+        <img
+          src={props.partialUrl}
+          alt={t("stage.generating")}
+          className="pm-gen-img"
+        />
       )}
     </>
   );
@@ -66,6 +74,7 @@ export function StageGenerating(props: {
   partialIndex: number;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const { n, size, partialUrl, partialIndex } = props;
   return (
     <>
@@ -102,12 +111,12 @@ export function StageGenerating(props: {
           </div>
           {/* 预留说明栏高度，完成切换时网格位置不动 */}
           <div className="pm-grid-cap pm-reserve" aria-hidden="true">
-            <span>共 {n} 张</span>
+            <span>{t("stage.total", { count: n })}</span>
             <Button variant="ghost" size="sm" isDisabled>
-              下载全部
+              {t("stage.downloadAll")}
             </Button>
             <Button variant="ghost" size="sm" isDisabled>
-              复用参数再生成
+              {t("stage.reuseAndRegenerate")}
             </Button>
           </div>
         </div>
@@ -118,12 +127,12 @@ export function StageGenerating(props: {
           <i />
           <i />
         </span>
-        <span>正在生成</span>
+        <span>{t("stage.generating")}</span>
         <Button
           variant="ghost"
           size="sm"
           isIconOnly
-          aria-label="取消生成"
+          aria-label={t("stage.cancel")}
           onPress={props.onCancel}
         >
           <X size={13} />
@@ -138,6 +147,7 @@ export function StageSingle(props: {
   img: DisplayImage;
   onZoom: (id: string) => void;
 }) {
+  const { t, i18n } = useTranslation();
   const { row } = props.display;
   const p = row.params;
   return (
@@ -147,7 +157,7 @@ export function StageSingle(props: {
         alt={row.prompt}
         role="button"
         tabIndex={0}
-        aria-label="放大查看大图"
+        aria-label={t("stage.zoomAria")}
         onClick={() => props.onZoom(props.img.id)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -157,8 +167,8 @@ export function StageSingle(props: {
         }}
       />
       <figcaption className="pm-single-meta">
-        {MODEL_LABELS[p.model]} · {QUALITY_LABELS[p.quality]} ·{" "}
-        {sizeText(p.size)} · {fmtTime(row.createdAt)}
+        {MODEL_LABELS[p.model]} · {t(`params.qualityLevel.${p.quality}`)} ·{" "}
+        {sizeText(p.size, t)} · {fmtTime(row.createdAt, i18n)}
       </figcaption>
     </figure>
   );
@@ -171,6 +181,7 @@ export function StageGrid(props: {
   onDownloadAll: () => void;
   onReuse: () => void;
 }) {
+  const { t } = useTranslation();
   const { row, images } = props.display;
   return (
     <div className="pm-grid-wrap">
@@ -181,7 +192,7 @@ export function StageGrid(props: {
             className="pm-gtile"
             role="button"
             tabIndex={0}
-            aria-label={`结果 ${idx + 1}`}
+            aria-label={t("stage.result", { index: idx + 1 })}
             onClick={() => props.onZoomIn(idx)}
             onKeyDown={(e) => {
               if (
@@ -202,7 +213,7 @@ export function StageGrid(props: {
                   props.onZoomIn(idx);
                 }}
               >
-                放大
+                {t("stage.zoom")}
               </button>
               <button
                 type="button"
@@ -211,19 +222,19 @@ export function StageGrid(props: {
                   props.onDownload(idx);
                 }}
               >
-                下载
+                {t("stage.download")}
               </button>
             </div>
           </div>
         ))}
       </div>
       <div className="pm-grid-cap">
-        共 {images.length} 张
+        {t("stage.total", { count: images.length })}
         <Button variant="ghost" size="sm" onPress={props.onDownloadAll}>
-          下载全部
+          {t("stage.downloadAll")}
         </Button>
         <Button variant="ghost" size="sm" onPress={props.onReuse}>
-          复用参数再生成
+          {t("stage.reuseAndRegenerate")}
         </Button>
       </div>
     </div>
@@ -237,29 +248,30 @@ export function StageToolbar(props: {
   onEdit?: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="pm-stage-toolbar">
       <button type="button" onClick={props.onZoom}>
         <Maximize2 size={13} />
-        放大
+        {t("stage.zoom")}
       </button>
       <button type="button" onClick={props.onDownload}>
         <Download size={13} />
-        下载
+        {t("stage.download")}
       </button>
       <button type="button" onClick={props.onReuse}>
         <RotateCcw size={13} />
-        复用参数
+        {t("stage.reuse")}
       </button>
       {props.onEdit && (
         <button type="button" onClick={props.onEdit}>
           <RefreshCw size={13} />
-          编辑此图
+          {t("stage.edit")}
         </button>
       )}
       <button type="button" className="danger" onClick={props.onDelete}>
         <Trash2 size={13} />
-        删除
+        {t("stage.delete")}
       </button>
     </div>
   );
