@@ -1,7 +1,10 @@
 /** 舞台右上详情浮卡，纯展示；局部重绘记录提供「查看选区/调整上次重绘」 */
+import { useTranslation } from "react-i18next";
 import { Star, X } from "lucide-react";
-import { fmtDuration, fmtTime } from "../lib/format";
-import { MODEL_LABELS, QUALITY_LABELS, sizeText } from "../lib/params";
+import { fmtTime } from "../i18n/format";
+import { inputName, sizeText } from "../i18n/labels";
+import { fmtDuration } from "../lib/format";
+import { MODEL_LABELS } from "../lib/params";
 import type { DisplayGen, DisplayInput } from "../lib/view-models";
 
 export function DetailCard(props: {
@@ -25,57 +28,62 @@ export function DetailCard(props: {
   /** 恢复上次草稿（不生成） */
   onAdjustInpaint?: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const { row, images } = props.display;
   const p = row.params;
   const starred = !!row.starred;
   const editImageId = props.selectedImageId ?? images[0]?.id ?? null;
   const inpaintRow = !!row.inpaint;
   return (
-    <aside className="pm-island pm-detail" aria-label="本次生成详情">
+    <aside className="pm-island pm-detail" aria-label={t("detail.label")}>
       <header className="pm-detail-cap">
-        <b>本次生成</b>
-        <span className="t">{fmtTime(row.createdAt)}</span>
+        <b>{t("detail.heading")}</b>
+        <span className="t">{fmtTime(row.createdAt, i18n)}</span>
         <button
           type="button"
           className={"pm-detail-star" + (starred ? " on" : "")}
           aria-pressed={starred}
-          aria-label={starred ? "取消收藏" : "收藏这次生成"}
-          title={starred ? "取消收藏" : "收藏"}
+          aria-label={starred ? t("detail.unstar") : t("detail.star")}
+          title={starred ? t("detail.unstarTitle") : t("detail.starTitle")}
           onClick={props.onToggleStar}
         >
           <Star size={13} fill={starred ? "currentColor" : "none"} />
         </button>
-        <button type="button" aria-label="收起详情" onClick={props.onClose}>
+        <button
+          type="button"
+          aria-label={t("detail.collapse")}
+          onClick={props.onClose}
+        >
           <X size={12} />
         </button>
       </header>
       <div className="pm-detail-chips">
         <span className="pm-detail-chip">
-          模型 <b>{MODEL_LABELS[p.model]}</b>
+          {t("detail.model")} <b>{MODEL_LABELS[p.model]}</b>
         </span>
         <span className="pm-detail-chip">
-          尺寸 <b>{sizeText(p.size)}</b>
+          {t("detail.size")} <b>{sizeText(p.size, t)}</b>
         </span>
         <span className="pm-detail-chip">
-          质量 <b>{QUALITY_LABELS[p.quality]}</b>
+          {t("detail.quality")} <b>{t(`params.qualityLevel.${p.quality}`)}</b>
         </span>
         <span className="pm-detail-chip">
-          张数 <b>{images.length}</b>
+          {t("detail.count")} <b>{images.length}</b>
         </span>
         <span className="pm-detail-chip">
           <b>{p.outputFormat.toUpperCase()}</b>
         </span>
       </div>
       <div className="pm-detail-promptcap">
-        <span>画面描述</span>
+        <span>{t("detail.prompt")}</span>
         <button type="button" onClick={props.onCopyPrompt}>
-          复制
+          {t("detail.copy")}
         </button>
       </div>
       <p className="pm-detail-prompt">{row.prompt}</p>
       {row.originPrompt && row.originPrompt !== row.prompt && (
         <p className="pm-detail-origin">
-          <span>原始描述</span>
+          <span>{t("detail.origin")}</span>
           {row.originPrompt}
         </p>
       )}
@@ -87,40 +95,43 @@ export function DetailCard(props: {
                 key={image.id}
                 type="button"
                 className="pm-detail-src"
-                aria-label={`预览图${index + 1}`}
+                aria-label={t("detail.previewSource", { index: index + 1 })}
                 onClick={() => props.onViewSource(image.id)}
               >
                 {image.url ? (
-                  <img src={image.url} alt={image.name} />
+                  <img src={image.url} alt={inputName(image.naming, t)} />
                 ) : (
-                  <span>不可用</span>
+                  <span>{t("common.unavailable")}</span>
                 )}
               </button>
             ))}
           </div>
           <p className="pm-detail-hint">
-            输入来源 {props.sources.length} 张 · 保留原图 ·{" "}
-            {row.inputFidelity === "high"
-              ? "高"
-              : row.inputFidelity === "low"
-                ? "低"
-                : "自动"}
+            {t("detail.sourceInfo", {
+              count: props.sources.length,
+              fidelity:
+                row.inputFidelity === "high"
+                  ? t("params.fidelityHigh")
+                  : row.inputFidelity === "low"
+                    ? t("params.fidelityLow")
+                    : t("common.auto"),
+            })}
           </p>
         </>
       )}
       <div className="pm-detail-acts">
         <button type="button" onClick={props.onDownload}>
-          下载
+          {t("detail.download")}
         </button>
         <button type="button" onClick={props.onReuse}>
-          复用参数
+          {t("detail.reuse")}
         </button>
         <button
           type="button"
           disabled={!editImageId || !props.canEdit}
           onClick={() => editImageId && props.onEdit(editImageId)}
         >
-          编辑此图
+          {t("detail.edit")}
         </button>
       </div>
       <div className="pm-detail-acts">
@@ -128,7 +139,7 @@ export function DetailCard(props: {
           <>
             {props.onViewMask && (
               <button type="button" onClick={props.onViewMask}>
-                查看选区
+                {t("detail.viewMask")}
               </button>
             )}
             {props.onAdjustInpaint && (
@@ -137,7 +148,7 @@ export function DetailCard(props: {
                 disabled={!props.canEdit}
                 onClick={props.onAdjustInpaint}
               >
-                调整上次重绘
+                {t("detail.adjustInpaint")}
               </button>
             )}
           </>
@@ -147,39 +158,38 @@ export function DetailCard(props: {
             disabled={!editImageId || !props.canEdit}
             onClick={() => editImageId && props.onInpaint(editImageId)}
           >
-            局部重绘
+            {t("detail.inpaint")}
           </button>
         )}
       </div>
       {!inpaintRow && !props.selectedImageId && images.length > 1 && (
-        <p className="pm-detail-hint">
-          多张结果先在轮播中选一张，再对这一张局部重绘。
-        </p>
+        <p className="pm-detail-hint">{t("detail.pickBeforeInpaint")}</p>
       )}
       {!inpaintRow && props.selectedImageId && (
         <p className="pm-detail-hint">
-          将对第 {images.findIndex((i) => i.id === props.selectedImageId) + 1}{" "}
-          张发起局部重绘。
+          {t("detail.inpaintTarget", {
+            index: images.findIndex((i) => i.id === props.selectedImageId) + 1,
+          })}
         </p>
       )}
       {inpaintRow && row.inpaint && (
-        <p className="pm-detail-hint">
-          选区叠加在实际请求底图上；「再来一版」复用同一份选区。
-        </p>
+        <p className="pm-detail-hint">{t("detail.maskNote")}</p>
       )}
       {!props.selectedImageId && images.length > 1 && (
-        <p className="pm-detail-hint">多张结果可在轮播中选一张，再编辑此图。</p>
+        <p className="pm-detail-hint">{t("detail.pickBeforeEdit")}</p>
       )}
       {!props.canEdit && (
-        <p className="pm-detail-hint">本地保存成功后才能继续编辑。</p>
+        <p className="pm-detail-hint">{t("detail.saveFirst")}</p>
       )}
       <button type="button" className="pm-detail-del" onClick={props.onDelete}>
-        删除这次生成
+        {t("detail.deleteRecord")}
       </button>
       <button type="button" className="pm-detail-new" onClick={props.onNew}>
-        新建生成
+        {t("detail.newGeneration")}
       </button>
-      <p className="pm-detail-dur">耗时 {fmtDuration(row.durationMs)}</p>
+      <p className="pm-detail-dur">
+        {t("detail.duration", { duration: fmtDuration(row.durationMs) })}
+      </p>
     </aside>
   );
 }

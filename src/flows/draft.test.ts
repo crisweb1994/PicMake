@@ -6,12 +6,7 @@ vi.mock("../lib/input-images", () => ({ readInputImage: vi.fn() }));
 import { toast } from "@heroui/react";
 import type { ImageRow } from "../db/schema";
 import { readInputImage } from "../lib/input-images";
-import {
-  ApiError,
-  ERROR_HINTS,
-  MAX_INPUT_IMAGES,
-  type InputImage,
-} from "../lib/types";
+import { ApiError, MAX_INPUT_IMAGES, type InputImage } from "../lib/types";
 import { initialWorkspace, useWorkspace } from "../store/workspace";
 import { initializeDraft } from "../store/workspace/actions";
 import { addFiles, removeInput, removeMask } from "./draft";
@@ -46,7 +41,7 @@ describe("addFiles", () => {
     expect(state().draft).toMatchObject({
       dirty: true,
       readId: null,
-      uploadError: "",
+      uploadIssues: [],
     });
   });
 
@@ -70,8 +65,7 @@ describe("addFiles", () => {
 
   it("单个文件失败：其余照常加入，错误带文件名汇总", async () => {
     vi.mocked(readInputImage).mockImplementation(async (f) => {
-      if (f.name === "bad.png")
-        throw new ApiError("image-too-large", "图片超过 50MB");
+      if (f.name === "bad.png") throw new ApiError("image-too-large", "");
       return row(`img-${f.name}`);
     });
     await addFiles([file("a.png"), file("bad.png"), file("c.png")]);
@@ -79,15 +73,17 @@ describe("addFiles", () => {
       "img-a.png",
       "img-c.png",
     ]);
-    expect(state().draft.uploadError).toBe("bad.png：图片超过 50MB");
+    expect(state().draft.uploadIssues).toEqual([
+      { kind: "file", file: "bad.png", error: "image-too-large" },
+    ]);
   });
 
-  it("读取出现非 ApiError：用无效图片的通用文案", async () => {
+  it("读取出现非 ApiError：按无效图片记录", async () => {
     vi.mocked(readInputImage).mockRejectedValue(new Error("decode"));
     await addFiles([file("x.png")]);
-    expect(state().draft.uploadError).toBe(
-      `x.png：${ERROR_HINTS["invalid-image"]}`,
-    );
+    expect(state().draft.uploadIssues).toEqual([
+      { kind: "file", file: "x.png", error: "invalid-image" },
+    ]);
     expect(state().draft.inputs).toEqual([]);
   });
 
@@ -98,7 +94,9 @@ describe("addFiles", () => {
     );
     await addFiles([file("a.png"), file("b.png")]);
     expect(state().draft.inputs).toHaveLength(MAX_INPUT_IMAGES);
-    expect(state().draft.uploadError).toContain("1 张未添加");
+    expect(state().draft.uploadIssues).toEqual([
+      { kind: "overflow", kept: 1, skipped: 1 },
+    ]);
   });
 
   it("读取期间草稿被重置（如切换记录）：批次作废，结果丢弃", async () => {

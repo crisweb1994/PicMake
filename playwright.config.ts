@@ -12,6 +12,8 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://localhost:${APP_PORT}`,
+    // 界面默认跟随浏览器语言：冒烟用例固定为中文，英文界面的用例在 e2e/i18n.spec.ts 里单独指定
+    locale: "zh-CN",
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

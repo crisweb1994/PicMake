@@ -297,7 +297,7 @@ describe("draftToParams", () => {
     expect(r).toEqual({
       ok: false,
       reason: "invalid",
-      message: "先写一句画面描述",
+      issue: "empty-prompt",
       focusPrompt: true,
     });
   });

@@ -1,6 +1,12 @@
 /** 工作区判定规则：纯函数，入参是最小快照，不依赖 store 或 hooks 的结构 */
 import { inpaintTargetSize } from "./inpaint";
-import { customOk, formToParams, validateParams, type GenForm } from "./params";
+import {
+  customOk,
+  formToParams,
+  validateParams,
+  type GenForm,
+  type ParamIssue,
+} from "./params";
 import { sketchSnapshotKey } from "./sketch";
 import type { GenParams, InpaintDraft, SketchDocument } from "./types";
 import type { InpaintBarInfo } from "./view-models";
@@ -122,7 +128,13 @@ export function inpaintBarInfo(
   const target = inpaintTargetSize(inpaint.mask.width, inpaint.mask.height);
   // 底图不合法：理论不可达（进入编辑器前已拦截），保守按需重新选择
   if (!target)
-    return { tw: 0, th: 0, suggested: false, accepted: false, reason: "" };
+    return {
+      tw: 0,
+      th: 0,
+      suggested: false,
+      accepted: false,
+      reason: { floor: null, scaled: false },
+    };
   return {
     tw: target.w,
     th: target.h,
@@ -132,12 +144,16 @@ export function inpaintBarInfo(
   };
 }
 
+/** 提交前提示的问题码；界面文案见 i18n 资源 issues.* */
+export type DraftIssue = "size-not-accepted" | "custom-size" | ParamIssue;
+
 export type DraftParamsResult =
   | { ok: true; params: GenParams }
   | {
       ok: false;
       reason: "size-not-accepted" | "reading" | "custom-size" | "invalid";
-      message?: string;
+      /** 需要提示用户的问题；读取中静默拦截，没有 */
+      issue?: DraftIssue;
       /** 描述为空：调用方聚焦描述框 */
       focusPrompt?: boolean;
     };
@@ -154,25 +170,20 @@ export function draftToParams(d: {
     return {
       ok: false,
       reason: "size-not-accepted",
-      message: "输出尺寸与原图不同，请先接受建议尺寸",
+      issue: "size-not-accepted",
     };
   if (d.reading) return { ok: false, reason: "reading" };
   if (!info && !customOk(d.form))
-    return {
-      ok: false,
-      reason: "custom-size",
-      message:
-        "自定义尺寸无效：宽高须被 16 整除，比例 1:3 ～ 3:1，不超过 3840 × 2160",
-    };
+    return { ok: false, reason: "custom-size", issue: "custom-size" };
   const params = formToParams(d.form);
   // 局部重绘：输出尺寸按目标尺寸，不开放任意比例
   if (info) params.size = { w: info.tw, h: info.th };
-  const errors = validateParams(params);
-  if (errors.length)
+  const issues = validateParams(params);
+  if (issues.length)
     return {
       ok: false,
       reason: "invalid",
-      message: errors[0],
+      issue: issues[0],
       focusPrompt: !params.prompt.trim(),
     };
   return { ok: true, params };

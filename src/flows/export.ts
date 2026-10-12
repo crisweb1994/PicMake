@@ -1,5 +1,6 @@
 /** 导出结果：下载图片、复制描述。图片 URL 由 hooks 提供，这里只触发保存 */
 import { toast } from "@heroui/react";
+import { t } from "../i18n";
 import { downloadName } from "../lib/download";
 import type { DisplayGen } from "../lib/view-models";
 
@@ -19,5 +20,5 @@ export function downloadAll(display: DisplayGen) {
 export function copyPrompt(prompt: string) {
   void navigator.clipboard
     ?.writeText(prompt)
-    .then(() => toast("画面描述已复制"));
+    .then(() => toast(t("toast.promptCopied")));
 }

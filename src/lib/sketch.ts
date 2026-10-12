@@ -1,25 +1,24 @@
 /** 草图纯规则：坐标换算、命令提交、撤销游标、文档校验；Canvas 见 sketch-canvas.ts */
 import type { SketchDocument, SketchPoint, SketchStroke } from "./types";
 
-/** 固定色板（名称用于无障碍；值为实际绘画颜色，不随主题） */
-export const SKETCH_PALETTE: ReadonlyArray<{
-  name: string;
-  hex: string;
-}> = [
-  { name: "黑色", hex: "#1A1A1A" },
-  { name: "灰色", hex: "#6B7280" },
-  { name: "棕色", hex: "#7C4A1E" },
-  { name: "红色", hex: "#E53935" },
-  { name: "橙色", hex: "#F4772E" },
-  { name: "琥珀", hex: "#F5A623" },
-  { name: "绿色", hex: "#2E9E4F" },
-  { name: "青绿", hex: "#1B8A7A" },
-  { name: "天蓝", hex: "#26A9E0" },
-  { name: "蓝色", hex: "#2E6FE8" },
-  { name: "靛蓝", hex: "#4F46E5" },
-  { name: "紫色", hex: "#8B2FD6" },
-  { name: "品红", hex: "#D6247A" },
-];
+/** 固定色板（id 对应 i18n 资源 sketch.colors.*，用于无障碍名称；hex 为实际绘画颜色，不随主题） */
+export const SKETCH_PALETTE = [
+  { id: "black", hex: "#1A1A1A" },
+  { id: "gray", hex: "#6B7280" },
+  { id: "brown", hex: "#7C4A1E" },
+  { id: "red", hex: "#E53935" },
+  { id: "orange", hex: "#F4772E" },
+  { id: "amber", hex: "#F5A623" },
+  { id: "green", hex: "#2E9E4F" },
+  { id: "teal", hex: "#1B8A7A" },
+  { id: "sky", hex: "#26A9E0" },
+  { id: "blue", hex: "#2E6FE8" },
+  { id: "indigo", hex: "#4F46E5" },
+  { id: "purple", hex: "#8B2FD6" },
+  { id: "magenta", hex: "#D6247A" },
+] as const;
+
+export type SketchColorId = (typeof SKETCH_PALETTE)[number]["id"];
 
 /** 内存保护阈值（建议值） */
 export const SKETCH_MAX_COMMANDS = 2000;

@@ -1,4 +1,5 @@
 /** 顶左浮岛：品牌 / 主题切换 / 历史 / 设置 */
+import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
 import { Menu, Moon, Settings, Sun } from "lucide-react";
 import type { ResolvedTheme } from "../lib/theme";
@@ -9,9 +10,10 @@ export function TopNav(props: {
   onHistory: () => void;
   onSettings: () => void;
 }) {
+  const { t } = useTranslation();
   const dark = props.theme === "dark";
   return (
-    <nav className="pm-island pm-nav" aria-label="主导航">
+    <nav className="pm-island pm-nav" aria-label={t("nav.label")}>
       <div className="pm-brand">
         <img
           src="/favicon.svg"
@@ -26,7 +28,7 @@ export function TopNav(props: {
         variant="ghost"
         isIconOnly
         size="sm"
-        aria-label={dark ? "切换到浅色模式" : "切换到深色模式"}
+        aria-label={dark ? t("nav.toLight") : t("nav.toDark")}
         onPress={props.onToggleTheme}
       >
         {dark ? <Sun size={15} /> : <Moon size={15} />}
@@ -35,7 +37,7 @@ export function TopNav(props: {
         variant="ghost"
         isIconOnly
         size="sm"
-        aria-label="历史"
+        aria-label={t("nav.history")}
         onPress={props.onHistory}
       >
         <Menu size={15} />
@@ -44,7 +46,7 @@ export function TopNav(props: {
         variant="ghost"
         isIconOnly
         size="sm"
-        aria-label="设置"
+        aria-label={t("nav.settings")}
         onPress={props.onSettings}
       >
         <Settings size={15} />

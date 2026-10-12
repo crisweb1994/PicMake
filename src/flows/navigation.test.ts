@@ -14,7 +14,7 @@ import { toast } from "@heroui/react";
 import { deleteHistory } from "../db/history";
 import type { HistoryRow } from "../db/schema";
 import type { PreparedGeneration } from "../lib/generation";
-import { ERROR_HINTS, MAX_INPUT_IMAGES, type GenParams } from "../lib/types";
+import { MAX_INPUT_IMAGES, type GenParams } from "../lib/types";
 import { initialWorkspace, useWorkspace } from "../store/workspace";
 import {
   beginRun,
@@ -210,8 +210,9 @@ describe("editImage", () => {
   it("以展示记录的这张图为唯一输入开新草稿，并记住返回目标", () => {
     rowsLoaded([row("c"), row("b", ["b-1", "b-2"]), row("a")]);
     editImage("b-2");
+    // 系统来源不再写入显示名：名字在展示时按当前语言生成
     expect(state().draft.inputs).toEqual([
-      { generationId: "b", imageId: "b-2", name: "已有作品 · 第 2 张" },
+      { generationId: "b", imageId: "b-2" },
     ]);
     expect(state().draft.form.prompt).toBe("");
     expect(state().nav).toMatchObject({ selectedId: null, returnId: "b" });
@@ -253,7 +254,7 @@ describe("addAsReference", () => {
     selectRecord("a");
     addAsReference();
     expect(state().draft.inputs).toHaveLength(MAX_INPUT_IMAGES);
-    expect(toast).toHaveBeenCalledWith(ERROR_HINTS["too-many-images"]);
+    expect(toast).toHaveBeenCalledWith("最多添加 16 张输入图片。");
   });
 
   it("生成中：忽略", () => {
@@ -349,13 +350,18 @@ describe("deleteRecord", () => {
 });
 
 describe("adjustInpaint", () => {
-  const read = { ok: false as const, missing: "遮罩图" };
+  const read = {
+    ok: false as const,
+    missing: { kind: "reference" as const, name: "遮罩图" },
+  };
 
   it("资源缺失：提示并保持原状", async () => {
     vi.mocked(readInpaintDraft).mockResolvedValue(read);
     adjustInpaint("a");
     await flush();
-    expect(toast).toHaveBeenCalledWith("遮罩图不可用，无法恢复上次重绘");
+    expect(toast).toHaveBeenCalledWith(
+      "参考图「遮罩图」不可用，无法恢复上次重绘",
+    );
     expect(state().draft.inputs).toEqual([]);
   });
 

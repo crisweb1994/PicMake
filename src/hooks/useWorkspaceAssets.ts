@@ -5,9 +5,11 @@ import { useLayoutEffect, useState } from "react";
 import type { ImageRow } from "../db/schema";
 import type { PreparedGeneration } from "../lib/generation";
 import {
-  inputDisplay,
+  inputNaming,
+  workIndexOf,
   type DisplayGen,
   type DisplayImage,
+  type DisplayInput,
 } from "../lib/view-models";
 import { useWorkspace } from "../store/workspace";
 import {
@@ -57,13 +59,22 @@ export function useWorkspaceAssets() {
     }),
   );
 
-  const sourceImages = sources.map((source, index) => ({
-    id: source.imageId,
-    ...inputDisplay(source.name, index),
-    url: assetOf(source.imageId)?.url,
+  const sourceImages: DisplayInput[] = sources.map((source, index) => {
     /** 来源是草图：预览提供「继续画这张草图」 */
-    isSketch: !!assetOf(source.imageId)?.row.sketch,
-  }));
+    const isSketch = !!assetOf(source.imageId)?.row.sketch;
+    return {
+      id: source.imageId,
+      index,
+      // 重绘记录的 inputSources[0] 恒为底图
+      naming: inputNaming(source, {
+        sketch: isSketch,
+        base: !!displayRow?.inpaint && index === 0,
+        workIndex: workIndexOf(rows, source.generationId, source.imageId),
+      }),
+      url: assetOf(source.imageId)?.url,
+      isSketch,
+    };
+  });
 
   const images = (displayRow?.imageIds ?? []).map((id) => ({
     id,

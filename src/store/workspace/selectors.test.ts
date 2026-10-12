@@ -68,7 +68,7 @@ describe("selectCanWheelSwitch", () => {
     expect(selectCanWheelSwitch(state())).toBe(false);
     closeConfirm();
 
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     expect(selectCanWheelSwitch(state())).toBe(false);
     useWorkspace.setState(initialWorkspace(), true);
 
@@ -79,7 +79,7 @@ describe("selectCanWheelSwitch", () => {
     }
 
     const base = { id: "b", blob: new Blob(), width: 1, height: 1 } as ImageRow;
-    showViewMask({ base, name: "n", commands: [], rowId: "r" });
+    showViewMask({ base, commands: [], rowId: "r" });
     expect(selectCanWheelSwitch(state())).toBe(false);
     closeViewMask();
     expect(selectCanWheelSwitch(state())).toBe(true);

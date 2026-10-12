@@ -1,5 +1,7 @@
 /** 输入图缩略图条：预览、草图/选区入口、移除；含「移除选区」 */
+import { useTranslation } from "react-i18next";
 import { Pencil } from "lucide-react";
+import { inputName } from "../../i18n/labels";
 import type { DisplayInput, InpaintBarInfo } from "../../lib/view-models";
 
 export function InputThumbs(props: {
@@ -14,6 +16,7 @@ export function InputThumbs(props: {
   onEditMask: () => void;
   onRemoveMask: () => void;
 }) {
+  const { t } = useTranslation();
   const { inpaint } = props;
   return (
     <div className="pm-bar-thumbs">
@@ -28,7 +31,9 @@ export function InputThumbs(props: {
               type="button"
               className={image.isSketch ? "sk" : ""}
               aria-label={
-                image.isSketch ? `编辑图${index + 1}草图` : `预览图${index + 1}`
+                image.isSketch
+                  ? t("input.editSketch", { index: index + 1 })
+                  : t("input.preview", { index: index + 1 })
               }
               disabled={!image.url}
               onClick={() =>
@@ -40,31 +45,37 @@ export function InputThumbs(props: {
               {image.url ? (
                 <img
                   src={image.url}
-                  alt={image.isSketch ? `图${index + 1} 草图` : image.name}
+                  alt={
+                    image.isSketch
+                      ? t("input.sketchAlt", { index: index + 1 })
+                      : inputName(image.naming, t)
+                  }
                 />
               ) : (
-                <span>不可用</span>
+                <span>{t("common.unavailable")}</span>
               )}
             </button>
             <span className="no">{index + 1}</span>
-            {role === "mask" && <span className="sel-badge">已选区域</span>}
+            {role === "mask" && (
+              <span className="sel-badge">{t("input.maskBadge")}</span>
+            )}
             {(image.isSketch || role !== "ref") && (
               <button
                 type="button"
                 className="pen act"
                 aria-label={
                   image.isSketch
-                    ? `继续画图${index + 1}草图`
+                    ? t("input.continueSketchAria", { index: index + 1 })
                     : role === "mask"
-                      ? "修改选区"
-                      : `对图${index + 1}发起局部重绘`
+                      ? t("input.editMask")
+                      : t("input.inpaintAria", { index: index + 1 })
                 }
                 title={
                   image.isSketch
-                    ? "继续画这张草图"
+                    ? t("input.continueSketchTitle")
                     : role === "mask"
-                      ? "修改选区"
-                      : "局部重绘：涂选这张图的修改区域"
+                      ? t("input.editMask")
+                      : t("input.inpaintTitle")
                 }
                 disabled={props.reading}
                 onClick={(e) => {
@@ -80,7 +91,7 @@ export function InputThumbs(props: {
             <button
               type="button"
               className="rm"
-              aria-label={`移除图${index + 1}`}
+              aria-label={t("input.remove", { index: index + 1 })}
               onClick={() => props.onRemove(image.id)}
             >
               ×
@@ -92,10 +103,10 @@ export function InputThumbs(props: {
         <button
           type="button"
           className="pm-bar-rmmask"
-          title="保留底图、描述与参数，切换为普通图片编辑"
+          title={t("input.removeMaskTitle")}
           onClick={props.onRemoveMask}
         >
-          移除选区
+          {t("input.removeMask")}
         </button>
       )}
     </div>

@@ -13,8 +13,10 @@ import type {
   MaskCommand,
   MaskDocument,
   SketchDocument,
+  SketchOrigin,
+  UploadIssue,
 } from "../../lib/types";
-import type { ConfirmState, GenPlan } from "../../lib/view-models";
+import type { ConfirmState, GenPlan, InputNaming } from "../../lib/view-models";
 
 /** 生成生命周期；saving = 请求成功、正在写库，unsaved = 保存失败、结果留在内存（可查看、下载） */
 export type Run =
@@ -38,7 +40,8 @@ export type Drawing =
       cursor: number;
       /** 编辑已有附件时的原位替换目标；新建、继续历史草图为 null */
       replacesImageId: string | null;
-      meta: string;
+      /** 打开的来源：弹层角落的说明文字由界面按当前语言生成 */
+      origin: SketchOrigin;
       /** 打开时的快照键：撤销回这个状态视为没有修改 */
       openKey: string;
       confirming: boolean;
@@ -57,7 +60,8 @@ export type Drawing =
       cursor: number;
       /** draft-input 入口被涂选的原输入 id：确认后移除并把底图重排为图1 */
       chosenInputId: string | null;
-      name: string;
+      /** 被涂选底图的名字种类（标题与 alt） */
+      naming: InputNaming;
       openKey: string;
       confirming: boolean;
       /** 就地错误（非 toast） */
@@ -67,7 +71,6 @@ export type Drawing =
 /** 只读查看选区：底图 URL 由页面从 base.blob 生成 */
 export interface ViewMask {
   base: ImageRow;
-  name: string;
   commands: MaskCommand[];
   rowId: string;
 }
@@ -92,7 +95,8 @@ export interface WorkspaceState {
     dirty: boolean;
     /** 正在读取的上传批次；非 null 即读取中 */
     readId: string | null;
-    uploadError: string;
+    /** 上传读取阶段的提示；文案由界面按当前语言生成 */
+    uploadIssues: UploadIssue[];
   };
   nav: {
     selectedId: string | null;
@@ -129,7 +133,7 @@ export const initialWorkspace = (): WorkspaceState => ({
     inputFidelity: "auto",
     dirty: false,
     readId: null,
-    uploadError: "",
+    uploadIssues: [],
   },
   nav: { selectedId: null, returnId: null, lastDoneId: null },
   drawing: null,

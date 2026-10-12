@@ -2,11 +2,11 @@
 import type { ImageRow } from "../../../db/schema";
 import { formSize, type GenForm } from "../../../lib/params";
 import {
-  ERROR_HINTS,
   MAX_INPUT_IMAGES,
   type FidelityChoice,
   type GenParams,
   type InputImage,
+  type UploadIssue,
 } from "../../../lib/types";
 import { useWorkspace, type WorkspaceState } from "../index";
 import {
@@ -35,7 +35,7 @@ export const acceptSize = () => setDraft({ sizeAccepted: true });
 
 /** 开始读取一批上传 */
 export const beginRead = (readId: string) =>
-  setDraft({ readId, uploadError: "" });
+  setDraft({ readId, uploadIssues: [] });
 
 /** 第一批输入图：比例改为 auto */
 const withFirstInputs = (draft: WorkspaceState["draft"]): GenForm =>
@@ -43,11 +43,11 @@ const withFirstInputs = (draft: WorkspaceState["draft"]): GenForm =>
     ? draft.form
     : { ...draft.form, ratio: "auto", cw: "", ch: "" };
 
-/** 读取完成：批次已失效（读取中移除图片、切换记录等）时忽略并返回 false；超出上限的图片不添加 */
+/** 读取完成：批次已失效（读取中移除图片、切换记录等）时忽略并返回 false；超出上限的图片不添加并追加一条提示 */
 export function finishRead(
   readId: string,
   added: InputImage[],
-  errors: string[],
+  issues: UploadIssue[],
 ): boolean {
   const { draft } = useWorkspace.getState();
   if (draft.readId !== readId) return false;
@@ -56,12 +56,9 @@ export function finishRead(
     Math.max(0, MAX_INPUT_IMAGES - draft.inputs.length),
   );
   const skipped = added.length - kept.length;
-  const messages = skipped
-    ? [
-        ...errors,
-        `${ERROR_HINTS["too-many-images"]}本次添加 ${kept.length} 张，${skipped} 张未添加。`,
-      ]
-    : errors;
+  const nextIssues: UploadIssue[] = skipped
+    ? [...issues, { kind: "overflow", kept: kept.length, skipped }]
+    : issues;
   set((s) => ({
     draft: {
       ...s.draft,
@@ -72,7 +69,7 @@ export function finishRead(
             dirty: true,
           }
         : {}),
-      uploadError: messages.join("\n"),
+      uploadIssues: nextIssues,
       readId: null,
     },
   }));
@@ -88,7 +85,7 @@ export function removeDraftInput(id: string): "base-and-mask" | "renumbered" {
     inputs: draft.inputs.filter((input) => input.imageId !== id),
     ...(withMask ? { inpaint: null, sizeAccepted: false } : {}),
     dirty: true,
-    uploadError: "",
+    uploadIssues: [],
   });
   return withMask ? "base-and-mask" : "renumbered";
 }
@@ -107,7 +104,6 @@ export const applyInpaintToDraft = (
 export function appendExisting(
   imageId: string,
   generationId: string | undefined,
-  name: string,
 ): "duplicate" | "too-many" | "added" {
   const { draft } = useWorkspace.getState();
   if (draft.inputs.some((input) => input.imageId === imageId))
@@ -116,7 +112,7 @@ export function appendExisting(
   set((s) => ({
     draft: {
       ...s.draft,
-      inputs: [...s.draft.inputs, { imageId, generationId, name }],
+      inputs: [...s.draft.inputs, { imageId, generationId }],
       form: withFirstInputs(s.draft),
       dirty: true,
     },
@@ -124,10 +120,12 @@ export function appendExisting(
   return "added";
 }
 
-/** 草图落附件并展开创作条：原位替换或追加；第一次加草图且尺寸为 auto 时改用草图尺寸，描述为空时填入起始文字 */
+/** 草图落附件并展开创作条：原位替换或追加；第一次加草图且尺寸为 auto 时改用草图尺寸，
+ *  描述为空时填入起始文字（seedPrompt 由调用方按当前语言生成，参数是草图的图序号，从 1 起） */
 export function applySketchAttachment(
   image: ImageRow,
   replaces: string | null,
+  seedPrompt: (index: number) => string,
 ): { ok: false } | { ok: true; sizeSetTo: { w: number; h: number } | null } {
   const { draft } = useWorkspace.getState();
   const target =
@@ -135,14 +133,10 @@ export function applySketchAttachment(
     draft.inputs.find((input) => input.upload?.sketch)?.imageId ??
     null;
   if (!target && draft.inputs.length >= MAX_INPUT_IMAGES) return { ok: false };
-  const attachment: InputImage = {
-    imageId: image.id,
-    name: "草图",
-    upload: image,
-  };
+  const attachment: InputImage = { imageId: image.id, upload: image };
   const setSize =
     !replaces && draft.inputs.length === 0 && formSize(draft.form) === "auto";
-  const seedPrompt = !replaces && !draft.form.prompt.trim();
+  const seed = !replaces && !draft.form.prompt.trim();
   set((s) => ({
     draft: {
       ...s.draft,
@@ -156,11 +150,7 @@ export function applySketchAttachment(
         ...(setSize
           ? { cw: String(image.width), ch: String(image.height) }
           : {}),
-        ...(seedPrompt
-          ? {
-              prompt: `以图${draft.inputs.length + 1}的草图为构图参考，保留主体的相对位置与比例，将粗略线条转成完整画面。`,
-            }
-          : {}),
+        ...(seed ? { prompt: seedPrompt(draft.inputs.length + 1) } : {}),
       },
       dirty: true,
     },

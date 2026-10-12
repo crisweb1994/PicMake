@@ -221,7 +221,8 @@ export function readImageMeta(blob: Blob): Promise<OrientationResult> {
  *  失败返回明确错误，不静默退回。meta 由调用方读取（含头尺寸拦截）后传入 */
 export async function prepareInpaintBase(
   blob: Blob,
-  name: string,
+  /** 用户文件名；没有就不记（系统来源的名字在展示时按语言生成） */
+  name: string | undefined,
   meta: Exclude<OrientationResult, { issue: InpaintIssue }>,
   id: () => string = () => crypto.randomUUID(),
 ): Promise<

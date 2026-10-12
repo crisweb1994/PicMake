@@ -1,4 +1,5 @@
 /** 创作条 complete 态：完成摘要与后续动作 */
+import { useTranslation } from "react-i18next";
 import { Sparkles } from "lucide-react";
 import { fmtDuration } from "../../lib/format";
 import type { DisplayGen } from "../../lib/view-models";
@@ -11,43 +12,44 @@ export function DoneBar(props: {
   onUseAsRef: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="pm-bar-done">
       <div className="pm-bar-genrow">
         <span className="pm-bar-ok">
           <i aria-hidden />
-          生成完成 · 已保存本地
+          {t("bar.done")}
         </span>
         <span className="pm-bar-dur">
-          耗时 <b>{fmtDuration(props.done.row.durationMs)}</b>
+          {t("bar.duration")} <b>{fmtDuration(props.done.row.durationMs)}</b>
         </span>
         <button
           type="button"
           className="pm-bar-dismiss"
-          aria-label="收起，回到输入"
+          aria-label={t("bar.dismiss")}
           onClick={props.onDismiss}
         >
           ✕
         </button>
       </div>
       <div className="pm-bar-donerow">
-        <span className="pm-bar-donecap">接下来</span>
+        <span className="pm-bar-donecap">{t("bar.next")}</span>
         <button
           type="button"
           className="pm-chip act primary"
           onClick={props.onAgain}
         >
-          再来一版
+          {t("bar.again")}
         </button>
         <button type="button" className="pm-chip act" onClick={props.onTweak}>
-          微调描述
+          {t("bar.tweak")}
         </button>
         <button
           type="button"
           className="pm-chip act"
           onClick={props.onDownloadAll}
         >
-          下载全部
+          {t("common.downloadAll")}
         </button>
         <button
           type="button"
@@ -55,7 +57,7 @@ export function DoneBar(props: {
           onClick={props.onUseAsRef}
         >
           <Sparkles size={11} />
-          设为参考图
+          {t("bar.useAsRef")}
         </button>
       </div>
     </div>

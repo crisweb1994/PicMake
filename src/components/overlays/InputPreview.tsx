@@ -1,5 +1,6 @@
 /** 输入图片预览：纯展示的受控弹层 */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Modal,
@@ -7,6 +8,7 @@ import {
   ModalContainer,
   ModalDialog,
 } from "@heroui/react";
+import { inputLabel, inputName } from "../../i18n/labels";
 import type { DisplayInput } from "../../lib/view-models";
 
 /** 输入预览；草图额外提供「继续画这张草图」 */
@@ -15,6 +17,7 @@ export function InputPreview(props: {
   onContinueSketch?: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [size, setSize] = useState("");
   return (
     <Modal
@@ -25,11 +28,21 @@ export function InputPreview(props: {
     >
       <ModalBackdrop isKeyboardDismissDisabled>
         <ModalContainer placement="center">
-          <ModalDialog className="pm-input-preview" aria-label="输入图片预览">
-            <h3>{props.image?.label}</h3>
+          <ModalDialog
+            className="pm-input-preview"
+            aria-label={t("input.previewLabel")}
+          >
+            <h3>
+              {props.image &&
+                inputLabel(props.image.naming, props.image.index, t)}
+            </h3>
             <img
               src={props.image?.url}
-              alt={props.image?.name ?? "输入图片"}
+              alt={
+                props.image
+                  ? inputName(props.image.naming, t)
+                  : t("input.fallbackAlt")
+              }
               onLoad={(event) =>
                 setSize(
                   `${event.currentTarget.naturalWidth} × ${event.currentTarget.naturalHeight}`,
@@ -43,11 +56,11 @@ export function InputPreview(props: {
                 onPress={props.onContinueSketch}
                 className="pm-input-preview-continue"
               >
-                继续画这张草图
+                {t("input.continueSketch")}
               </Button>
             )}
             <Button variant="secondary" onPress={props.onClose}>
-              关闭预览
+              {t("input.closePreview")}
             </Button>
           </ModalDialog>
         </ModalContainer>

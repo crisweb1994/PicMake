@@ -7,7 +7,6 @@ import { saveSettings, testConnection } from "../flows/settings";
 import { selectHistory, toggleStar } from "../flows/navigation";
 import { useTheme } from "../hooks/useTheme";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
-import { fmtBytes } from "../lib/format";
 import { useSettings } from "../store/settings";
 import { useWorkspace } from "../store/workspace";
 import {
@@ -22,13 +21,15 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
   const theme = useTheme();
   const baseUrl = useSettings((s) => s.baseUrl);
   const apiKey = useSettings((s) => s.apiKey);
+  const locale = useSettings((s) => s.locale);
+  const setLocale = useSettings((s) => s.setLocale);
   const drawerOpen = useWorkspace((s) => s.view.drawerOpen);
   const settingsOpen = useWorkspace((s) => s.view.settingsOpen);
 
-  const [usageText, setUsageText] = useState("");
+  const [usageBytes, setUsageBytes] = useState<number | null>(null);
   useEffect(() => {
     void navigator.storage?.estimate?.().then((est) => {
-      if (est?.usage != null) setUsageText(` · 已用 ${fmtBytes(est.usage)}`);
+      if (est?.usage != null) setUsageBytes(est.usage);
     });
   }, [rows.length]);
   const totalImages = rows.reduce((sum, row) => sum + row.imageIds.length, 0);
@@ -60,9 +61,15 @@ export function ChromeArea({ assets }: { assets: WorkspaceAssets }) {
         open={settingsOpen}
         baseUrl={baseUrl}
         apiKey={apiKey}
-        storageText={`本地已存 ${rows.length} 次 · ${totalImages} 张${usageText}`}
+        storage={{
+          generations: rows.length,
+          images: totalImages,
+          usageBytes,
+        }}
         theme={theme.pref}
         onThemeChange={theme.setPref}
+        locale={locale}
+        onLocaleChange={setLocale}
         onTest={testConnection}
         onSave={saveSettings}
         onClose={closeSettings}

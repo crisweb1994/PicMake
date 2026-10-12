@@ -1,4 +1,5 @@
 /** 通用确认：纯展示的受控弹层 */
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Modal,
@@ -13,6 +14,7 @@ export function ConfirmDialog(props: {
   state: ConfirmState | null;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal
       isOpen={props.state != null}
@@ -24,14 +26,14 @@ export function ConfirmDialog(props: {
         <ModalContainer placement="center">
           <ModalDialog
             role="alertdialog"
-            aria-label={props.state?.title ?? "确认"}
+            aria-label={props.state?.title ?? t("confirm.title")}
             className="pm-modal"
           >
             <h3>{props.state?.title}</h3>
             <p className="sub">{props.state?.desc}</p>
             <div className="pm-mbtns">
               <Button variant="secondary" onPress={props.onCancel}>
-                {props.state?.cancelLabel ?? "取消"}
+                {props.state?.cancelLabel ?? t("common.cancel")}
               </Button>
               <Button
                 variant="primary"
@@ -41,7 +43,7 @@ export function ConfirmDialog(props: {
                   ok?.();
                 }}
               >
-                {props.state?.okLabel ?? "继续"}
+                {props.state?.okLabel ?? t("common.continue")}
               </Button>
             </div>
           </ModalDialog>

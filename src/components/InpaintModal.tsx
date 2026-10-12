@@ -2,6 +2,7 @@
  *  坐标以底图像素为单位，缩放不改笔宽；Esc 不关闭，有修改时关闭由接线层确认。
  *  副作用（随卸载清理）：ResizeObserver / 初始焦点 rAF / 指针捕获 */
 import { FocusScope } from "react-aria";
+import { useTranslation } from "react-i18next";
 import {
   useCallback,
   useEffect,
@@ -25,14 +26,15 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { inpaintIssueText, inputName } from "../i18n/labels";
 import {
-  INPAINT_ISSUE_HINTS,
   type InpaintIssue,
   type MaskCommand,
   type MaskDocument,
   type MaskStroke,
   type SketchPoint,
 } from "../lib/types";
+import type { InputNaming } from "../lib/view-models";
 import {
   SKETCH_MAX_COMMANDS,
   SKETCH_MAX_POINTS,
@@ -55,7 +57,8 @@ interface BoardBox {
 
 export function InpaintModal(props: {
   baseUrl: string;
-  name: string;
+  /** 被涂选底图的名字种类（标题与 alt） */
+  naming: InputNaming;
   baseW: number;
   baseH: number;
   /** 归一化发生时的提示 */
@@ -73,6 +76,7 @@ export function InpaintModal(props: {
   onRequestClose: () => void;
   onLimit: (kind: "commands" | "points") => void;
 }) {
+  const { t } = useTranslation();
   const { doc, cursor } = props;
   const stageRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -97,6 +101,7 @@ export function InpaintModal(props: {
   const [hasSelection, setHasSelection] = useState(false);
 
   const brushRange = maskBrushRange(doc.width, doc.height);
+  const name = inputName(props.naming, t);
 
   /* ── 布局：contain 容纳底图记为 1×；resize 只复位视图，不丢选区 ── */
   const fit = useCallback(() => {
@@ -385,7 +390,7 @@ export function InpaintModal(props: {
           className="pm-ip-board"
           role="dialog"
           aria-modal="true"
-          aria-label="选择修改区域"
+          aria-label={t("inpaint.board")}
         >
           <div
             className={"pm-ip-stage" + (tool === "pan" ? " panning" : "")}
@@ -400,7 +405,7 @@ export function InpaintModal(props: {
               <div className="pm-ip-frame" ref={frameRef} style={frameStyle}>
                 <img
                   src={props.baseUrl}
-                  alt={props.name}
+                  alt={name}
                   draggable={false}
                   onLoad={() => renderDisplay(null)}
                 />
@@ -423,7 +428,7 @@ export function InpaintModal(props: {
           <button
             type="button"
             className="pm-ip-close"
-            aria-label="关闭"
+            aria-label={t("inpaint.close")}
             disabled={busy}
             onClick={props.onRequestClose}
           >
@@ -431,20 +436,24 @@ export function InpaintModal(props: {
           </button>
 
           <div className="pm-ip-title">
-            <b>选择修改区域</b>
-            <span className="name">{props.name}</span>
+            <b>{t("inpaint.board")}</b>
+            <span className="name">{name}</span>
             <span className="dims">
               {props.baseW} × {props.baseH} px
             </span>
             {props.normalized && (
-              <span className="norm">已校正图片方向，原文件保留</span>
+              <span className="norm">{t("inpaint.normalized")}</span>
             )}
           </div>
 
-          <div className="pm-ip-hist" role="group" aria-label="撤销重做与显隐">
+          <div
+            className="pm-ip-hist"
+            role="group"
+            aria-label={t("inpaint.history")}
+          >
             <button
               type="button"
-              aria-label="撤销"
+              aria-label={t("common.undo")}
               disabled={!canUndo || busy}
               onClick={props.onUndo}
             >
@@ -452,7 +461,7 @@ export function InpaintModal(props: {
             </button>
             <button
               type="button"
-              aria-label="重做"
+              aria-label={t("common.redo")}
               disabled={!canRedo || busy}
               onClick={props.onRedo}
             >
@@ -460,7 +469,7 @@ export function InpaintModal(props: {
             </button>
             <button
               type="button"
-              aria-label="清空选区"
+              aria-label={t("inpaint.clearSelection")}
               disabled={!hasSelection || busy}
               onClick={props.onClear}
             >
@@ -471,22 +480,22 @@ export function InpaintModal(props: {
               type="button"
               aria-pressed={overlayHidden}
               disabled={busy}
-              title={
-                overlayHidden
-                  ? "显示选区"
-                  : "隐藏选区（隐藏时暂停涂画，不清空）"
-              }
+              title={overlayHidden ? t("inpaint.show") : t("inpaint.hideTitle")}
               onClick={() => setOverlayHidden((v) => !v)}
             >
               {overlayHidden ? <EyeOff size={16} /> : <Eye size={16} />}
-              {overlayHidden ? "显示选区" : "隐藏选区"}
+              {overlayHidden ? t("inpaint.show") : t("inpaint.hide")}
             </button>
           </div>
 
-          <div className="pm-ip-zoombar" role="group" aria-label="缩放与平移">
+          <div
+            className="pm-ip-zoombar"
+            role="group"
+            aria-label={t("inpaint.zoomGroup")}
+          >
             <button
               type="button"
-              aria-label="缩小"
+              aria-label={t("inpaint.zoomOut")}
               disabled={zoom <= 1 || busy}
               onClick={() => applyZoom(-0.25)}
             >
@@ -495,7 +504,7 @@ export function InpaintModal(props: {
             <b>{Math.round(zoom * 100)}%</b>
             <button
               type="button"
-              aria-label="放大"
+              aria-label={t("inpaint.zoomIn")}
               disabled={zoom >= 8 || busy}
               onClick={() => applyZoom(0.25)}
             >
@@ -503,52 +512,56 @@ export function InpaintModal(props: {
             </button>
             <button type="button" onClick={fitView} disabled={busy}>
               <Maximize size={14} />
-              适应窗口
+              {t("inpaint.fit")}
             </button>
             <button
               type="button"
               className={tool === "pan" ? "on" : ""}
               aria-pressed={tool === "pan"}
-              title="拖动画布平移视图，不影响选区"
+              title={t("inpaint.panTitle")}
               onClick={() => setTool((t) => (t === "pan" ? "pen" : "pan"))}
             >
               <Hand size={14} />
-              拖动画布
+              {t("inpaint.pan")}
             </button>
           </div>
 
-          <div className="pm-ip-tools" role="toolbar" aria-label="绘画工具">
+          <div
+            className="pm-ip-tools"
+            role="toolbar"
+            aria-label={t("inpaint.tools")}
+          >
             <button
               type="button"
               ref={penBtnRef}
               className={tool === "pen" ? "on" : ""}
-              aria-label="画笔"
+              aria-label={t("inpaint.brush")}
               aria-pressed={tool === "pen"}
-              title="画笔：扩大待修改区域"
+              title={t("inpaint.brushTitle")}
               disabled={busy}
               onClick={() => setTool("pen")}
             >
               <Brush size={15} />
-              画笔
+              {t("inpaint.brush")}
             </button>
             <button
               type="button"
               className={tool === "eraser" ? "on" : ""}
-              aria-label="擦除"
+              aria-label={t("inpaint.erase")}
               aria-pressed={tool === "eraser"}
-              title="擦除：缩小待修改区域，不擦除原图"
+              title={t("inpaint.eraseTitle")}
               disabled={busy}
               onClick={() => setTool("eraser")}
             >
               <Eraser size={15} />
-              擦除
+              {t("inpaint.erase")}
             </button>
             <span className="vr" />
             <label className="pm-ip-size">
-              粗细
+              {t("inpaint.size")}
               <input
                 type="range"
-                aria-label="画笔粗细（底图像素）"
+                aria-label={t("inpaint.sizeRange")}
                 min={brushRange.min}
                 max={brushRange.max}
                 step={1}
@@ -557,7 +570,7 @@ export function InpaintModal(props: {
               />
               <input
                 type="number"
-                aria-label="画笔粗细数值"
+                aria-label={t("inpaint.sizeNumber")}
                 min={brushRange.min}
                 max={brushRange.max}
                 step={1}
@@ -579,11 +592,11 @@ export function InpaintModal(props: {
 
           {props.error && (
             <p className="pm-ip-error" role="alert">
-              {INPAINT_ISSUE_HINTS[props.error]}
+              {inpaintIssueText(props.error, t)}
             </p>
           )}
           {!props.error && !hasSelection && !busy && (
-            <p className="pm-ip-hint">请先涂选需要修改的区域</p>
+            <p className="pm-ip-hint">{t("inpaint.hint")}</p>
           )}
 
           <button
@@ -593,7 +606,7 @@ export function InpaintModal(props: {
             onClick={props.onConfirm}
           >
             {busy ? <Loader2 size={16} /> : <Check size={16} />}
-            {busy ? "处理中…" : "使用选区"}
+            {busy ? t("inpaint.busy") : t("inpaint.use")}
           </button>
         </div>
       </div>

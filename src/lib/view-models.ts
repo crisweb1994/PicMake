@@ -1,4 +1,5 @@
 import type { HistoryRow } from "../db/schema";
+import type { SizeReason } from "./inpaint";
 import type { SizeSpec } from "./types";
 
 export interface DisplayImage {
@@ -28,10 +29,21 @@ export interface ConfirmState {
   cancelLabel?: string;
 }
 
+/** 输入来源的名字：只记种类与必要参数，文案由界面按当前语言生成（记录里保存的系统名不再使用） */
+export type InputNaming =
+  /** 用户上传的文件名 */
+  | { kind: "file"; fileName: string }
+  | { kind: "sketch" }
+  /** 已有作品；workIndex 为它在来源记录里的序号（从 1 起），来源记录已删除时未知 */
+  | { kind: "work"; workIndex?: number }
+  /** 局部重绘的底图 */
+  | { kind: "base" };
+
 export interface DisplayInput {
   id: string;
-  name: string;
-  label: string;
+  /** 在输入列表里的序号（从 0 起），决定「图N」 */
+  index: number;
+  naming: InputNaming;
   url?: string;
   /** 草图附件：点击重开画板而非预览 */
   isSketch?: boolean;
@@ -39,10 +51,29 @@ export interface DisplayInput {
   inpaintRole?: "mask" | "ref" | "candidate";
 }
 
-/** 输入来源的展示名与编号标签（创作条缩略与历史来源预览共用） */
-export function inputDisplay(name: string | undefined, index: number) {
-  const display = name ?? "已有作品";
-  return { name: display, label: `图${index + 1} · ${display}` };
+/** 来源图片在来源记录里的序号（从 1 起）；记录或图片不存在时为 undefined */
+export function workIndexOf(
+  rows: readonly { id: string; imageIds: readonly string[] }[],
+  generationId: string | undefined,
+  imageId: string,
+): number | undefined {
+  const at = rows
+    .find((row) => row.id === generationId)
+    ?.imageIds.indexOf(imageId);
+  return at !== undefined && at >= 0 ? at + 1 : undefined;
+}
+
+/** 输入来源的名字种类。顺序即优先级：草图 → 局部重绘底图 → 已有作品 → 用户文件名；
+ *  都不是（旧数据没有名字）按已有作品处理 */
+export function inputNaming(
+  source: { name?: string; generationId?: string },
+  ctx: { sketch: boolean; base: boolean; workIndex?: number },
+): InputNaming {
+  if (ctx.sketch) return { kind: "sketch" };
+  if (ctx.base) return { kind: "base" };
+  if (source.generationId) return { kind: "work", workIndex: ctx.workIndex };
+  if (source.name) return { kind: "file", fileName: source.name };
+  return { kind: "work" };
 }
 
 /** 创作条的局部重绘投影 */
@@ -53,5 +84,5 @@ export interface InpaintBarInfo {
   /** 目标 ≠ 底图原尺寸：需要用户接受 */
   suggested: boolean;
   accepted: boolean;
-  reason: string;
+  reason: SizeReason;
 }

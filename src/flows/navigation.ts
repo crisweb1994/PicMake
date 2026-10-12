@@ -1,7 +1,9 @@
 /** 导航流程：切换记录、新建、返回结果、复用参数、编辑此图、调整上次重绘、删除、收藏、设为参考图 */
 import { toast } from "@heroui/react";
 import { deleteHistory, toggleStar as toggleStarRow } from "../db/history";
-import { ERROR_HINTS } from "../lib/types";
+import { t } from "../i18n";
+import { errorHint } from "../i18n/errors";
+import { missingText } from "../i18n/labels";
 import {
   hasUserWork,
   leaveDecision,
@@ -52,8 +54,8 @@ export function requestLeave(onLeave: () => void, usesDisplayed = false) {
   if (decision === "blocked") return;
   if (decision === "confirm-unsaved") {
     setConfirm({
-      title: "放弃未保存结果？",
-      desc: "图片已经生成，但尚未保存到本机。离开后这次结果会丢失。",
+      title: t("confirm.unsavedLeave.title"),
+      desc: t("confirm.unsavedLeave.desc"),
       onOk: () => {
         if (busyNow()) return;
         discardUnsaved();
@@ -64,8 +66,8 @@ export function requestLeave(onLeave: () => void, usesDisplayed = false) {
   }
   if (decision === "confirm-draft") {
     setConfirm({
-      title: "放弃当前草稿？",
-      desc: "未提交的修改将被放弃。",
+      title: t("confirm.draft.title"),
+      desc: t("confirm.draft.desc"),
       onOk: () => {
         if (!busyNow()) onLeave();
       },
@@ -99,7 +101,7 @@ export function reuseParams(id: string) {
     setReturnId(null);
     resetView();
     openBar();
-    toast("参数已回填，可直接生成");
+    toast(t("toast.paramsRestored"));
   });
 }
 
@@ -110,11 +112,7 @@ export function editImage(imageId: string) {
   requestLeave(() => {
     clearDone();
     initializeDraft({ ...row.params, prompt: "" }, [
-      {
-        generationId: row.id,
-        imageId,
-        name: `已有作品 · 第 ${row.imageIds.indexOf(imageId) + 1} 张`,
-      },
+      { generationId: row.id, imageId },
     ]);
     setReturnId(row.id);
     selectRecord(null);
@@ -145,7 +143,7 @@ export function adjustInpaint(id: string) {
     const read = await readInpaintDraft(row);
     if (busyNow()) return;
     if (!read.ok) {
-      toast(`${read.missing}不可用，无法恢复上次重绘`);
+      toast(t("toast.cantRestore", { what: missingText(read.missing, t) }));
       return;
     }
     // 恢复为已确认草稿：接受状态沿用已保存目标（约束变化在生成前重新复核）
@@ -161,7 +159,7 @@ export function adjustInpaint(id: string) {
     setReturnId(null);
     resetView();
     openBar();
-    toast("已恢复上次重绘，可继续调整后生成");
+    toast(t("toast.inpaintRestored"));
   }, true);
 }
 
@@ -172,13 +170,13 @@ export function deleteRecord(id: string) {
   // 请求时确定是否删的是当前记录：liveQuery 可能先于删除完成回推并回退选中
   const wasCurrent = state.nav.selectedId === id;
   setConfirm({
-    title: "删除这次生成？",
-    desc: `包含 ${row.imageIds.length} 张图片，删除后无法恢复。`,
+    title: t("confirm.delete.title"),
+    desc: t("confirm.delete.desc", { count: row.imageIds.length }),
     onOk: () => {
       if (busyNow()) return;
       void deleteHistory(id)
         .then(() => {
-          toast("已删除");
+          toast(t("toast.deleted"));
           recordDeleted(id);
           // 删除期间已开始生成：草稿属于这次生成，不再复位
           if (wasCurrent && !busyNow()) resetWorkspace();
@@ -200,13 +198,9 @@ export function addAsReference() {
   if (state.run.phase !== "idle" || !row) return;
   const imageId = selectSelectedImageId(state) ?? row.imageIds[0] ?? null;
   if (!imageId) return;
-  const added = appendExisting(
-    imageId,
-    row.id,
-    `已有作品 · 第 ${row.imageIds.indexOf(imageId) + 1} 张`,
-  );
-  if (added === "too-many") toast(ERROR_HINTS["too-many-images"]);
+  const added = appendExisting(imageId, row.id);
+  if (added === "too-many") toast(errorHint("too-many-images", t));
   clearDone();
   setBarMode("full");
-  toast("已加入参考图，继续描述后生成");
+  toast(t("toast.referenceAdded"));
 }

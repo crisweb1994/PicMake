@@ -9,14 +9,16 @@ import {
   type MaskDocument,
   type SketchCommand,
   type SketchDocument,
+  type SketchOrigin,
 } from "../../../lib/types";
+import type { InputNaming } from "../../../lib/view-models";
 import { useWorkspace } from "../index";
 import { set, freshDraft, withInpaint, type InpaintPayload } from "./internal";
 
 /** 打开草图画板：新建、编辑附件（replacesImageId）或继续历史草图；已有画板时忽略并返回 false */
 export function openSketch(
   doc: SketchDocument,
-  meta: string,
+  origin: SketchOrigin,
   replacesImageId: string | null,
 ): boolean {
   if (useWorkspace.getState().drawing) return false;
@@ -27,7 +29,7 @@ export function openSketch(
       doc,
       cursor: doc.commands.length,
       replacesImageId,
-      meta,
+      origin,
       openKey: sketchSnapshotKey(doc),
       confirming: false,
     },
@@ -52,7 +54,7 @@ export function openInpaint(
     original?: InpaintDraft["original"];
     normalized: boolean;
     doc: MaskDocument;
-    name: string;
+    naming: InputNaming;
     chosenInputId: string | null;
   },
 ): boolean {
@@ -144,7 +146,7 @@ export function applyInpaintSelection(
       return {
         draft: withInpaint(
           freshDraft(s.draft, undefined, [
-            { imageId: payload.base.id, name: "底图", upload: payload.base },
+            { imageId: payload.base.id, upload: payload.base },
           ]),
           payload,
         ),

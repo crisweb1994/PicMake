@@ -104,7 +104,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         images={draftImages}
         inputFidelity={draft.inputFidelity}
         reading={draft.readId !== null}
-        uploadError={draft.uploadError}
+        uploadIssues={draft.uploadIssues}
         canReturn={canReturn}
         sketchSize={sketchSize}
         inpaint={inpaintInfo}

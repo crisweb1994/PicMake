@@ -17,8 +17,6 @@ import { blankMask } from "../lib/inpaint";
 import { blankSketch } from "../lib/sketch";
 import { exportSketchPng } from "../lib/sketch-canvas";
 import {
-  ERROR_HINTS,
-  INPAINT_ISSUE_HINTS,
   MAX_INPUT_IMAGES,
   type InputImage,
   type SketchCommand,
@@ -76,7 +74,7 @@ function openInpaintSession(base = image("base")) {
     base,
     normalized: false,
     doc: blankMask(base.id, base.width, base.height),
-    name: "底图",
+    naming: { kind: "base" },
     chosenInputId: "base",
   });
   return id;
@@ -98,7 +96,8 @@ describe("openSketchNew", () => {
     openSketchNew();
     expect(state().drawing).toMatchObject({
       kind: "sketch",
-      meta: "1024 × 1024",
+      origin: { kind: "new" },
+      doc: { width: 1024, height: 1024 },
       cursor: 0,
     });
   });
@@ -106,7 +105,10 @@ describe("openSketchNew", () => {
   it("沿用当前输出尺寸", () => {
     patchForm({ cw: "1280", ch: "960" });
     openSketchNew();
-    expect(state().drawing).toMatchObject({ meta: "1280 × 960" });
+    expect(state().drawing).toMatchObject({
+      origin: { kind: "new" },
+      doc: { width: 1280, height: 960 },
+    });
   });
 
   it("输入图已满且没有可替换的草图：提示上限，不打开", () => {
@@ -116,12 +118,12 @@ describe("openSketchNew", () => {
     );
     openSketchNew();
     expect(state().drawing).toBeNull();
-    expect(toast).toHaveBeenCalledWith(ERROR_HINTS["too-many-images"]);
+    expect(toast).toHaveBeenCalledWith("最多添加 16 张输入图片。");
   });
 
   it.each([
     ["生成中", () => beginRun({ n: 1, size: "auto" })],
-    ["已有画板", () => openSketch(blankSketch(8, 8), "m", null)],
+    ["已有画板", () => openSketch(blankSketch(8, 8), { kind: "new" }, null)],
     ["确认框打开", () => setConfirm({ title: "t", desc: "d", onOk: () => {} })],
   ])("%s：忽略", (_, setup) => {
     setup();
@@ -153,14 +155,14 @@ describe("editSketchAttachment", () => {
     expect(state().drawing).toMatchObject({
       kind: "sketch",
       replacesImageId: "sk",
-      meta: "640 × 480 · 图2 的草图",
+      origin: { kind: "attachment", index: 2 },
     });
   });
 });
 
 describe("confirmSketch", () => {
   const open = () => {
-    openSketch(blankSketch(100, 80), "m", null);
+    openSketch(blankSketch(100, 80), { kind: "new" }, null);
     strokeDrawing(stroke(1));
     return state().drawing!.id;
   };
@@ -189,10 +191,10 @@ describe("confirmSketch", () => {
     vi.mocked(exportSketchPng).mockResolvedValue(new Blob(["png"]));
     confirmSketch();
     closeDrawing();
-    openSketch(blankSketch(10, 10), "新会话", null);
+    openSketch(blankSketch(10, 10), { kind: "history" }, null);
     await flush();
     expect(state().draft.inputs).toEqual([]);
-    expect(state().drawing).toMatchObject({ meta: "新会话" });
+    expect(state().drawing).toMatchObject({ origin: { kind: "history" } });
   });
 
   it("导出失败：画板保留、可重试，并提示", async () => {
@@ -222,7 +224,7 @@ describe("confirmSketch", () => {
       kind: "sketch",
       confirming: false,
     });
-    expect(toast).toHaveBeenCalledWith(ERROR_HINTS["too-many-images"]);
+    expect(toast).toHaveBeenCalledWith("最多添加 16 张输入图片。");
   });
 
   it("确认中重复触发：只导出一次", async () => {
@@ -250,27 +252,27 @@ describe("confirmSketch", () => {
 
 describe("requestCloseSketch", () => {
   it("没有修改：直接关闭", () => {
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     requestCloseSketch();
     expect(state().drawing).toBeNull();
     expect(state().confirm).toBeNull();
   });
 
   it("有修改：先确认；确认只关闭发起时的会话", () => {
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     strokeDrawing(stroke(1));
     requestCloseSketch();
     expect(state().drawing).not.toBeNull();
     expect(state().confirm?.title).toBe("放弃本次草图修改？");
     const { onOk } = state().confirm!;
     closeDrawing();
-    openSketch(blankSketch(20, 20), "新会话", null);
+    openSketch(blankSketch(20, 20), { kind: "history" }, null);
     onOk();
-    expect(state().drawing).toMatchObject({ meta: "新会话" });
+    expect(state().drawing).toMatchObject({ origin: { kind: "history" } });
   });
 
   it("确认导出中：忽略", () => {
-    openSketch(blankSketch(10, 10), "m", null);
+    openSketch(blankSketch(10, 10), { kind: "new" }, null);
     strokeDrawing(stroke(1));
     useWorkspace.setState((s) => ({
       drawing: s.drawing && ({ ...s.drawing, confirming: true } as never),
@@ -337,7 +339,9 @@ describe("startInpaintFromInput", () => {
     startInpaintFromInput("src");
     await flush();
     expect(state().drawing).toBeNull();
-    expect(toast).toHaveBeenCalledWith(INPAINT_ISSUE_HINTS["pixel-limit"]);
+    expect(toast).toHaveBeenCalledWith(
+      "图片像素过多（超过 16,777,216 像素总量），请缩小后再使用局部重绘",
+    );
   });
 
   it("底图准备失败：关闭占位并提示原因", async () => {
@@ -350,7 +354,9 @@ describe("startInpaintFromInput", () => {
     startInpaintFromInput("src");
     await flush();
     expect(state().drawing).toBeNull();
-    expect(toast).toHaveBeenCalledWith(INPAINT_ISSUE_HINTS["canvas-failed"]);
+    expect(toast).toHaveBeenCalledWith(
+      "当前设备无法处理这张图片，请缩小图片后再试",
+    );
   });
 
   it("读取来源图期间开始了生成：不再打开", async () => {
@@ -371,7 +377,7 @@ describe("startInpaintFromInput", () => {
     startInpaintFromInput("src");
     await flush();
     expect(state().drawing).toBeNull();
-    expect(toast).toHaveBeenCalledWith(ERROR_HINTS["source-unavailable"]);
+    expect(toast).toHaveBeenCalledWith("来源图片不可用，无法继续编辑");
   });
 });
 
