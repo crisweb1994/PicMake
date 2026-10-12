@@ -10,6 +10,11 @@
  *   [stream-error]            第一个 partial 之后发 error 事件
  *   [slow]                    事件间隔 3 秒，便于测试取消
  *   [json]                    不走 SSE，直接返回 JSON（中转站兼容路径）
+ *
+ * 多尺寸生成每个比例是一个独立请求，描述里的标记会让所有比例一起触发。
+ * 只想让某个尺寸触发，在标记里加 @宽x高，例如 [429@1792x1008]、[slow@1792x1008]、[500@1008x1792]：
+ * 只有请求尺寸恰好是 1792 × 1008 的那个请求报 429 / 放慢，其余照常，用来验证部分失败与取消时保留已完成的图。
+ * 适用于全部标记：[401] [403] [429] [500] [policy] [stream-error] [slow] [json]
  */
 import http from "node:http";
 import zlib from "node:zlib";
@@ -66,6 +71,14 @@ function solidPng(width, height, [r, g, b]) {
   const b64 = png.toString("base64");
   pngCache.set(key, b64);
   return b64;
+}
+
+/** 描述里是否带有这个标记：[名字] 对所有请求生效，[名字@宽x高] 只对该尺寸的请求生效 */
+function marked(prompt, name, width, height) {
+  return (
+    prompt.includes(`[${name}]`) ||
+    prompt.includes(`[${name}@${width}x${height}]`)
+  );
 }
 
 /** 同一描述、同一张序号得到稳定的颜色 */
@@ -158,7 +171,8 @@ async function handleImages(res, request, edit) {
   const kind = edit ? "image_edit" : "image_generation";
 
   for (const [marker, [status, code, message]] of Object.entries(HTTP_ERRORS)) {
-    if (prompt.includes(marker)) return sendError(res, status, code, message);
+    if (marked(prompt, marker.slice(1, -1), width, height))
+      return sendError(res, status, code, message);
   }
 
   const usage = {
@@ -166,11 +180,13 @@ async function handleImages(res, request, edit) {
     output_tokens: 1000 * n,
     total_tokens: 50 + 1000 * n,
   };
+  // 颜色带上尺寸：多尺寸生成时每个请求 n = 1，不然各比例同色，看不出谁是谁
+  const seed = `${prompt}|${width}x${height}`;
   const finals = Array.from({ length: n }, (_, i) =>
-    solidPng(width, height, colorFor(prompt, i)),
+    solidPng(width, height, colorFor(seed, i)),
   );
 
-  if (!stream || prompt.includes("[json]")) {
+  if (!stream || marked(prompt, "json", width, height)) {
     return sendJson(res, 200, {
       created: Math.floor(Date.now() / 1000),
       data: finals.map((b64_json) => ({ b64_json })),
@@ -193,12 +209,13 @@ async function handleImages(res, request, edit) {
         `event: ${type}\ndata: ${JSON.stringify({ type, ...payload })}\n\n`,
       );
   };
-  const gap = prompt.includes("[slow]") ? 3000 : 400;
+  const gap = marked(prompt, "slow", width, height) ? 3000 : 400;
   const meta = { size: `${width}x${height}`, output_format: "png" };
 
   for (let i = 0; i < n; i++) {
-    const final = colorFor(prompt, i);
-    const partials = prompt.includes("[stream-error]") ? 1 : partialImages;
+    const final = colorFor(seed, i);
+    const streamError = marked(prompt, "stream-error", width, height);
+    const partials = streamError ? 1 : partialImages;
     for (let k = 0; k < partials; k++) {
       await sleep(gap);
       if (closed) return;
@@ -212,7 +229,7 @@ async function handleImages(res, request, edit) {
         ...meta,
       });
     }
-    if (prompt.includes("[stream-error]")) {
+    if (streamError) {
       send("error", {
         error: { status: 500, code: "server_error", message: "mock：生成中断" },
       });
@@ -282,4 +299,5 @@ server.listen(PORT, () => {
   console.log(
     "描述里的标记：[401] [403] [429] [500] [policy] [stream-error] [slow] [json]",
   );
+  console.log("只对某个尺寸生效：加 @宽x高，如 [429@1792x1008]");
 });
