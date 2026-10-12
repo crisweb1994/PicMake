@@ -59,6 +59,14 @@
               {
                 "name": "react",
                 "message": "store 不使用 React API"
+              },
+              {
+                "name": "i18next",
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              },
+              {
+                "name": "react-i18next",
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
               }
             ],
             "patterns": [
@@ -73,6 +81,10 @@
                 ],
                 "allowTypeImports": true,
                 "message": "store 不做 IO，只依赖 lib"
+              },
+              {
+                "group": ["**/i18n", "**/i18n/**"],
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
               }
             ]
           }
@@ -182,6 +194,71 @@
                 ],
                 "allowTypeImports": true,
                 "message": "lib 只放纯函数"
+              },
+              {
+                "group": ["**/i18n", "**/i18n/**"],
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              }
+            ],
+            "paths": [
+              {
+                "name": "i18next",
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              },
+              {
+                "name": "react-i18next",
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/api/**", "src/db/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "i18next",
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              },
+              {
+                "name": "react-i18next",
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["**/i18n", "**/i18n/**"],
+                "message": "这一层不产出界面文案：返回问题码或结构化数据，由组件/flows 用 i18n 资源翻译"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/i18n/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/store/**",
+                  "**/flows/**",
+                  "**/hooks/**",
+                  "**/containers/**",
+                  "**/components/**",
+                  "**/api/**",
+                  "**/db/**"
+                ],
+                "allowTypeImports": true,
+                "message": "i18n 只依赖 lib：它是被组件、容器、flows 引用的底层"
               }
             ]
           }

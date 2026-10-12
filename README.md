@@ -21,6 +21,7 @@ GPT Image 2.5 是 OpenAI 目前最强的生图 API，但官方只给了 API，�
 - **中转站友好** —— 地址自动补全 `/v1`；流式被拒自动降级为普通请求；异步任务型接口（返回 `task_id` 需轮询）也能出图；失败绝不重发请求，同批图不会计费两次
 - **全参数** —— Flare / Sunburst 双模型、8 种比例加自定义像素（16 整除实时校验）、五档质量、1–4 张、透明或纯色背景、PNG / JPEG / WebP
 - **历史在本地** —— 作品与生成记录存 IndexedDB，可回看、复用参数再生成、灯箱大图轮播；清除站点数据即彻底删除
+- **中英双语** —— 界面支持简体中文与 English，默认跟随浏览器语言，可在设置里手动切换；你写的画面描述原样发给模型，不做翻译
 
 | 首次运行，填一次 Key               | 生成参数                                    |
 | ---------------------------------- | ------------------------------------------- |
@@ -71,7 +72,7 @@ pnpm mock       # → http://localhost:8787
 
 ## 技术栈
 
-Vite 8 · React 19 · TypeScript · Tailwind CSS v4 · HeroUI v3 · Zustand · Dexie · eventsource-parser。网络层是原生 fetch 封装（`/v1` 归一化、错误归一化、流式与自动降级），不引 axios，也不引官方 SDK。
+Vite 8 · React 19 · TypeScript · Tailwind CSS v4 · HeroUI v3 · Zustand · Dexie · i18next · eventsource-parser。网络层是原生 fetch 封装（`/v1` 归一化、错误归一化、流式与自动降级），不引 axios，也不引官方 SDK。
 
 ---
 
