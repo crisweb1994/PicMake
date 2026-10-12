@@ -38,9 +38,9 @@ import {
   selectSelectedImageId,
 } from "../store/workspace/selectors";
 
-// 选区查看弹层与局部重绘弹层同文件，按需加载，不进首屏 chunk
+// 选区查看弹层按需加载，不进首屏 chunk
 const MaskViewModal = lazy(() =>
-  import("../components/InpaintModal").then((m) => ({
+  import("../components/MaskViewModal").then((m) => ({
     default: m.MaskViewModal,
   })),
 );

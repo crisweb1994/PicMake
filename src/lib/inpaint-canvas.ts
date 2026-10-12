@@ -175,3 +175,11 @@ export async function exportMaskPng(
   );
   return { blob, issue: blob ? null : "canvas-failed", selected };
 }
+
+/** Canvas 不支持 CSS 变量：从根元素解析 --pm-inpaint-fill，缺省回退强调色 */
+export function overlayFill(): string {
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue("--pm-inpaint-fill")
+    .trim();
+  return value || "#FF9A62";
+}
