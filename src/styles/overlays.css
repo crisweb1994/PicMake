@@ -128,6 +128,9 @@
   color: var(--pm-text-2);
   font-variant-numeric: tabular-nums;
 }
+.pm-car-meta {
+  color: var(--pm-text-3);
+}
 .pm-car-arrow,
 .pm-x-btn {
   position: absolute;
@@ -409,6 +412,9 @@
   .pm-dots i,
   .pm-dots-wave,
   .pm-gen-img,
+  .pm-gen-final,
+  .pm-switch,
+  .pm-switch i,
   .pm-bar,
   .pm-bar-full,
   .pm-bar-gen,

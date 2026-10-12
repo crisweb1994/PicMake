@@ -60,6 +60,16 @@
   margin-left: 4px;
   font-variant-numeric: tabular-nums;
 }
+/* 多尺寸：每张图的实际像素各占一行 */
+.pm-detail-chip.sizes {
+  display: flex;
+  align-items: flex-start;
+}
+.pm-detail-chip.sizes b {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .pm-detail-promptcap {
   display: flex;
   align-items: center;

@@ -34,6 +34,8 @@ import {
 } from "../store/workspace/actions";
 import {
   selectCanReturn,
+  selectRunDone,
+  selectRunTotal,
   selectShouldCollapseBar,
 } from "../store/workspace/selectors";
 
@@ -47,6 +49,9 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
   const partialIndex = useWorkspace((s) =>
     s.run.phase === "generating" ? (s.run.partial?.index ?? 0) : 0,
   );
+  // 多尺寸生成中的进度（已完成 / 总数）；单尺寸时总数为 0
+  const runDone = useWorkspace(selectRunDone);
+  const runTotal = useWorkspace(selectRunTotal);
   const canReturn = useWorkspace(selectCanReturn);
   // 草稿在 store：读取中 = readId 非空；附件缩略图与重绘尺寸在这里投影
   const draft = useWorkspace((s) => s.draft);
@@ -99,6 +104,7 @@ export function CreateArea({ assets }: { assets: WorkspaceAssets }) {
         generating={generating}
         done={doneGen}
         partialIndex={partialIndex}
+        progress={runTotal > 0 ? { done: runDone, total: runTotal } : null}
         form={draft.form}
         customValid={customOk(draft.form)}
         images={draftImages}

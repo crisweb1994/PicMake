@@ -1,4 +1,5 @@
-/** 结果舞台：空 / 生成中 / 单张 / 网格 四形态，纯展示 */
+/** 结果舞台：空 / 生成中 / 单张 / 网格 / 多尺寸 五形态，纯展示 */
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@heroui/react";
 import {
@@ -10,11 +11,18 @@ import {
   X,
 } from "lucide-react";
 import { DotsWave } from "./DotsWave";
+import { errorTitle } from "../i18n/errors";
 import { fmtTime } from "../i18n/format";
-import { sizeText } from "../i18n/labels";
+import { sizeCaption, sizeText } from "../i18n/labels";
 import { MODEL_LABELS } from "../lib/params";
+import { layoutMulti, multiBox } from "../lib/stage-layout";
 import type { SizeSpec } from "../lib/types";
-import type { DisplayGen, DisplayImage, GenPlan } from "../lib/view-models";
+import type {
+  DisplayGen,
+  DisplayImage,
+  DisplaySlot,
+  GenPlan,
+} from "../lib/view-models";
 
 export function StageEmpty(props: { onStart: () => void }) {
   const { t } = useTranslation();
@@ -150,6 +158,10 @@ export function StageSingle(props: {
   const { t, i18n } = useTranslation();
   const { row } = props.display;
   const p = row.params;
+  // 多尺寸记录只成功一张时，params.size 可能是失败的那个比例：尺寸取图片的实际宽高
+  const size: SizeSpec = p.sizes
+    ? { w: props.img.width, h: props.img.height }
+    : p.size;
   return (
     <figure className="pm-single">
       <img
@@ -168,7 +180,7 @@ export function StageSingle(props: {
       />
       <figcaption className="pm-single-meta">
         {MODEL_LABELS[p.model]} · {t(`params.qualityLevel.${p.quality}`)} ·{" "}
-        {sizeText(p.size, t)} · {fmtTime(row.createdAt, i18n)}
+        {sizeText(size, t)} · {fmtTime(row.createdAt, i18n)}
       </figcaption>
     </figure>
   );
@@ -241,6 +253,191 @@ export function StageGrid(props: {
   );
 }
 
+/* ── 多尺寸：各图保持自身比例、同一行等高，必要时折成两行；生成中的占位与完成后的成品共用排版 ── */
+
+/** 按排版把各格排成一行或两行；cell 画一格（格子 + 下方标注），宽高由排版给出 */
+function MultiRows(props: {
+  aspects: readonly number[];
+  viewport: { w: number; h: number };
+  cell: (index: number, width: number, height: number) => ReactNode;
+}) {
+  const layout = layoutMulti(props.aspects, multiBox(props.viewport));
+  return (
+    <div className="pm-multi-rows">
+      {layout.rows.map((row) => (
+        <div key={row.join("-")} className="pm-multi-row">
+          {row.map((index) =>
+            props.cell(
+              index,
+              Math.round(props.aspects[index] * layout.height),
+              layout.height,
+            ),
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 多尺寸生成中：每格按自己的比例占位，各自显示渐进预览；完成的格子原位显示终稿，失败的格子显示失败标记 */
+export function StageMultiGenerating(props: {
+  slots: DisplaySlot[];
+  viewport: { w: number; h: number };
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const { slots } = props;
+  const done = slots.filter((slot) => slot.status === "done").length;
+  return (
+    <>
+      <div className="pm-grid-wrap">
+        <MultiRows
+          aspects={slots.map((slot) => slot.size.w / slot.size.h)}
+          viewport={props.viewport}
+          cell={(index, width, height) => {
+            const slot = slots[index];
+            return (
+              <div key={index} className="pm-mcell">
+                <div
+                  className={"pm-gen-tile pm-mtile " + slot.status}
+                  style={{ width, height }}
+                >
+                  {slot.status === "failed" ? (
+                    <div className="pm-mfail" role="status">
+                      <b>{t("stage.failed")}</b>
+                      <span>{errorTitle(slot.failure ?? "unknown", t)}</span>
+                    </div>
+                  ) : slot.status === "done" && slot.url ? (
+                    <img
+                      src={slot.url}
+                      alt={sizeCaption(slot.size)}
+                      className="pm-gen-final"
+                    />
+                  ) : (
+                    <GenTile partialUrl={slot.url} />
+                  )}
+                </div>
+                <span className="pm-mcap">{sizeCaption(slot.size)}</span>
+              </div>
+            );
+          }}
+        />
+        {/* 预留说明栏高度，完成切换时格子位置不动 */}
+        <div className="pm-grid-cap pm-reserve" aria-hidden="true">
+          <span>{t("stage.totalSizes", { count: slots.length })}</span>
+          <Button variant="ghost" size="sm" isDisabled>
+            {t("stage.downloadAll")}
+          </Button>
+          <Button variant="ghost" size="sm" isDisabled>
+            {t("stage.reuseAndRegenerate")}
+          </Button>
+        </div>
+      </div>
+      <div className="pm-gen-pill" role="status">
+        <span className="pm-dots" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span>
+          {t("stage.generatingProgress", { done, total: slots.length })}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          isIconOnly
+          aria-label={t("stage.cancel")}
+          onPress={props.onCancel}
+        >
+          <X size={13} />
+        </Button>
+      </div>
+    </>
+  );
+}
+
+/** 多尺寸结果（2 张及以上）：等高并列，每张下方标注比例与像素；悬浮放大 / 下载，点图弹轮播 */
+export function StageMulti(props: {
+  display: DisplayGen;
+  viewport: { w: number; h: number };
+  onZoomIn: (idx: number) => void;
+  onDownload: (idx: number) => void;
+  onDownloadAll: () => void;
+  onReuse: () => void;
+}) {
+  const { t } = useTranslation();
+  const { row, images } = props.display;
+  return (
+    <div className="pm-grid-wrap">
+      <MultiRows
+        // 宽高读不到（旧数据为 0）时按 3:2 占位
+        aspects={images.map((im) =>
+          im.width > 0 && im.height > 0 ? im.width / im.height : 3 / 2,
+        )}
+        viewport={props.viewport}
+        cell={(idx, width, height) => {
+          const im = images[idx];
+          return (
+            <div key={im.id} className="pm-mcell">
+              <div
+                className="pm-gtile"
+                style={{ width, height }}
+                role="button"
+                tabIndex={0}
+                aria-label={t("stage.result", { index: idx + 1 })}
+                onClick={() => props.onZoomIn(idx)}
+                onKeyDown={(e) => {
+                  if (
+                    e.target === e.currentTarget &&
+                    (e.key === "Enter" || e.key === " ")
+                  ) {
+                    e.preventDefault();
+                    props.onZoomIn(idx);
+                  }
+                }}
+              >
+                <img src={im.url} alt={`${row.prompt} ${idx + 1}`} />
+                <div className="pm-gtile-acts">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.onZoomIn(idx);
+                    }}
+                  >
+                    {t("stage.zoom")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.onDownload(idx);
+                    }}
+                  >
+                    {t("stage.download")}
+                  </button>
+                </div>
+              </div>
+              <span className="pm-mcap">
+                {sizeCaption({ w: im.width, h: im.height })}
+              </span>
+            </div>
+          );
+        }}
+      />
+      <div className="pm-grid-cap">
+        {t("stage.totalSizes", { count: images.length })}
+        <Button variant="ghost" size="sm" onPress={props.onDownloadAll}>
+          {t("stage.downloadAll")}
+        </Button>
+        <Button variant="ghost" size="sm" onPress={props.onReuse}>
+          {t("stage.reuseAndRegenerate")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function StageToolbar(props: {
   onZoom: () => void;
   onDownload: () => void;
@@ -282,6 +479,10 @@ export function Stage(props: {
   phase: "idle" | "generating";
   partial: { url: string; index: number } | null;
   genPlan?: GenPlan | null;
+  /** 多尺寸生成中每个请求一格；单尺寸为 null */
+  slots?: DisplaySlot[] | null;
+  /** 视口尺寸：多尺寸排版据此决定一行还是两行 */
+  viewport: { w: number; h: number };
   display: DisplayGen | null;
   onFocus: (idx: number | null) => void;
   onLightbox: (id: string) => void;
@@ -293,23 +494,49 @@ export function Stage(props: {
   onCancel: () => void;
   onStart: () => void;
 }) {
-  const { display, phase, partial } = props;
+  const { display, phase, partial, slots } = props;
   const isGen = phase === "generating";
   const done = !isGen && display;
   const single = done && display.images.length === 1;
-  const bgUrl = isGen ? partial?.url : done ? display.images[0]?.url : null;
+  // 多尺寸记录（2 张及以上）用等高并列的排版，其余多张仍是 2×2 网格
+  const multi = done && !single && !!display.row.params.sizes;
+  // 舞台背景取第一格（终稿或预览）的模糊延伸
+  const bgUrl = isGen
+    ? slots
+      ? slots[0]?.url
+      : partial?.url
+    : done
+      ? display.images[0]?.url
+      : null;
 
   return (
     <div
       className="pm-stage"
-      data-mode={isGen ? "gen" : done ? (single ? "single" : "grid") : "empty"}
+      data-mode={
+        isGen
+          ? "gen"
+          : done
+            ? single
+              ? "single"
+              : multi
+                ? "multi"
+                : "grid"
+            : "empty"
+      }
     >
       <div
         className="pm-stage-bg"
         style={bgUrl ? { backgroundImage: `url(${bgUrl})` } : undefined}
         aria-hidden="true"
       />
-      {isGen && (
+      {isGen && slots && (
+        <StageMultiGenerating
+          slots={slots}
+          viewport={props.viewport}
+          onCancel={props.onCancel}
+        />
+      )}
+      {isGen && !slots && (
         <StageGenerating
           n={props.genPlan?.n ?? 1}
           size={props.genPlan?.size ?? "auto"}
@@ -339,13 +566,24 @@ export function Stage(props: {
       )}
       {!isGen && done && !single && (
         <div key={display.row.id} className="pm-stage-swap">
-          <StageGrid
-            display={display}
-            onZoomIn={(i) => props.onFocus(i)}
-            onDownload={props.onDownload}
-            onDownloadAll={props.onDownloadAll}
-            onReuse={props.onReuse}
-          />
+          {multi ? (
+            <StageMulti
+              display={display}
+              viewport={props.viewport}
+              onZoomIn={(i) => props.onFocus(i)}
+              onDownload={props.onDownload}
+              onDownloadAll={props.onDownloadAll}
+              onReuse={props.onReuse}
+            />
+          ) : (
+            <StageGrid
+              display={display}
+              onZoomIn={(i) => props.onFocus(i)}
+              onDownload={props.onDownload}
+              onDownloadAll={props.onDownloadAll}
+              onReuse={props.onReuse}
+            />
+          )}
         </div>
       )}
     </div>

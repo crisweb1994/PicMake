@@ -2,9 +2,9 @@
 import { useTranslation } from "react-i18next";
 import { Star, X } from "lucide-react";
 import { fmtTime } from "../i18n/format";
-import { inputName, sizeText } from "../i18n/labels";
+import { inputName, ratioOrSize, sizeText } from "../i18n/labels";
 import { fmtDuration } from "../lib/format";
-import { MODEL_LABELS } from "../lib/params";
+import { MODEL_LABELS, missingSizes } from "../lib/params";
 import type { DisplayGen, DisplayInput } from "../lib/view-models";
 
 export function DetailCard(props: {
@@ -34,6 +34,14 @@ export function DetailCard(props: {
   const starred = !!row.starred;
   const editImageId = props.selectedImageId ?? images[0]?.id ?? null;
   const inpaintRow = !!row.inpaint;
+  // 多尺寸记录：尺寸列出每张图的实际像素，不显示张数；部分失败时标出没出图的比例
+  const sizes = p.sizes;
+  const missing = sizes
+    ? missingSizes(
+        sizes,
+        images.map((image) => ({ w: image.width, h: image.height })),
+      )
+    : [];
   return (
     <aside className="pm-island pm-detail" aria-label={t("detail.label")}>
       <header className="pm-detail-cap">
@@ -61,19 +69,41 @@ export function DetailCard(props: {
         <span className="pm-detail-chip">
           {t("detail.model")} <b>{MODEL_LABELS[p.model]}</b>
         </span>
-        <span className="pm-detail-chip">
-          {t("detail.size")} <b>{sizeText(p.size, t)}</b>
-        </span>
+        {sizes ? (
+          <span className="pm-detail-chip sizes">
+            {t("detail.size")}
+            <b>
+              {images.map((image) => (
+                <span key={image.id}>
+                  {sizeText({ w: image.width, h: image.height }, t)}
+                </span>
+              ))}
+            </b>
+          </span>
+        ) : (
+          <span className="pm-detail-chip">
+            {t("detail.size")} <b>{sizeText(p.size, t)}</b>
+          </span>
+        )}
         <span className="pm-detail-chip">
           {t("detail.quality")} <b>{t(`params.qualityLevel.${p.quality}`)}</b>
         </span>
-        <span className="pm-detail-chip">
-          {t("detail.count")} <b>{images.length}</b>
-        </span>
+        {!sizes && (
+          <span className="pm-detail-chip">
+            {t("detail.count")} <b>{images.length}</b>
+          </span>
+        )}
         <span className="pm-detail-chip">
           <b>{p.outputFormat.toUpperCase()}</b>
         </span>
       </div>
+      {missing.length > 0 && (
+        <p className="pm-detail-hint" role="status">
+          {t("detail.missingSizes", {
+            sizes: missing.map(ratioOrSize).join(t("detail.missingSeparator")),
+          })}
+        </p>
+      )}
       <div className="pm-detail-promptcap">
         <span>{t("detail.prompt")}</span>
         <button type="button" onClick={props.onCopyPrompt}>

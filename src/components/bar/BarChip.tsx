@@ -12,6 +12,8 @@ export function BarChip(props: {
   /** 值 ≠ 默认值时的强调态（橙色描边 + 橙字 + 淡橙底） */
   dirty?: boolean;
   disabled?: boolean;
+  /** 悬停提示（如不可用的原因） */
+  title?: string;
   /** 弹层右对齐（条尾 chip 用） */
   right?: boolean;
   popWidth?: number;
@@ -41,6 +43,7 @@ export function BarChip(props: {
         }
         aria-label={props.ariaLabel}
         aria-expanded={open}
+        title={props.title}
         disabled={props.disabled}
         onClick={() => setOpen((v) => !v)}
       >
