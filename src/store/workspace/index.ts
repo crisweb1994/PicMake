@@ -4,6 +4,7 @@ import type { HistoryRow, ImageRow } from "../../db/schema";
 import type { PreparedGeneration } from "../../lib/generation";
 import { DEFAULT_FORM, type GenForm } from "../../lib/params";
 import type {
+  ApiErrorKind,
   FidelityChoice,
   InpaintDraft,
   InpaintEntry,
@@ -12,19 +13,35 @@ import type {
   InputSource,
   MaskCommand,
   MaskDocument,
+  PixelSize,
   SketchDocument,
   SketchOrigin,
   UploadIssue,
 } from "../../lib/types";
 import type { ConfirmState, GenPlan, InputNaming } from "../../lib/view-models";
 
-/** 生成生命周期；saving = 请求成功、正在写库，unsaved = 保存失败、结果留在内存（可查看、下载） */
+/** 多尺寸生成中的一个请求（一个比例一格）：各自的阶段、渐进预览、终稿与失败原因 */
+export interface RunSlot {
+  /** 这个请求的尺寸 */
+  size: PixelSize;
+  status: "running" | "done" | "failed";
+  /** 最新的渐进预览 */
+  partial: Blob | null;
+  /** 终稿：舞台原位显示，全部结束后才合并保存 */
+  final: Blob | null;
+  /** 失败时的错误种类，舞台上显示它的标题 */
+  failure: ApiErrorKind | null;
+}
+
+/** 生成生命周期；saving = 请求成功、正在写库，unsaved = 保存失败、结果留在内存（可查看、下载）。
+ *  多尺寸时 slots 是每个比例的请求，partial 不用；单尺寸时 slots 为 null */
 export type Run =
   | { phase: "idle" }
   | {
       phase: "generating";
       plan: GenPlan;
       partial: { blob: Blob; index: number } | null;
+      slots: RunSlot[] | null;
     }
   | { phase: "saving"; prepared: PreparedGeneration }
   | { phase: "unsaved"; prepared: PreparedGeneration };

@@ -37,9 +37,9 @@ export const acceptSize = () => setDraft({ sizeAccepted: true });
 export const beginRead = (readId: string) =>
   setDraft({ readId, uploadIssues: [] });
 
-/** 第一批输入图：比例改为 auto */
+/** 第一批输入图：比例改为 auto。多比例开着时保持多比例与所选比例（多比例下没有「自动」） */
 const withFirstInputs = (draft: WorkspaceState["draft"]): GenForm =>
-  draft.inputs.length
+  draft.inputs.length || draft.form.multi
     ? draft.form
     : { ...draft.form, ratio: "auto", cw: "", ch: "" };
 

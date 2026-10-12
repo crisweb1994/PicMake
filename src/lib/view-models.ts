@@ -1,18 +1,32 @@
 import type { HistoryRow } from "../db/schema";
 import type { SizeReason } from "./inpaint";
-import type { SizeSpec } from "./types";
+import type { ApiErrorKind, PixelSize, SizeSpec } from "./types";
 
 export interface DisplayImage {
   id: string;
   url: string;
   /** 图片实际格式（png / jpeg / webp），决定下载扩展名 */
   format: string;
+  /** 图片宽高（多尺寸记录里是保存时读到的实际尺寸；auto 的旧记录为 0） */
+  width: number;
+  height: number;
 }
 
-/** 生成中占位布局：本次请求的张数与尺寸（决定占位卡比例） */
+/** 生成中占位布局：本次请求的张数与尺寸（决定占位卡比例）；多尺寸时 sizes 是各请求的尺寸 */
 export interface GenPlan {
   n: number;
   size: SizeSpec;
+  sizes?: PixelSize[];
+}
+
+/** 多尺寸生成中一格（一个比例的请求）的展示数据；URL 由 hooks 生成 */
+export interface DisplaySlot {
+  size: PixelSize;
+  status: "running" | "done" | "failed";
+  /** 渐进预览或终稿的 URL */
+  url: string | null;
+  /** 失败时的错误种类，舞台上显示它的标题 */
+  failure: ApiErrorKind | null;
 }
 
 export interface DisplayGen {

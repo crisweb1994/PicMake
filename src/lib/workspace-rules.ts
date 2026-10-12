@@ -4,6 +4,7 @@ import {
   customOk,
   formToParams,
   validateParams,
+  withoutMulti,
   type GenForm,
   type ParamIssue,
 } from "./params";
@@ -175,8 +176,8 @@ export function draftToParams(d: {
   if (d.reading) return { ok: false, reason: "reading" };
   if (!info && !customOk(d.form))
     return { ok: false, reason: "custom-size", issue: "custom-size" };
-  const params = formToParams(d.form);
-  // 局部重绘：输出尺寸按目标尺寸，不开放任意比例
+  // 局部重绘：输出尺寸按目标尺寸，不开放任意比例，也不支持多比例
+  const params = formToParams(info ? withoutMulti(d.form) : d.form);
   if (info) params.size = { w: info.tw, h: info.th };
   const issues = validateParams(params);
   if (issues.length)

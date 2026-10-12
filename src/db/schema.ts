@@ -25,6 +25,8 @@ export interface HistoryRow {
   prompt: string;
   params: GenParams;
   usage: Record<string, unknown> | null;
+  /** 多尺寸记录（params.sizes 存在）：每个请求各自的原始 usage，顺序与 imageIds 一致，不合计、不换算；此时 usage 为 null */
+  usages?: Array<Record<string, unknown> | null>;
   imageIds: string[];
   createdAt: number;
   inputSources?: InputSource[];

@@ -2,12 +2,22 @@
  *  这样切换语言会重渲染）。lib 本身不产出任何界面文字。 */
 import type { TFunction } from "i18next";
 import type { SizeReason } from "../lib/inpaint";
-import { BASE_LABELS, isCustomActive, type GenForm } from "../lib/params";
+import {
+  BASE_LABELS,
+  PRESET_RATIOS,
+  isCustomActive,
+  isMultiSize,
+  nearestRatio,
+  sizeToPreset,
+  type BaseRes,
+  type GenForm,
+} from "../lib/params";
 import type { RatioId } from "../lib/params";
 import { SIZE_LIMITS } from "../lib/size";
 import type {
   InpaintIssue,
   MissingResource,
+  PixelSize,
   SizeSpec,
   SketchOrigin,
   UploadIssue,
@@ -20,14 +30,53 @@ import { errorHint } from "./errors";
 export const sizeText = (size: SizeSpec, t: TFunction): string =>
   size === "auto" ? t("common.auto") : `${size.w} × ${size.h}`;
 
-/** chip 上的尺寸值文本：自定义宽高 / 比例·基准 / 自动（MiniBar 与比例 chip 共用） */
-export function sizeChipValue(
-  f: Pick<GenForm, "ratio" | "base" | "cw" | "ch">,
-  t: TFunction,
-): string {
+type SizeForm = Pick<
+  GenForm,
+  "ratio" | "base" | "cw" | "ch" | "multi" | "ratios"
+>;
+
+const baseLabel = (base: BaseRes): string =>
+  BASE_LABELS.find((b) => b.id === base)?.label ?? base.toUpperCase();
+
+/** 单尺寸的文本：自定义宽高 / 比例·基准 / 自动。多比例只选了 1 个比例时与单选显示相同 */
+function singleSizeText(f: SizeForm, t: TFunction): string {
+  if (f.multi && f.ratios[0]) return `${f.ratios[0]} · ${baseLabel(f.base)}`;
   if (isCustomActive(f)) return `${f.cw}×${f.ch}`;
   if (f.ratio === "auto") return t("common.auto");
-  return `${f.ratio} · ${BASE_LABELS.find((b) => b.id === f.base)?.label}`;
+  return `${f.ratio} · ${baseLabel(f.base)}`;
+}
+
+/** 比例 chip 上的尺寸值文本：自定义宽高 / 比例·基准 / 自动；多尺寸显示「N 个比例 · 基准」 */
+export function sizeChipValue(f: SizeForm, t: TFunction): string {
+  if (isMultiSize(f))
+    return t("params.sizeChipMulti", {
+      count: f.ratios.length,
+      base: baseLabel(f.base),
+    });
+  return singleSizeText(f, t);
+}
+
+/** 创作条 mini 摘要里的尺寸：多尺寸列出全部比例（如「1:1/16:9/9:16 · 2K」），不展开也能读出全部配置 */
+export function sizeSummary(f: SizeForm, t: TFunction): string {
+  if (isMultiSize(f))
+    return `${PRESET_RATIOS.filter((id) => f.ratios.includes(id)).join("/")} · ${baseLabel(f.base)}`;
+  return singleSizeText(f, t);
+}
+
+/** 比例名：像素恰好是「预设比例 × 基准」或接近某个预设比例时用预设名（如 "16:9"），认不出时用像素。
+ *  比例与像素都是参数值，不随语言变化 */
+export function ratioOrSize(size: PixelSize): string {
+  return (
+    sizeToPreset(size)?.ratio ??
+    nearestRatio(size.w, size.h) ??
+    `${size.w} × ${size.h}`
+  );
+}
+
+/** 多尺寸每张图下的标注，如「16:9 · 1792 × 1008」；比例认不出时只有像素 */
+export function sizeCaption(size: PixelSize): string {
+  const ratio = sizeToPreset(size)?.ratio ?? nearestRatio(size.w, size.h);
+  return ratio ? `${ratio} · ${size.w} × ${size.h}` : `${size.w} × ${size.h}`;
 }
 
 export const ratioLabel = (id: RatioId, t: TFunction): string =>

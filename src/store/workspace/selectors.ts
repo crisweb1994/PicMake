@@ -18,6 +18,16 @@ export const selectCanReturn = (s: WorkspaceState) =>
   !!s.nav.returnId &&
   (s.history.rows ?? EMPTY_ROWS).some((row) => row.id === s.nav.returnId);
 
+/** 多尺寸生成中已完成的请求数；不是多尺寸生成中为 0 */
+export const selectRunDone = (s: WorkspaceState): number =>
+  s.run.phase === "generating" && s.run.slots
+    ? s.run.slots.filter((slot) => slot.status === "done").length
+    : 0;
+
+/** 多尺寸生成中的请求总数；不是多尺寸生成中为 0 */
+export const selectRunTotal = (s: WorkspaceState): number =>
+  s.run.phase === "generating" ? (s.run.slots?.length ?? 0) : 0;
+
 /** 只在内存里的结果：保存中、保存失败 */
 export const selectPending = (s: WorkspaceState): PreparedGeneration | null =>
   s.run.phase === "saving" || s.run.phase === "unsaved" ? s.run.prepared : null;

@@ -1,14 +1,25 @@
 /** 生成生命周期迁移函数：占位、partial、保存、未保存 */
 import type { PreparedGeneration } from "../../../lib/generation";
+import type { ApiErrorKind } from "../../../lib/types";
 import type { GenPlan } from "../../../lib/view-models";
-import { useWorkspace } from "../index";
+import { useWorkspace, type RunSlot } from "../index";
 import { set, freshDraft } from "./internal";
 
-/** 开始生成：只有空闲时能占位，判断与写入同步完成；同时清空选中、完成标记、过渡结果与查看状态 */
+/** 开始生成：只有空闲时能占位，判断与写入同步完成；同时清空选中、完成标记、过渡结果与查看状态。
+ *  plan.sizes 存在（多尺寸）时，每个尺寸占一个槽位 */
 export function beginRun(plan: GenPlan): boolean {
   if (useWorkspace.getState().run.phase !== "idle") return false;
+  const slots: RunSlot[] | null = plan.sizes
+    ? plan.sizes.map((size) => ({
+        size,
+        status: "running",
+        partial: null,
+        final: null,
+        failure: null,
+      }))
+    : null;
   set((s) => ({
-    run: { phase: "generating", plan, partial: null },
+    run: { phase: "generating", plan, partial: null, slots },
     history: { ...s.history, recent: null },
     nav: { ...s.nav, selectedId: null, lastDoneId: null },
     view: { ...s.view, focusIdx: null, lightboxId: null, previewId: null },
@@ -23,6 +34,40 @@ export const setPartial = (blob: Blob, index: number) =>
       ? { run: { ...s.run, partial: { blob, index } } }
       : s,
   );
+
+/** 改一个槽位：只在生成中、槽位还在运行时生效，取消后才到达的事件直接忽略 */
+const updateSlot = (index: number, update: (slot: RunSlot) => RunSlot) =>
+  set((s) => {
+    if (s.run.phase !== "generating" || !s.run.slots) return s;
+    const slot = s.run.slots[index];
+    if (!slot || slot.status !== "running") return s;
+    const slots = s.run.slots.map((item, at) =>
+      at === index ? update(item) : item,
+    );
+    return { run: { ...s.run, slots } };
+  });
+
+/** 多尺寸：某个请求的渐进预览 */
+export const setSlotPartial = (index: number, partial: Blob) =>
+  updateSlot(index, (slot) => ({ ...slot, partial }));
+
+/** 多尺寸：某个请求完成，终稿在原位显示 */
+export const setSlotDone = (index: number, final: Blob) =>
+  updateSlot(index, (slot) => ({
+    ...slot,
+    status: "done",
+    partial: null,
+    final,
+  }));
+
+/** 多尺寸：某个请求失败，其余请求继续 */
+export const setSlotFailed = (index: number, failure: ApiErrorKind) =>
+  updateSlot(index, (slot) => ({
+    ...slot,
+    status: "failed",
+    partial: null,
+    failure,
+  }));
 
 /** 生成结束于取消或失败：回到空闲，草稿保留 */
 export const endRun = () =>

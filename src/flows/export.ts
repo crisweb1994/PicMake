@@ -9,7 +9,13 @@ export function downloadImage(display: DisplayGen, index: number) {
   if (!image) return;
   const a = document.createElement("a");
   a.href = image.url;
-  a.download = downloadName(display.row.id, index, image.format);
+  // 多尺寸记录的文件名带上图片的实际像素，拿到文件就知道是哪个尺寸
+  a.download = downloadName(
+    display.row.id,
+    index,
+    image.format,
+    display.row.params.sizes ? { w: image.width, h: image.height } : undefined,
+  );
   a.click();
 }
 

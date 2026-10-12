@@ -18,8 +18,11 @@ export const MODEL_NAMES: Record<ModelId, string> = {
   sunburst: "gpt-image-2.5-sunburst",
 };
 
+/** 具体像素尺寸 */
+export type PixelSize = { w: number; h: number };
+
 /** 尺寸：'auto' 或具体宽高 */
-export type SizeSpec = { w: number; h: number } | "auto";
+export type SizeSpec = PixelSize | "auto";
 
 export interface GenParams {
   model: ModelId;
@@ -30,6 +33,10 @@ export interface GenParams {
   n: number;
   background: Background;
   outputFormat: OutputFormat;
+  /** 多尺寸（2026-10-13）：提交时所选的 2–4 个尺寸，按比例 chip 顺序，每个尺寸单独一个请求。
+   *  存在时 n = 1；size 取 sizes[0] 只为保持字段合法，展示与复用不得据此推断尺寸。
+   *  单尺寸记录与旧记录没有这个字段 */
+  sizes?: PixelSize[];
 }
 
 /** 有序输入来源；本地文件没有 generationId。 */
