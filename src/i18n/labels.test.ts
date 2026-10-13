@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { PresetRatio } from "../lib/params";
 import { SKETCH_PALETTE } from "../lib/sketch";
 import { i18n, t } from "./index";
 import {
@@ -8,8 +9,11 @@ import {
   issueText,
   missingText,
   ratioLabel,
+  ratioOrSize,
+  sizeCaption,
   sizeChipValue,
   sizeReasonText,
+  sizeSummary,
   sizeText,
   sketchMeta,
   uploadIssueText,
@@ -19,7 +23,14 @@ afterEach(async () => {
   await i18n.changeLanguage("zh-CN");
 });
 
-const form = { ratio: "3:2" as const, base: "1k" as const, cw: "", ch: "" };
+const form = {
+  ratio: "3:2" as const,
+  base: "1k" as const,
+  cw: "",
+  ch: "",
+  multi: false,
+  ratios: [] as PresetRatio[],
+};
 
 describe("尺寸文本", () => {
   it("中文", () => {
@@ -187,5 +198,41 @@ describe("带数值的文案（中文与改造前逐字一致）", () => {
     expect(t("confirm.delete.desc", { count: 1 })).toBe(
       "It contains 1 image. This can't be undone.",
     );
+  });
+});
+
+describe("多比例的尺寸文本", () => {
+  const multi = {
+    ...form,
+    multi: true,
+    ratios: ["16:9", "1:1", "9:16"] as PresetRatio[],
+    base: "2k" as const,
+  };
+
+  it("值 chip 显示「N 个比例 · 基准」，mini 摘要按 chip 顺序列出全部比例", async () => {
+    expect(sizeChipValue(multi, t)).toBe("3 个比例 · 2K");
+    expect(sizeSummary(multi, t)).toBe("1:1/16:9/9:16 · 2K");
+    await i18n.changeLanguage("en");
+    expect(sizeChipValue(multi, t)).toBe("3 ratios · 2K");
+    expect(sizeSummary(multi, t)).toBe("1:1/16:9/9:16 · 2K");
+  });
+
+  it("只选 1 个比例时两处都与单选显示相同", () => {
+    const one = { ...multi, ratios: ["16:9"] as PresetRatio[] };
+    expect(sizeChipValue(one, t)).toBe("16:9 · 2K");
+    expect(sizeSummary(one, t)).toBe("16:9 · 2K");
+  });
+
+  it("单选时 mini 摘要与值 chip 一致", () => {
+    expect(sizeSummary(form, t)).toBe(sizeChipValue(form, t));
+  });
+
+  it("比例名与标注：预设组合和接近预设的尺寸认作预设比例，认不出只显示像素", () => {
+    expect(ratioOrSize({ w: 1792, h: 1008 })).toBe("16:9");
+    expect(ratioOrSize({ w: 1360, h: 1024 })).toBe("4:3");
+    expect(ratioOrSize({ w: 2000, h: 1000 })).toBe("2000 × 1000");
+    expect(sizeCaption({ w: 1792, h: 1008 })).toBe("16:9 · 1792 × 1008");
+    expect(sizeCaption({ w: 3248, h: 2160 })).toBe("3:2 · 3248 × 2160");
+    expect(sizeCaption({ w: 2000, h: 1000 })).toBe("2000 × 1000");
   });
 });

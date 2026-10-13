@@ -1,6 +1,10 @@
 /** 结果区：舞台、详情浮卡、轮播、灯箱与选区查看；把 store 与资源投影成展示组件的 props，操作交给 flows。
- *  副作用：舞台滚轮监听只在 selectCanWheelSwitch 成立期间挂载，条件不满足即移除 */
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+ *  副作用（都只在对应状态区间挂载，离开即移除）：
+ *  - 舞台滚轮监听：selectCanWheelSwitch 成立期间
+ *  - 离开页面前的浏览器确认：生成中与保存中（useLeaveGuard）
+ *  - 视口尺寸监听：多尺寸舞台显示期间（useViewportSize）
+ *  - 多尺寸各格的 Object URL：生成中，卸载或格子内容变化时回收（useBlobUrls） */
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { DetailCard } from "../components/DetailCard";
 import { Carousel } from "../components/overlays/Carousel";
 import { Lightbox } from "../components/overlays/Lightbox";
@@ -22,8 +26,13 @@ import {
   switchByWheel,
   toggleStar,
 } from "../flows/navigation";
+import { useBlobUrls } from "../hooks/useBlobUrls";
+import { useLeaveGuard } from "../hooks/useLeaveGuard";
 import { useObjectUrl } from "../hooks/useObjectUrl";
+import { useViewportSize } from "../hooks/useViewportSize";
 import type { WorkspaceAssets } from "../hooks/useWorkspaceAssets";
+import { sizeCaption } from "../i18n/labels";
+import type { DisplaySlot } from "../lib/view-models";
 import { useWorkspace } from "../store/workspace";
 import {
   closeLightbox,
@@ -52,6 +61,30 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
   const gen = run.phase === "generating" ? run : null;
   const pending = run.phase === "saving" || run.phase === "unsaved";
   const partialUrl = useObjectUrl(gen?.partial?.blob);
+  // 多尺寸生成中：每格显示终稿或最新预览
+  const slots = gen?.slots ?? null;
+  const slotBlobs = useMemo(
+    () => slots?.map((slot) => slot.final ?? slot.partial) ?? [],
+    [slots],
+  );
+  const slotUrls = useBlobUrls(slotBlobs);
+  const displaySlots = useMemo<DisplaySlot[] | null>(
+    () =>
+      slots?.map((slot, index) => ({
+        size: slot.size,
+        status: slot.status,
+        url: slotUrls[index] ?? null,
+        failure: slot.failure,
+      })) ?? null,
+    [slots, slotUrls],
+  );
+  const multiDone =
+    !!display &&
+    !gen &&
+    !!display.row.params.sizes &&
+    display.images.length > 1;
+  const viewport = useViewportSize(!!slots || multiDone);
+  useLeaveGuard(run.phase === "generating" || run.phase === "saving");
   const selectedImageId = useWorkspace(selectSelectedImageId);
   const focusIdx = useWorkspace((s) => s.view.focusIdx);
   const lightboxId = useWorkspace((s) => s.view.lightboxId);
@@ -94,6 +127,8 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
               : null
           }
           genPlan={gen?.plan ?? null}
+          slots={displaySlots}
+          viewport={viewport}
           display={display}
           onFocus={setFocusIdx}
           onLightbox={openLightbox}
@@ -138,6 +173,14 @@ export function ResultArea({ assets }: { assets: WorkspaceAssets }) {
           prompt={display.row.prompt}
           index={focusIdx}
           total={display.images.length}
+          meta={
+            display.row.params.sizes
+              ? sizeCaption({
+                  w: display.images[focusIdx].width,
+                  h: display.images[focusIdx].height,
+                })
+              : undefined
+          }
           onPrev={() => {
             const n = display.images.length;
             setFocusIdx((focusIdx - 1 + n) % n);

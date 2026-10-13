@@ -364,6 +364,63 @@
   color: var(--pm-text-1);
   border: 1px solid var(--pm-line);
 }
+/* 多尺寸：各图保持自身比例、同一行等高；格子宽高由 lib/stage-layout 算出，样式只管排列。
+   占位（pm-gen-tile）与成品（pm-gtile）共用同一套排列 */
+.pm-multi-rows {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.pm-multi-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 12px;
+}
+.pm-mcell {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pm-mcap {
+  font-size: 11.5px;
+  line-height: 18px;
+  color: var(--pm-text-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* 完成的格子原位显示终稿（不带预览的模糊），失败的格子显示失败标记 */
+.pm-gen-final {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: pm-gen-in 0.45s ease both;
+}
+.pm-mtile.failed {
+  display: grid;
+  place-items: center;
+  background: var(--pm-error-soft);
+  box-shadow: 0 0 0 1px var(--pm-error-border);
+}
+.pm-mfail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--pm-error);
+  overflow-wrap: anywhere;
+}
+.pm-mfail b {
+  font-weight: 600;
+}
 .pm-grid-cap {
   margin-top: 14px;
   font-size: 12px;

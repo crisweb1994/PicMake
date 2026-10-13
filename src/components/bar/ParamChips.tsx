@@ -4,16 +4,21 @@ import { ratioLabel, sizeChipValue } from "../../i18n/labels";
 import {
   BASE_LABELS,
   DEFAULT_FORM,
+  MAX_MULTI_RATIOS,
   MODEL_LABELS,
   RATIOS,
   formSize,
+  formSizes,
   isCustomActive,
+  isMultiSize,
+  multiPatch,
+  toggleRatioPatch,
   type GenForm,
 } from "../../lib/params";
 import { SIZE_LIMITS } from "../../lib/size";
 import { ratioMismatch } from "../../lib/sketch";
 import type { FidelityChoice, OutputFormat, Quality } from "../../lib/types";
-import { Segmented } from "../controls";
+import { Segmented, Switch } from "../controls";
 import { BarChip, PopRow } from "./BarChip";
 
 const QUALITIES: ReadonlyArray<Quality> = [
@@ -32,6 +37,8 @@ export function ParamChips(props: {
   /** 有输入图（编辑态）：「保留原图」才有意义 */
   editing: boolean;
   hasSketch: boolean;
+  /** 局部重绘草稿：输出尺寸由选区决定，不支持多比例 */
+  multiDisabled: boolean;
   inputFidelity: FidelityChoice;
   onPatch: (patch: Partial<GenForm>) => void;
   onInputFidelity: (value: FidelityChoice) => void;
@@ -40,10 +47,16 @@ export function ParamChips(props: {
   const { form: f, editing, hasSketch, onPatch } = props;
   const usingCustom = isCustomActive(f);
   const explicitSize = formSize(f);
+  // 多个比例时，任一比例与草图不一致都提示
+  const checkedSizes =
+    formSizes(f) ?? (explicitSize === "auto" ? [] : [explicitSize]);
+  const sketchSize = props.sketchSize;
   const sizeMismatch =
-    !!props.sketchSize &&
-    explicitSize !== "auto" &&
-    ratioMismatch(explicitSize, props.sketchSize);
+    !!sketchSize &&
+    checkedSizes.some((size) => ratioMismatch(size, sketchSize));
+  // 至少 2 个比例才是多尺寸：每个比例 1 张，张数 chip 不可用
+  const countLocked = isMultiSize(f);
+  const ratiosFull = f.multi && f.ratios.length >= MAX_MULTI_RATIOS;
   return (
     <>
       <BarChip
@@ -75,31 +88,64 @@ export function ParamChips(props: {
         ariaLabel={t("params.ratioAndBase")}
         value={sizeChipValue(f, t)}
         dirty={
+          f.multi ||
           f.ratio !== DEFAULT_FORM.ratio ||
           f.base !== DEFAULT_FORM.base ||
           usingCustom
         }
         popWidth={252}
       >
-        <p className="pm-pop-lb">{t("params.ratio")}</p>
-        <div className="pm-pop-ratio">
-          {RATIOS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={!usingCustom && f.ratio === id ? "on" : ""}
-              onClick={() => onPatch({ ratio: id, cw: "", ch: "" })}
-            >
-              {ratioLabel(id, t)}
-            </button>
-          ))}
+        <div className="pm-pop-head">
+          <p className="pm-pop-lb">{t("params.ratio")}</p>
+          <span className="pm-pop-multi">
+            {t("params.multi")}
+            <Switch
+              checked={f.multi}
+              disabled={props.multiDisabled}
+              ariaLabel={t("params.multi")}
+              onChange={(on) => onPatch(multiPatch(f, on))}
+            />
+          </span>
         </div>
+        <div className="pm-pop-ratio">
+          {RATIOS.map((id) => {
+            const preset = id !== "auto";
+            const on = f.multi
+              ? preset && f.ratios.includes(id)
+              : !usingCustom && f.ratio === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={on ? "on" : ""}
+                aria-pressed={on}
+                // 多比例下「自动」不可用；选满后其余比例不可选
+                disabled={f.multi && (!preset || (!on && ratiosFull))}
+                onClick={() => {
+                  if (!f.multi) return onPatch({ ratio: id, cw: "", ch: "" });
+                  const patch = preset ? toggleRatioPatch(f, id) : null;
+                  if (patch) onPatch(patch);
+                }}
+              >
+                {ratioLabel(id, t)}
+              </button>
+            );
+          })}
+        </div>
+        {ratiosFull && (
+          <p className="pm-pop-hint" role="status">
+            {t("params.multiMax", { max: MAX_MULTI_RATIOS })}
+          </p>
+        )}
+        {props.multiDisabled && (
+          <p className="pm-pop-hint">{t("params.multiInpaint")}</p>
+        )}
         <p className="pm-pop-lb">{t("params.baseRes")}</p>
         <Segmented
           full
           ariaLabel={t("params.baseRes")}
           value={f.base}
-          disabled={f.ratio === "auto" || usingCustom}
+          disabled={!f.multi && (f.ratio === "auto" || usingCustom)}
           onChange={(base) => onPatch({ base })}
           options={BASE_LABELS.map((b) => ({ value: b.id, label: b.label }))}
         />
@@ -112,6 +158,7 @@ export function ParamChips(props: {
             step={16}
             placeholder={t("params.widthPlaceholder")}
             aria-label={t("params.customWidth")}
+            disabled={f.multi}
             value={f.cw}
             className={props.customValid ? "" : "bad"}
             onChange={(e) => onPatch({ cw: e.target.value })}
@@ -124,19 +171,29 @@ export function ParamChips(props: {
             step={16}
             placeholder={t("params.heightPlaceholder")}
             aria-label={t("params.customHeight")}
+            disabled={f.multi}
             value={f.ch}
             className={props.customValid ? "" : "bad"}
             onChange={(e) => onPatch({ ch: e.target.value })}
           />
           <span>px</span>
         </div>
-        <p className="pm-pop-hint">
-          {t("params.sizeHint", {
-            long: SIZE_LIMITS.long,
-            short: SIZE_LIMITS.short,
-          })}
-        </p>
-        <p className="pm-pop-hint">{t("params.sketchSizeHint")}</p>
+        {f.multi ? (
+          <>
+            <p className="pm-pop-hint">{t("params.multiHint")}</p>
+            <p className="pm-pop-hint">{t("params.multiDiffer")}</p>
+          </>
+        ) : (
+          <>
+            <p className="pm-pop-hint">
+              {t("params.sizeHint", {
+                long: SIZE_LIMITS.long,
+                short: SIZE_LIMITS.short,
+              })}
+            </p>
+            <p className="pm-pop-hint">{t("params.sketchSizeHint")}</p>
+          </>
+        )}
         {sizeMismatch && (
           <p className="pm-pop-hint warn" role="status">
             {t("params.sketchMismatch")}
@@ -164,8 +221,11 @@ export function ParamChips(props: {
 
       <BarChip
         ariaLabel={t("params.count")}
-        value={`×${f.n}`}
-        dirty={f.n !== DEFAULT_FORM.n}
+        // 多比例时总张数 = 比例数，不能改
+        value={`×${countLocked ? f.ratios.length : f.n}`}
+        dirty={!countLocked && f.n !== DEFAULT_FORM.n}
+        disabled={countLocked}
+        title={countLocked ? t("params.countLocked") : undefined}
         popWidth={196}
         closeOnSelect
       >

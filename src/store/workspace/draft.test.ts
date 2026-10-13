@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ImageRow } from "../../db/schema";
-import { paramsToForm } from "../../lib/params";
+import {
+  DEFAULT_FORM,
+  formToParams,
+  multiPatch,
+  paramsToForm,
+  toggleRatioPatch,
+} from "../../lib/params";
 import type { GenParams, InputImage, MaskImage } from "../../lib/types";
 import { initialWorkspace, useWorkspace } from "./index";
 import {
@@ -235,5 +241,85 @@ describe("草图附件", () => {
       ok: false,
     });
     expect(draft().inputs).toHaveLength(16);
+  });
+});
+
+describe("多比例", () => {
+  /** 多比例开着、选了 16:9 和 9:16 */
+  const withMulti = () => {
+    patchForm(multiPatch(draft().form, true));
+    patchForm({ ratio: "16:9", ratios: ["16:9"] });
+    patchForm(toggleRatioPatch(draft().form, "9:16")!);
+  };
+
+  it("第一批输入图：多比例开着就保持多比例与所选比例，不改成 auto", () => {
+    withMulti();
+    beginRead("r1");
+    finishRead("r1", [input(image("a"))], []);
+    expect(draft().form).toMatchObject({
+      multi: true,
+      ratios: ["16:9", "9:16"],
+    });
+    expect(draft().form.ratio).not.toBe("auto");
+  });
+
+  it("设为参考图：多比例开着同样保持", () => {
+    withMulti();
+    expect(appendExisting("x", "g1")).toBe("added");
+    expect(draft().form).toMatchObject({
+      multi: true,
+      ratios: ["16:9", "9:16"],
+    });
+  });
+
+  it("多比例关着时仍然改成 auto", () => {
+    expect(appendExisting("x", "g1")).toBe("added");
+    expect(draft().form).toMatchObject({ multi: false, ratio: "auto" });
+  });
+
+  it("进入局部重绘：多比例退回单选，所选比例只留第一个，张数等其余设置不动", () => {
+    withMulti();
+    patchForm({ n: 3, base: "2k" });
+    const base = image("base");
+    initializeDraft(undefined, [input(base)]);
+    // initializeDraft 不给参数时保留表单
+    expect(draft().form.multi).toBe(true);
+    applyInpaintToDraft({ base, mask: maskOf(base), entry: "draft-input" });
+    expect(draft().form).toMatchObject({
+      multi: false,
+      ratios: [],
+      ratio: "16:9",
+      base: "2k",
+      n: 3,
+    });
+    expect(formToParams(draft().form).sizes).toBeUndefined();
+  });
+
+  it("复用多尺寸记录：还原多比例开关、所选比例与基准", () => {
+    const params = formToParams({
+      ...DEFAULT_FORM,
+      prompt: "海边",
+      multi: true,
+      ratios: ["1:1", "3:2"],
+      base: "2k",
+    });
+    initializeDraft(params);
+    expect(draft().form).toMatchObject({
+      multi: true,
+      ratios: ["1:1", "3:2"],
+      base: "2k",
+    });
+    expect(draft().form).toEqual(paramsToForm(params));
+  });
+
+  it("新建生成保留最近输出设置，包括多比例开关与所选比例", () => {
+    withMulti();
+    patchForm({ prompt: "猫" });
+    initializeDraft();
+    expect(draft().form).toMatchObject({
+      prompt: "",
+      multi: true,
+      ratios: ["16:9", "9:16"],
+    });
   });
 });

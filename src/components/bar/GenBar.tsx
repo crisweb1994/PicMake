@@ -6,6 +6,8 @@ import type { ModelId } from "../../lib/types";
 export function GenBar(props: {
   model: ModelId;
   partialIndex: number;
+  /** 多尺寸生成：已完成的请求数与总数；单尺寸为 null */
+  progress: { done: number; total: number } | null;
   onCancel: () => void;
 }) {
   const { t } = useTranslation();
@@ -20,7 +22,13 @@ export function GenBar(props: {
           <i />
         </span>
         <span className="pm-bar-genst">
-          {t("bar.genStatus")} <b>{step}/3</b>
+          {props.progress ? (
+            <b>{t("bar.genProgress", props.progress)}</b>
+          ) : (
+            <>
+              {t("bar.genStatus")} <b>{step}/3</b>
+            </>
+          )}
         </span>
         <button
           type="button"
@@ -31,7 +39,9 @@ export function GenBar(props: {
         </button>
       </div>
       <div className="pm-shimmer" aria-hidden />
-      <p className="pm-bar-gennote">{t("bar.genNote")}</p>
+      <p className="pm-bar-gennote">
+        {props.progress ? t("bar.genNoteMulti") : t("bar.genNote")}
+      </p>
     </div>
   );
 }

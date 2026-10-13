@@ -42,3 +42,25 @@ export function Segmented<T extends string>(props: {
     </div>
   );
 }
+
+/** 开关，纯展示 */
+export function Switch(props: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={props.checked}
+      aria-label={props.ariaLabel}
+      disabled={props.disabled}
+      className={"pm-switch" + (props.checked ? " on" : "")}
+      onClick={() => props.onChange(!props.checked)}
+    >
+      <i aria-hidden="true" />
+    </button>
+  );
+}

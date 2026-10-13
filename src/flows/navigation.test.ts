@@ -145,7 +145,7 @@ describe("requestLeave", () => {
     const { onOk } = state().confirm!;
     // 用户在确认框打开时通过其他途径丢弃并重新开始了生成
     useWorkspace.setState({
-      run: { phase: "generating", plan, partial: null },
+      run: { phase: "generating", plan, partial: null, slots: null },
     });
     onOk();
     expect(leave).not.toHaveBeenCalled();

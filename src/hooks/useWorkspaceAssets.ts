@@ -76,17 +76,26 @@ export function useWorkspaceAssets() {
     };
   });
 
-  const images = (displayRow?.imageIds ?? []).map((id) => ({
-    id,
-    url: shown ? shownUrls[id] : assetOf(id)?.url,
-    format: shown
-      ? shown.images.find((image) => image.id === id)?.format
-      : assetOf(id)?.row.format,
-  }));
+  const images = (displayRow?.imageIds ?? []).map((id) => {
+    const row = shown
+      ? shown.images.find((image) => image.id === id)
+      : assetOf(id)?.row;
+    return {
+      id,
+      url: shown ? shownUrls[id] : assetOf(id)?.url,
+      format: row?.format,
+      width: row?.width,
+      height: row?.height,
+    };
+  });
   const display: DisplayGen | null =
     displayRow &&
     images.every(
-      (image): image is DisplayImage => !!image.url && !!image.format,
+      (image): image is DisplayImage =>
+        !!image.url &&
+        !!image.format &&
+        image.width !== undefined &&
+        image.height !== undefined,
     )
       ? { row: displayRow, images }
       : null;

@@ -13,6 +13,8 @@ export function DoneBar(props: {
   onDismiss: () => void;
 }) {
   const { t } = useTranslation();
+  // 多尺寸记录：再来一版会按提交的全部比例重发，按钮上标出份数，避免意外计费
+  const sizes = props.done.row.params.sizes;
   return (
     <div className="pm-bar-done">
       <div className="pm-bar-genrow">
@@ -39,7 +41,9 @@ export function DoneBar(props: {
           className="pm-chip act primary"
           onClick={props.onAgain}
         >
-          {t("bar.again")}
+          {sizes
+            ? t("bar.againMulti", { count: sizes.length })
+            : t("bar.again")}
         </button>
         <button type="button" className="pm-chip act" onClick={props.onTweak}>
           {t("bar.tweak")}

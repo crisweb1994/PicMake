@@ -302,3 +302,46 @@ describe("draftToParams", () => {
     });
   });
 });
+
+describe("draftToParams：多比例", () => {
+  const multiForm = (patch: Partial<GenForm> = {}): GenForm => ({
+    ...DEFAULT_FORM,
+    prompt: "一只猫",
+    multi: true,
+    ratios: ["1:1", "16:9"],
+    n: 3,
+    ...patch,
+  });
+  const base = {
+    inpaint: null,
+    sizeAccepted: false,
+    reading: false,
+  };
+
+  it("多个比例：得到 sizes，n 固定为 1", () => {
+    const r = draftToParams({ ...base, form: multiForm() });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.params.sizes).toEqual([
+        { w: 1024, h: 1024 },
+        { w: 1792, h: 1008 },
+      ]);
+      expect(r.params.n).toBe(1);
+    }
+  });
+
+  it("局部重绘：不带 sizes，张数照常，输出尺寸取目标尺寸", () => {
+    const r = draftToParams({
+      ...base,
+      form: multiForm(),
+      inpaint: inpaintOf(1000, 1000),
+      sizeAccepted: true,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.params.sizes).toBeUndefined();
+      expect(r.params.n).toBe(3);
+      expect(r.params.size).toEqual({ w: 992, h: 992 });
+    }
+  });
+});

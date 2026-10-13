@@ -180,6 +180,111 @@ test.describe("英文界面", () => {
     await expect(view.getByText("Base image · 256 × 256")).toBeVisible();
     await expectNoCjk(page);
   });
+
+  /** 比例弹层、创作条一行 chip、详情浮卡里有没有内容被挤出容器（英文比中文长 30%–50%） */
+  async function overflowing(page: Page): Promise<string[]> {
+    return page.evaluate(() =>
+      [
+        ...document.querySelectorAll(
+          ".pm-pop, .pm-bar-row2, .pm-detail, .pm-mcell, .pm-gen-pill",
+        ),
+      ]
+        .filter((el) => el.scrollWidth > el.clientWidth + 1)
+        .map((el) => el.className),
+    );
+  }
+
+  test("多比例：弹层、生成结果与部分失败提示没有残留中文，也不溢出", async ({
+    page,
+  }) => {
+    await configure(page);
+    await expandBar(page);
+    await page
+      .getByRole("button", { name: "Ratio and base resolution" })
+      .click();
+    const pop = page.getByRole("dialog", { name: "Ratio and base resolution" });
+    await pop.getByRole("switch", { name: "Multiple ratios" }).click();
+    for (const id of ["16:9", "9:16", "1:1"])
+      await pop.getByRole("button", { name: id, exact: true }).click();
+    // 开启时默认选中的 3:2 最后取消（至少保留 1 个）
+    await pop.getByRole("button", { name: "3:2", exact: true }).click();
+    await expect(
+      pop.getByText("Each ratio is a separate, billed request"),
+    ).toBeVisible();
+    await expect(
+      pop.getByText(
+        "Each ratio is composed on its own, so the images won't match",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Ratio and base resolution" }),
+    ).toContainText("3 ratios · 1K");
+    await expect(
+      page.getByRole("button", { name: "Number of images" }),
+    ).toBeDisabled();
+    await expectNoCjk(page);
+    expect(await overflowing(page)).toEqual([]);
+
+    // 再选满 4 个：提示与禁用态
+    await pop.getByRole("button", { name: "4:3", exact: true }).click();
+    await expect(pop.getByText("Up to 4 ratios")).toBeVisible();
+    await expect(pop.getByRole("button", { name: "Auto" })).toBeDisabled();
+    await expectNoCjk(page);
+    expect(await overflowing(page)).toEqual([]);
+    await pop.getByRole("button", { name: "4:3", exact: true }).click();
+    await page.mouse.click(40, 420);
+
+    await prompt(page).fill("three ratios [json] [429@1008x1792]");
+    await page.getByRole("button", { name: "Generate image" }).click();
+    await expect(page.getByText("2 of 3 sizes generated")).toBeVisible();
+    await expect(page.getByText("9:16: Too many requests")).toBeVisible();
+    await expect(page.getByText("2 sizes")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Regenerate · 3 sizes" }),
+    ).toBeVisible();
+    await expect(page.getByText("Not generated: 9:16")).toBeVisible();
+    await expect(page.locator(".pm-mcap")).toHaveText([
+      "1:1 · 1024 × 1024",
+      "16:9 · 1792 × 1008",
+    ]);
+    await expectNoCjk(page);
+    expect(await overflowing(page)).toEqual([]);
+
+    await page.getByRole("button", { name: "Result 1" }).click();
+    const carousel = page.getByRole("dialog", { name: "View images" });
+    await expect(carousel.getByText("1:1 · 1024 × 1024")).toBeVisible();
+    await expectNoCjk(page);
+  });
+
+  test("多比例：生成中的进度、失败格与取消提示（含复数）", async ({ page }) => {
+    await configure(page);
+    await expandBar(page);
+    await page
+      .getByRole("button", { name: "Ratio and base resolution" })
+      .click();
+    const pop = page.getByRole("dialog", { name: "Ratio and base resolution" });
+    await pop.getByRole("switch", { name: "Multiple ratios" }).click();
+    for (const id of ["1:1", "16:9", "9:16"])
+      await pop.getByRole("button", { name: id, exact: true }).click();
+    await pop.getByRole("button", { name: "3:2", exact: true }).click();
+    await page.mouse.click(40, 420);
+
+    await prompt(page).fill("cancel one [500@1008x1792] [slow@1792x1008]");
+    await page.getByRole("button", { name: "Generate image" }).click();
+    await expect(page.getByText("Generating · 1/3 done")).toBeVisible();
+    await expect(page.getByText("Failed", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Service temporarily unavailable"),
+    ).toBeVisible();
+    await expectNoCjk(page);
+    expect(await overflowing(page)).toEqual([]);
+    await page.getByRole("button", { name: "Cancel generation" }).click();
+    // 1 张已完成：复数的 _one 形式
+    await expect(
+      page.getByText("Cancelled. 1 finished image saved"),
+    ).toBeVisible();
+    await expectNoCjk(page);
+  });
 });
 
 test.describe("系统语言", () => {

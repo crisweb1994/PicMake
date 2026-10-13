@@ -222,6 +222,7 @@ function FullBar(props: FullBarProps) {
           sketchSize={props.sketchSize}
           editing={editing}
           hasSketch={hasSketch}
+          multiDisabled={!!inpaint}
           inputFidelity={props.inputFidelity}
           onPatch={onPatch}
           onInputFidelity={props.onInputFidelity}
@@ -238,6 +239,8 @@ export function CreateBar(
     generating: boolean;
     done: DisplayGen | null;
     partialIndex: number;
+    /** 多尺寸生成中已完成的请求数与总数；单尺寸为 null */
+    progress: { done: number; total: number } | null;
     onCancel: () => void;
     onExpand: () => void;
     onAgain: () => void;
@@ -251,6 +254,7 @@ export function CreateBar(
     generating,
     done,
     partialIndex,
+    progress,
     onCancel,
     onExpand,
     onAgain,
@@ -275,6 +279,7 @@ export function CreateBar(
         <GenBar
           model={full.form.model}
           partialIndex={partialIndex}
+          progress={progress}
           onCancel={onCancel}
         />
       )}

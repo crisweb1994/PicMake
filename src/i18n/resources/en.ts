@@ -90,9 +90,13 @@ export const en = {
     emptyHint: "Describe the picture you want. It will appear here in seconds.",
     emptyCta: "Write the first line",
     generating: "Generating",
+    generatingProgress: "Generating · {{done}}/{{total}} done",
     cancel: "Cancel generation",
     total_one: "{{count}} image",
     total_other: "{{count}} images",
+    totalSizes_one: "{{count}} size",
+    totalSizes_other: "{{count}} sizes",
+    failed: "Failed",
     downloadAll: "Download all",
     reuseAndRegenerate: "Reuse settings & regenerate",
     zoomAria: "View larger",
@@ -116,6 +120,8 @@ export const en = {
     size: "Size",
     quality: "Quality",
     count: "Images",
+    missingSizes: "Not generated: {{sizes}}",
+    missingSeparator: ", ",
     prompt: "Prompt",
     copy: "Copy",
     origin: "Original prompt",
@@ -148,6 +154,8 @@ export const en = {
     miniExpandAria: "Expand and generate",
     miniMeta:
       "Current: {{model}} · {{size}} · {{quality}} · ×{{n}} · {{format}} · {{background}}",
+    miniMetaMulti:
+      "Current: {{model}} · {{size}} · {{quality}} · {{format}} · {{background}}",
     promptLabel: "Prompt",
     editLabel: "Edit prompt",
     placeholder:
@@ -182,11 +190,14 @@ export const en = {
     genCancel: "Cancel",
     genNote:
       "Single streaming request · partial_images 3 · saved locally when done",
+    genProgress: "{{done}}/{{total}} done",
+    genNoteMulti: "One request per ratio · saved locally when all finish",
     done: "Generation complete · saved locally",
     duration: "Took",
     dismiss: "Collapse and go back to input",
     next: "Next",
     again: "Regenerate",
+    againMulti: "Regenerate · {{count}} sizes",
     tweak: "Tweak prompt",
     useAsRef: "Use as reference",
   },
@@ -213,6 +224,12 @@ export const en = {
       "A new sketch uses the current output size; with “Auto” it is 1024 × 1024",
     sketchMismatch:
       "The output ratio differs from the sketch, so the composition may shift",
+    multi: "Multiple ratios",
+    multiHint: "Each ratio is a separate, billed request",
+    multiDiffer: "Each ratio is composed on its own, so the images won't match",
+    multiMax: "Up to {{max}} ratios",
+    multiInpaint: "Inpainting doesn't support multiple ratios",
+    sizeChipMulti: "{{count}} ratios · {{base}}",
     quality: "Quality",
     qualityLevel: {
       low: "Low",
@@ -231,6 +248,7 @@ export const en = {
     count: "Number of images",
     countHint:
       "Generated in one request and saved one by one. With n>1 the stage shows a 2×2 grid.",
+    countLocked: "One image per ratio",
     more: "More settings",
     background: "Background",
     backgroundLevel: {
@@ -440,6 +458,11 @@ export const en = {
     settingsSaved: "Settings saved",
     generated: "Generation complete",
     cancelled: "Generation cancelled",
+    cancelledSaved_one: "Cancelled. {{count}} finished image saved",
+    cancelledSaved_other: "Cancelled. {{count}} finished images saved",
+    partialTitle: "{{done}} of {{total}} sizes generated",
+    partialItem: "{{ratio}}: {{reason}}",
+    partialSeparator: "; ",
     promptCopied: "Prompt copied",
     paramsRestored: "Settings restored. Ready to generate.",
     referenceAdded:

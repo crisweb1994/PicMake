@@ -10,6 +10,8 @@ export function Carousel(props: {
   prompt: string;
   index: number;
   total: number;
+  /** 当前图的尺寸标注：多尺寸记录里各图尺寸不同才传 */
+  meta?: string;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -47,6 +49,7 @@ export function Carousel(props: {
         <img src={props.img.url} alt={props.prompt} />
         <figcaption>
           {props.index + 1} / {props.total}
+          {props.meta && <span className="pm-car-meta"> · {props.meta}</span>}
         </figcaption>
       </figure>
       <button

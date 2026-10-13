@@ -1,7 +1,7 @@
 /** actions 内部共用：写入助手与跨切片的纯计算；不经 index.ts 对外导出 */
 import type { ImageRow } from "../../../db/schema";
 import { inpaintTargetSize } from "../../../lib/inpaint";
-import { paramsToForm } from "../../../lib/params";
+import { paramsToForm, withoutMulti } from "../../../lib/params";
 import {
   type GenParams,
   type InpaintDraft,
@@ -43,7 +43,8 @@ export interface InpaintPayload {
   entry: InpaintEntry;
 }
 
-/** 选区落进草稿（纯计算）：draft-input 把底图重排为图1 并移除被选中的原图；result 底图已由新草稿就位、reedit 底图已在位 */
+/** 选区落进草稿（纯计算）：draft-input 把底图重排为图1 并移除被选中的原图；result 底图已由新草稿就位、reedit 底图已在位。
+ *  局部重绘的输出尺寸由选区决定，不支持多比例：进入时退回单选 */
 export function withInpaint(
   draft: WorkspaceState["draft"],
   payload: InpaintPayload,
@@ -55,6 +56,7 @@ export function withInpaint(
       : inpaintTargetSize(payload.mask.width, payload.mask.height);
   return {
     ...draft,
+    form: withoutMulti(draft.form),
     inputs:
       payload.entry === "draft-input"
         ? [

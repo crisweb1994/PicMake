@@ -22,11 +22,16 @@ import {
   setPartial,
   setPreviewId,
   setReturnId,
+  setSlotDone,
+  setSlotFailed,
+  setSlotPartial,
 } from "./actions";
 import {
   findRow,
   selectDisplayRow,
   selectPending,
+  selectRunDone,
+  selectRunTotal,
   selectSelectedImageId,
 } from "./selectors";
 
@@ -63,7 +68,12 @@ describe("生成生命周期", () => {
     setPreviewId("in");
     openDrawer();
     expect(beginRun(plan)).toBe(true);
-    expect(state().run).toEqual({ phase: "generating", plan, partial: null });
+    expect(state().run).toEqual({
+      phase: "generating",
+      plan,
+      partial: null,
+      slots: null,
+    });
     expect(state().history.recent).toBeNull();
     expect(state().nav).toEqual({
       selectedId: null,
@@ -249,5 +259,80 @@ describe("resetWorkspace", () => {
     markUnsaved();
     resetWorkspace("a");
     expect(state().run.phase).toBe("unsaved");
+  });
+});
+
+describe("多尺寸生成中的槽位", () => {
+  const sizes = [
+    { w: 1024, h: 1024 },
+    { w: 1792, h: 1008 },
+    { w: 1008, h: 1792 },
+  ];
+  const multiPlan = { n: 1, size: sizes[0], sizes };
+  const slots = () => {
+    const run = state().run;
+    if (run.phase !== "generating" || !run.slots) throw new Error("no slots");
+    return run.slots;
+  };
+
+  it("beginRun：每个尺寸一个运行中的槽位；单尺寸没有槽位", () => {
+    expect(beginRun(multiPlan)).toBe(true);
+    expect(slots().map((slot) => [slot.size, slot.status])).toEqual(
+      sizes.map((size) => [size, "running"]),
+    );
+    expect(selectRunTotal(state())).toBe(3);
+    expect(selectRunDone(state())).toBe(0);
+    endRun();
+    beginRun(plan);
+    expect(state().run).toMatchObject({ slots: null });
+    expect(selectRunTotal(state())).toBe(0);
+  });
+
+  it("各槽位独立：预览、完成、失败互不影响，完成数随之递增", () => {
+    beginRun(multiPlan);
+    const preview = new Blob(["p"]);
+    const final = new Blob(["f"]);
+    setSlotPartial(1, preview);
+    expect(slots()[1]).toMatchObject({ status: "running", partial: preview });
+    expect(slots()[0].partial).toBeNull();
+
+    setSlotDone(1, final);
+    expect(slots()[1]).toMatchObject({
+      status: "done",
+      partial: null,
+      final,
+    });
+    expect(selectRunDone(state())).toBe(1);
+
+    setSlotFailed(2, "rate-limit");
+    expect(slots()[2]).toMatchObject({
+      status: "failed",
+      failure: "rate-limit",
+    });
+    // 失败不算已完成；其余槽位继续
+    expect(selectRunDone(state())).toBe(1);
+    expect(slots()[0].status).toBe("running");
+  });
+
+  it("已结束的槽位忽略迟到的事件", () => {
+    beginRun(multiPlan);
+    const final = new Blob(["f"]);
+    setSlotDone(0, final);
+    setSlotPartial(0, new Blob(["late"]));
+    setSlotFailed(0, "server");
+    expect(slots()[0]).toMatchObject({ status: "done", final, failure: null });
+  });
+
+  it("不在生成中、越界的下标：忽略", () => {
+    setSlotPartial(0, new Blob());
+    expect(state().run).toEqual({ phase: "idle" });
+    beginRun(multiPlan);
+    const before = state();
+    setSlotPartial(9, new Blob());
+    setSlotDone(-1, new Blob());
+    expect(state()).toBe(before);
+    endRun();
+    setSlotDone(0, new Blob());
+    expect(state().run).toEqual({ phase: "idle" });
   });
 });

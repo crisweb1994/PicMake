@@ -4,19 +4,28 @@ import { requestImages } from "../api/client";
 import { db, type HistoryRow } from "../db/schema";
 import { saveGeneration } from "../db/history";
 import { t } from "../i18n";
-import { errorMessage, kindMessage } from "../i18n/errors";
-import { issueText, missingText } from "../i18n/labels";
-import { b64ToBlob } from "../lib/blob";
-import { prepareGeneration } from "../lib/generation";
+import { errorMessage, errorTitle, kindMessage } from "../i18n/errors";
+import { issueText, missingText, ratioOrSize } from "../i18n/labels";
+import { b64Format, b64ToBlob } from "../lib/blob";
+import {
+  prepareGeneration,
+  prepareMultiGeneration,
+  type GeneratedSlot,
+  type PreparedGeneration,
+} from "../lib/generation";
+import { readImageMeta } from "../lib/image-orientation";
 import { inpaintTargetSize } from "../lib/inpaint";
 import {
+  ApiError,
   clientError,
+  type ApiErrorKind,
   type EditDraft,
   type EditSubmission,
   type GenParams,
   type InputImage,
   type MaskImage,
   type MissingResource,
+  type PixelSize,
 } from "../lib/types";
 import { draftToParams, leaveDecision } from "../lib/workspace-rules";
 import { useSettings } from "../store/settings";
@@ -33,6 +42,9 @@ import {
   setConfirm,
   setLastDoneId,
   setPartial,
+  setSlotDone,
+  setSlotFailed,
+  setSlotPartial,
 } from "../store/workspace/actions";
 
 export function isAbortError(error: unknown): boolean {
@@ -44,7 +56,7 @@ export function toastError(error: unknown) {
   toast(errorMessage(error, t));
 }
 
-/** 进行中请求的取消句柄：同一时间最多一个（由 beginRun 保证） */
+/** 进行中请求的取消句柄：同一时间最多一个（由 beginRun 保证）；多尺寸时所有请求共用它 */
 let abort: AbortController | null = null;
 
 export const cancelGenerate = () => abort?.abort();
@@ -132,9 +144,31 @@ async function regenerateInpaint(row: HistoryRow) {
   await runGeneration(read.params, read.draft);
 }
 
-/** 一次完整生成：占位 → 读来源 → 请求 → 写库；准备阶段已处于 generating，可以取消 */
+/** 写库并展示结果；保存失败时结果留在内存（可查看、下载）。返回是否保存成功 */
+async function persist(prepared: PreparedGeneration): Promise<boolean> {
+  beginSave(prepared);
+  try {
+    await saveGeneration(prepared);
+  } catch {
+    markUnsaved();
+    toast(kindMessage("save-failed", t));
+    return false;
+  }
+  finishSave(prepared);
+  return true;
+}
+
+/** 一次完整生成：占位 → 读来源 → 请求 → 写库；准备阶段已处于 generating，可以取消。
+ *  params.sizes 存在时每个尺寸各发一个请求（多尺寸），见 generateMulti */
 async function runGeneration(params: GenParams, draft: EditDraft | null) {
-  if (!beginRun({ n: params.n, size: params.size })) return;
+  if (
+    !beginRun({
+      n: params.n,
+      size: params.size,
+      ...(params.sizes ? { sizes: params.sizes } : {}),
+    })
+  )
+    return;
   // 配置在开始时读一次，不订阅 settings
   const { baseUrl, apiKey } = useSettings.getState();
   const controller = new AbortController();
@@ -148,6 +182,18 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
     const edit = draft
       ? await loadEditSubmission(draft, controller.signal)
       : undefined;
+    if (params.sizes) {
+      await generateMulti({
+        params,
+        sizes: params.sizes,
+        edit,
+        startedAt,
+        originPrompt,
+        config: { baseUrl, apiKey },
+        signal: controller.signal,
+      });
+      return;
+    }
     const result = await requestImages(
       params,
       { baseUrl, apiKey },
@@ -166,16 +212,7 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
       undefined,
       originPrompt,
     );
-    beginSave(prepared);
-    try {
-      await saveGeneration(prepared);
-    } catch {
-      markUnsaved();
-      toast(kindMessage("save-failed", t));
-      return;
-    }
-    finishSave(prepared);
-    toast(t("toast.generated"));
+    if (await persist(prepared)) toast(t("toast.generated"));
   } catch (caught) {
     endRun();
     if (isAbortError(caught)) {
@@ -187,6 +224,126 @@ async function runGeneration(params: GenParams, draft: EditDraft | null) {
     if (abort === controller) abort = null;
   }
 }
+
+/** 多尺寸里一个请求的结局 */
+type SlotOutcome =
+  | ({ status: "done" } & GeneratedSlot)
+  | { status: "failed"; size: PixelSize; error: unknown }
+  | { status: "aborted" };
+
+/** 图片的实际宽高：读容器头，读不到就用请求的尺寸 */
+async function actualSize(
+  blob: Blob,
+  requested: PixelSize,
+): Promise<PixelSize> {
+  try {
+    const meta = await readImageMeta(blob);
+    if (!("issue" in meta)) return { w: meta.width, h: meta.height };
+  } catch {
+    /* 读不到头：回退请求尺寸 */
+  }
+  return requested;
+}
+
+/** 失败请求的错误种类，舞台上显示它的标题 */
+const errorKind = (error: unknown): ApiErrorKind =>
+  error instanceof ApiError ? error.kind : "unknown";
+
+/** 多尺寸：每个尺寸各发一个请求（n = 1），同时发出、互不影响，不自动重试。
+ *  全部结束后，成功的按比例顺序合并为一条记录，失败的不入库；取消时已完成的照常保存 */
+async function generateMulti(job: {
+  params: GenParams;
+  sizes: PixelSize[];
+  edit: EditSubmission | undefined;
+  startedAt: number;
+  originPrompt: string | undefined;
+  config: { baseUrl: string; apiKey: string };
+  signal: AbortSignal;
+}) {
+  const { params, sizes, edit, signal } = job;
+  const requestOne = async (
+    index: number,
+    size: PixelSize,
+  ): Promise<SlotOutcome> => {
+    try {
+      const result = await requestImages(
+        { ...params, size, n: 1, sizes: undefined },
+        job.config,
+        { signal, onPartial: (b64) => setSlotPartial(index, b64ToBlob(b64)) },
+        edit,
+      );
+      // 每个请求 n = 1：只取第一张
+      const b64 = result.images[0];
+      const format = b64Format(b64) ?? params.outputFormat;
+      const blob = b64ToBlob(b64, `image/${format}`);
+      const actual = await actualSize(blob, size);
+      setSlotDone(index, blob);
+      return {
+        status: "done",
+        blob,
+        format,
+        width: actual.w,
+        height: actual.h,
+        usage: result.usage,
+      };
+    } catch (error) {
+      // 取消不算失败
+      if (signal.aborted || isAbortError(error)) return { status: "aborted" };
+      setSlotFailed(index, errorKind(error));
+      return { status: "failed", size, error };
+    }
+  };
+
+  const outcomes = await Promise.all(
+    sizes.map((size, index) => requestOne(index, size)),
+  );
+  const done = outcomes.filter(
+    (outcome): outcome is Extract<SlotOutcome, { status: "done" }> =>
+      outcome.status === "done",
+  );
+  const failed = outcomes.filter(
+    (outcome): outcome is Extract<SlotOutcome, { status: "failed" }> =>
+      outcome.status === "failed",
+  );
+
+  if (!done.length) {
+    // 一张都没完成：取消同单尺寸取消；否则同单尺寸失败，提示第一个失败比例的错误，草稿保留
+    endRun();
+    if (signal.aborted || !failed.length) toast(t("toast.cancelled"));
+    else toastError(failed[0].error);
+    return;
+  }
+
+  const prepared = prepareMultiGeneration(
+    params,
+    done,
+    edit,
+    job.startedAt,
+    undefined,
+    job.originPrompt,
+  );
+  if (!(await persist(prepared))) return;
+  if (signal.aborted) {
+    toast(t("toast.cancelledSaved", { count: done.length }));
+  } else if (failed.length) {
+    toast(t("toast.partialTitle", { done: done.length, total: sizes.length }), {
+      description: failed
+        .map((item) =>
+          t("toast.partialItem", {
+            ratio: ratioOrSize(item.size),
+            reason: errorTitle(errorKind(item.error), t),
+          }),
+        )
+        .join(t("toast.partialSeparator")),
+      timeout: PARTIAL_TOAST_MS,
+    });
+  } else {
+    toast(t("toast.generated"));
+  }
+}
+
+/** 部分失败的提示要逐条读，比默认的 4 秒停留更久 */
+const PARTIAL_TOAST_MS = 9000;
 
 /** 取首个输入源的原始描述（沿链路取最初；局部重绘 inputs[0] 恒为底图） */
 async function resolveOriginPrompt(

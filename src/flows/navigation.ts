@@ -1,9 +1,11 @@
 /** 导航流程：切换记录、新建、返回结果、复用参数、编辑此图、调整上次重绘、删除、收藏、设为参考图 */
 import { toast } from "@heroui/react";
 import { deleteHistory, toggleStar as toggleStarRow } from "../db/history";
+import { db } from "../db/schema";
 import { t } from "../i18n";
 import { errorHint } from "../i18n/errors";
 import { missingText } from "../i18n/labels";
+import type { GenParams } from "../lib/types";
 import {
   hasUserWork,
   leaveDecision,
@@ -105,19 +107,42 @@ export function reuseParams(id: string) {
   });
 }
 
+/** 编辑某张图的草稿参数：多尺寸记录的 params.size 只是第一个比例，
+ *  草稿尺寸取被编辑那张图的实际尺寸，多比例关闭 */
+async function editParams(
+  params: GenParams,
+  imageId: string,
+): Promise<GenParams> {
+  const { sizes: _sizes, ...single } = params;
+  const image = await db.images.get(imageId).catch(() => undefined);
+  const size =
+    image && image.width > 0 && image.height > 0
+      ? { w: image.width, h: image.height }
+      : single.size;
+  return { ...single, n: 1, size, prompt: "" };
+}
+
 export function editImage(imageId: string) {
   // 请求时确定来源记录：确认框之后执行时不再重新推断
   const row = selectDisplayRow(useWorkspace.getState());
   if (!row) return;
-  requestLeave(() => {
+  const enter = (params: GenParams) => {
     clearDone();
-    initializeDraft({ ...row.params, prompt: "" }, [
-      { generationId: row.id, imageId },
-    ]);
+    initializeDraft(params, [{ generationId: row.id, imageId }]);
     setReturnId(row.id);
     selectRecord(null);
     resetView();
     openBar();
+  };
+  requestLeave(() => {
+    if (!row.params.sizes) {
+      enter({ ...row.params, prompt: "" });
+      return;
+    }
+    void editParams(row.params, imageId).then((params) => {
+      // 读取期间已开始生成或正在保存：不再进入编辑
+      if (!busyNow()) enter(params);
+    });
   }, true);
 }
 
