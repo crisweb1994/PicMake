@@ -29,6 +29,7 @@ export const en = {
     toDark: "Switch to dark mode",
     history: "History",
     settings: "Settings",
+    github: "View source on GitHub",
   },
 
   settings: {

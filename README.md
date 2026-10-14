@@ -4,91 +4,91 @@
 
 # PicMake
 
-**简体中文** · [English](./README.en.md)
+**English** · [简体中文](./README.zh-CN.md)
 
-**你的 Key、你的图，都只留在你自己的浏览器里。**
+**Your API key and your images stay in your own browser.**
 
-GPT Image 2.5 生图工作台：纯前端，打开网页、填上 Key 就能画。
+A GPT Image 2.5 workspace that runs entirely in the browser: open the page, enter your key, start creating.
 
-[![在线体验](https://img.shields.io/badge/在线体验-PicMake.crisweb.com-FF9A62?style=flat-square)](https://PicMake.crisweb.com)
+[![Live demo](https://img.shields.io/badge/live%20demo-PicMake.crisweb.com-FF9A62?style=flat-square)](https://PicMake.crisweb.com)
 [![CI](https://img.shields.io/github/actions/workflow/status/crisweb1994/PicMake/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/crisweb1994/PicMake/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4A4A55?style=flat-square)](./LICENSE)
 
-[在线体验](https://PicMake.crisweb.com) · [功能一览](#功能一览) · [快速开始](#快速开始) · [部署](#部署) · [数据边界](#key-与数据的边界)
+[Live demo](https://PicMake.crisweb.com) · [Features](#features) · [Quick start](#quick-start) · [Deploy](#deploy) · [Privacy](#your-key-and-your-data)
 
 </div>
 
-![PicMake 主界面：一段描述同时生成 1:1、16:9、9:16 三个尺寸](screenshots/hero.webp)
+![PicMake: one prompt rendered at 1:1, 16:9 and 9:16 in a single run](screenshots/hero.en.webp)
 
-GPT Image 2.5 是 OpenAI 目前最强的生图 API，但官方只给了 API，没有独立客户端；在 ChatGPT 里用又调不了参数、管不了历史；走中转站的用户更是连个顺手的入口都没有。PicMake 补的就是这块：打开网页，填上自己的 API 地址和 Key，就能带着完整的参数控制和本地历史生图。
+GPT Image 2.5 is OpenAI's most capable image generation API to date, but it ships as an API only, with no standalone app. In ChatGPT you can't tune its parameters or manage what you've made, and if you use a relay you don't even get a convenient way in. PicMake fills the gap: open the page, enter your own API URL and key, and generate with full control over every parameter and a history that lives on your machine.
 
-| 🔒 数据只在本机                                                           | 🌊 看着它画出来                                               | 🔌 中转站友好                                                                    |
-| :------------------------------------------------------------------------ | :------------------------------------------------------------ | :------------------------------------------------------------------------------- |
-| 无后端、无账号、无遥测。Key 只存 localStorage，作品与记录只存 IndexedDB。 | SSE 流式渐进预览，从模糊到清晰，和 ChatGPT 里出图的观感一致。 | 官方接口或任意 OpenAI 兼容中转站都能接；不支持流式、只返回任务单的中转也能出图。 |
+| 🔒 Stays on your machine                                                                                    | 🌊 Watch it render                                                                | 🔌 Relay friendly                                                                                                         |
+| :---------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------ |
+| No backend, no account, no telemetry. Your key lives in localStorage; images and history live in IndexedDB. | Streaming previews sharpen from blurry to final, just like generating in ChatGPT. | Works with the official API or any OpenAI-compatible relay, even ones that ignore streaming or reply with async task IDs. |
 
-## 功能一览
+## Features
 
-### 一段描述，同时出多个比例
+### One prompt, several aspect ratios
 
-打开尺寸弹层里的「多比例」，一次选 2–4 个比例。每个比例单独请求、同时发出（也分别计费），结果合成一条记录并排展示，每张都标注实际像素——头像、横幅、竖版海报一次拿齐。某个比例失败不影响其他比例，成功的照常保存。
+Turn on **Multiple ratios** in the size popover and pick 2–4 of them. Each ratio goes out as its own request, all at the same time (each one billed separately), and the results land in a single history entry, side by side, each labeled with its actual pixel size: an avatar, a banner and a vertical poster in one go. If one ratio fails, the others still finish and are saved.
 
-![多比例：在尺寸弹层里选好 1:1、16:9、9:16](screenshots/multi-ratio.webp)
+![Multiple ratios: 1:1, 16:9 and 9:16 selected in the size popover](screenshots/multi-ratio.en.webp)
 
-### 看着它从模糊变清晰
+### From blur to sharp, as it renders
 
-请求走 SSE 流式渲染（`partial_images: 3`）：舞台上先出现模糊的预览，再逐级清晰到终稿，过程中随时可以取消；完成后自动存进本地历史。
+Requests stream over SSE (`partial_images: 3`): a blurry preview appears on the stage and sharpens step by step into the final image. You can cancel at any point, and finished images are saved to your local history automatically.
 
-![流式渐进预览：从写下描述到出图](screenshots/streaming.webp)
+![Streaming preview: from typing a prompt to the finished image](screenshots/streaming.en.webp)
 
-### 草图、参考图与局部重绘
+### Sketches, reference images and inpainting
 
-- **画草图**：在白纸画板上随手画构图、轮廓和色块，确认后作为输入图；之后还能打开接着改
-- **参考图**：上传 PNG / JPEG / WebP，或把已有作品设为参考图，连草图最多 16 张；描述里用「图1」「图2」说清楚怎么用
-- **局部重绘**：在图上涂出要改的区域，再描述怎么改。选区随记录保存，可以回看、调整后再来一版（选区用于引导修改，选区外也可能有变化）
+- **Sketch**: rough out the composition, outlines and color blocks on a blank canvas, then use it as an input image; reopen it any time to keep drawing
+- **Reference images**: upload PNG / JPEG / WebP or reuse earlier results, up to 16 inputs including sketches; refer to them as "Image 1", "Image 2" in your prompt
+- **Inpainting**: paint over the area you want to change, then describe the change. The selection is saved with the result, so you can review it, adjust it and run it again (the selection guides the edit; areas outside it may change too)
 
-| 草图画板                             | 局部重绘                              |
-| ------------------------------------ | ------------------------------------- |
-| ![草图画板](screenshots/sketch.webp) | ![局部重绘](screenshots/inpaint.webp) |
+| Sketch board                                | Inpainting                                 |
+| ------------------------------------------- | ------------------------------------------ |
+| ![Sketch board](screenshots/sketch.en.webp) | ![Inpainting](screenshots/inpaint.en.webp) |
 
-### 参数一个不少
+### Every parameter, exposed
 
-| 参数 | 可选                                                                                            |
-| ---- | ----------------------------------------------------------------------------------------------- |
-| 模型 | Flare（快速）· Sunburst（精细）                                                                 |
-| 比例 | 1:1 · 4:3 · 3:4 · 3:2 · 2:3 · 16:9 · 9:16 · 自动；开启「多比例」可一次选 2–4 个                 |
-| 尺寸 | 1K / 2K / 4K 基准，或自定义宽高（16 的倍数、比例 1:3～3:1、长边 ≤ 3840、短边 ≤ 2160，实时校验） |
-| 质量 | 低 · 中 · 高 · 超高 · 最高                                                                      |
-| 张数 | 1–4                                                                                             |
-| 背景 | 自动 · 透明 · 纯色                                                                              |
-| 格式 | PNG · JPEG · WebP                                                                               |
+| Parameter  | Options                                                                                                                                                        |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model      | Flare (fast) · Sunburst (detailed)                                                                                                                             |
+| Ratio      | 1:1 · 4:3 · 3:4 · 3:2 · 2:3 · 16:9 · 9:16 · Auto; turn on Multiple ratios to pick 2–4 at once                                                                  |
+| Size       | 1K / 2K / 4K base resolution, or a custom width × height (multiple of 16, ratio between 1:3 and 3:1, long side ≤ 3840, short side ≤ 2160, checked as you type) |
+| Quality    | Low · Medium · High · Extra high · Max                                                                                                                         |
+| Images     | 1–4                                                                                                                                                            |
+| Background | Auto · Transparent · Solid                                                                                                                                     |
+| Format     | PNG · JPEG · WebP                                                                                                                                              |
 
-### 历史全在本地
+### History that stays local
 
-作品和生成记录都存在浏览器的 IndexedDB 里：按描述搜索、按日期筛选、只看收藏。生成完可以再来一版、微调描述、设为参考图；翻到任何一条历史，也能复用参数、编辑此图或局部重绘。点图进灯箱看大图，多张结果可以轮播；在舞台上滚动滚轮，就能前后翻看记录。
+Every image and generation record is kept in your browser's IndexedDB: search by prompt, filter by date, or show favorites only. After a run you can regenerate, tweak the prompt or use the result as a reference; from any history entry you can reuse its settings, edit the image or inpaint it. Click an image to view it full size, browse multiple results in a carousel, and scroll on the stage to step through your history.
 
-![历史抽屉：搜索、日期筛选与收藏](screenshots/history.webp)
+![History drawer: search, date filters and favorites](screenshots/history.en.webp)
 
-### 浅色 / 深色，中文 / English
+### Light or dark, English or 简体中文
 
-界面支持简体中文与 English，默认跟随浏览器语言；主题可选浅色、深色或跟随系统，顶栏一键切换。你写的画面描述原样发给模型，不做翻译。
+The interface comes in English and Simplified Chinese and follows your browser language by default. The theme can be light, dark or follow the system, with a one-click toggle in the top bar. Your prompts are sent to the model exactly as you wrote them and are never translated.
 
-![浅色主题与英文界面](screenshots/light.en.webp)
+![Light theme with the Simplified Chinese interface](screenshots/light.webp)
 
-### 还有这些细节
+### And the small things
 
-- 请求成功但本地保存失败时，结果留在内存里，照样能看、能下载，离开前会再确认
-- 生成或保存进行中关闭页面，浏览器会先弹出离开确认
-- 尊重系统的「减少动态效果」设置
+- If a request succeeds but saving locally fails, the result stays in memory so you can still view and download it, and you're asked to confirm before leaving
+- Closing or reloading the page while an image is generating or saving brings up the browser's leave confirmation
+- Respects your system's reduced-motion setting
 
-<sub>截图里的图片由本地 mock 生成，是示意插画，不代表模型的实际出图效果。</sub>
+<sub>The images in these screenshots come from a local mock. They are placeholder illustrations, not actual model output.</sub>
 
-## 快速开始
+## Quick start
 
-**在线使用**：打开 [PicMake.crisweb.com](https://PicMake.crisweb.com)，在弹出的设置里填 API 地址与 Key（官方 `https://api.openai.com/v1`，或任意 OpenAI 格式兼容的中转站），点「测试连接」确认可用，保存后就能开始生成。
+**Use it online**: open [PicMake.crisweb.com](https://PicMake.crisweb.com) and enter your API URL and key in the settings dialog (the official `https://api.openai.com/v1` or any OpenAI-compatible relay). Click **Test connection** to check it works, then save and start generating.
 
-<p align="center"><img src="screenshots/setup.webp" width="400" alt="首次运行：连接你的 API" /></p>
+<p align="center"><img src="screenshots/setup.en.webp" width="400" alt="First run: connect your API" /></p>
 
-**本地运行**：
+**Run it locally**:
 
 ```bash
 git clone https://github.com/crisweb1994/PicMake.git
@@ -97,72 +97,72 @@ pnpm install
 pnpm dev        # → http://localhost:5173
 ```
 
-环境要求 Node ≥ 20.19、pnpm ≥ 10（见 `.nvmrc` 与 `package.json` 的 `engines`）。
+Requires Node ≥ 20.19 and pnpm ≥ 10 (see `.nvmrc` and `engines` in `package.json`).
 
 > [!NOTE]
-> 本地开发同理：Key 只写进浏览器 localStorage，全程没有任何服务器参与。
+> Local development works the same way: your key is only written to the browser's localStorage, and no server is involved at any point.
 
-## 部署
+## Deploy
 
-构建产物是纯静态文件，任意静态托管都能用，仓库已带两家的配置：
+The build output is plain static files, so any static host will do. The repo includes configs for two:
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcrisweb1994%2FPicMake)
 
-- **Vercel**：点上面的按钮，或在 [vercel.com/new](https://vercel.com/new) 导入仓库，`vercel.json` 已声明构建与输出目录
-- **Cloudflare Pages**：面板连接仓库，构建命令 `pnpm build`、输出目录 `dist`（`wrangler.toml` 已声明）；或 `pnpm build && npx wrangler pages deploy dist` 直接上传
+- **Vercel**: click the button above, or import the repo at [vercel.com/new](https://vercel.com/new); `vercel.json` already declares the build command and output directory
+- **Cloudflare Pages**: connect the repo in the dashboard with build command `pnpm build` and output directory `dist` (declared in `wrangler.toml`), or upload directly with `pnpm build && npx wrangler pages deploy dist`
 
 > [!TIP]
-> Pages 项目的 Deploy command 保持留空即可，构建完成后 Cloudflare 会自动上传 `dist`。不要填 `npx wrangler deploy`——那是部署 Worker 脚本的命令，对纯静态项目会报 `Missing entry-point`。
+> Leave the Pages project's Deploy command empty; Cloudflare uploads `dist` automatically after the build. Don't use `npx wrangler deploy`: it deploys a Worker script and fails on a static-only project with `Missing entry-point`.
 
-## 接入中转站
+## Using a relay
 
-PicMake 只发标准的 OpenAI 图片请求（`/images/generations`、`/images/edits`），并对中转站做了这些兼容：
+PicMake only sends standard OpenAI image requests (`/images/generations` and `/images/edits`), and handles relays like this:
 
-- **地址自动补全**：带不带 `/v1`、带不带尾斜杠都能用
-- **不支持流式也能出图**：中转忽略 `stream`、直接回普通 JSON 时，就地解析
-- **异步任务型接口**：返回 `task_id` 的中转，自动轮询任务取回图片（每 3 秒一次，最长 5 分钟）
-- **失败绝不自动重发**：没有自动重试，也没有自动降级，同一批图不会因为重发被计费两次；要重来，由你再点一次「生成」
-- **浏览器直连**：请求从浏览器直接发出，API 地址需要允许跨域（CORS）。官方接口支持；用中转站时请确认它允许浏览器调用
+- **URL normalization**: with or without `/v1`, with or without a trailing slash, it works
+- **No streaming support needed**: if a relay ignores `stream` and returns plain JSON, the response is parsed as is
+- **Async task APIs**: if a relay returns a `task_id`, PicMake polls the task until the image is ready (every 3 seconds, for up to 5 minutes)
+- **Never resends on failure**: no automatic retries and no fallback requests, so a resend never bills you twice for the same images; to try again, click Generate yourself
+- **Direct browser requests**: requests go straight from your browser, so the API URL must allow cross-origin requests (CORS). The official API does; if you use a relay, make sure it accepts browser requests
 
-## Key 与数据的边界
+## Your key and your data
 
 > [!IMPORTANT]
-> API Key 只存浏览器 localStorage，只在请求头 `Authorization` 中发往你配置的地址。本应用无账号、无后端、无埋点和遥测；图片与历史只写 IndexedDB。
+> Your API key is stored only in the browser's localStorage and is sent only in the `Authorization` header to the API URL you configure. There's no account, no backend, no analytics or telemetry; images and history are written only to IndexedDB.
 
-- 除了界面字体从 Google Fonts 加载，页面只请求你配置的 API 地址（以及它返回的图片链接）
-- 使用中转站时，画面描述和图片会经过中转方
-- 本地数据是唯一的副本：清除站点数据会把 Key、图片和历史一并删除，重要的图记得及时下载
-- 纯前端应用挡不住同源 XSS：请在自己信任的环境中使用，不要在公共设备上保存 Key
+- Apart from the UI font, which loads from Google Fonts, the page only talks to your configured API URL (and the image URLs it returns)
+- With a relay, your prompts and images pass through the relay operator
+- Your local data is the only copy: clearing site data deletes your key, images and history together, so download anything you want to keep
+- A browser-only app can't protect against same-origin XSS: use it in an environment you trust, and don't save your key on shared devices
 
-## 开发
+## Development
 
-| 命令         | 作用                                             |
-| ------------ | ------------------------------------------------ |
-| `pnpm dev`   | 开发服务器（5173）                               |
-| `pnpm build` | 类型检查 + 生产构建                              |
-| `pnpm test`  | Vitest 单元测试                                  |
-| `pnpm e2e`   | Playwright 冒烟测试（自带 mock）                 |
-| `pnpm check` | lint + 格式 + 文案检查 + 单测 + 构建，与 CI 相同 |
-| `pnpm mock`  | 本地 mock API（8787）                            |
+| Command      | What it does                                                    |
+| ------------ | --------------------------------------------------------------- |
+| `pnpm dev`   | Dev server (5173)                                               |
+| `pnpm build` | Type check + production build                                   |
+| `pnpm test`  | Vitest unit tests                                               |
+| `pnpm e2e`   | Playwright smoke tests (built-in mock)                          |
+| `pnpm check` | Lint + formatting + i18n check + unit tests + build, same as CI |
+| `pnpm mock`  | Local mock API (8787)                                           |
 
-首次运行 `pnpm e2e` 前先执行 `pnpm exec playwright install chromium`。欢迎提 Issue 和 PR，提交前跑一遍 `pnpm check`。
+Run `pnpm exec playwright install chromium` once before your first `pnpm e2e`. Issues and PRs are welcome; please run `pnpm check` before submitting.
 
 <details>
-<summary><b>本地 mock API</b>：不花额度，也能触发各种错误</summary>
+<summary><b>Local mock API</b>: test errors without spending credits</summary>
 
 ```bash
 pnpm mock       # → http://localhost:8787
 ```
 
-在设置里把 API 地址填为 `http://localhost:8787`，Key 随便填。mock 返回按请求尺寸生成的纯色 PNG；在画面描述里加 `[401]`、`[403]`、`[429]`、`[500]`、`[policy]` 模拟对应错误，`[stream-error]` 模拟流式中断，`[slow]` 放慢事件便于测试取消，`[json]` 走非流式 JSON 响应。多尺寸生成每个比例是独立请求，标记默认让所有比例一起触发；在标记里加 `@宽x高`（如 `[429@1792x1008]`、`[slow@1792x1008]`）只让该尺寸的请求触发，用来验证部分失败与取消时保留已完成的图。
+Set the API URL to `http://localhost:8787` in settings; any key works. The mock returns solid-color PNGs at the requested size. Add markers to your prompt to simulate failures: `[401]`, `[403]`, `[429]`, `[500]` and `[policy]` return the matching errors, `[stream-error]` breaks the stream after the first preview, `[slow]` slows events down so you can test cancelling, and `[json]` returns a non-streaming JSON response. With multiple ratios each ratio is its own request, and a marker applies to all of them by default; add `@<width>x<height>` (e.g. `[429@1792x1008]`, `[slow@1792x1008]`) to target a single size, which is handy for testing partial failures and keeping finished images when you cancel.
 
 </details>
 
-## 技术栈
+## Tech stack
 
-Vite 8 · React 19 · TypeScript 6 · Tailwind CSS v4 · HeroUI v3 · Zustand · Dexie · i18next · eventsource-parser · perfect-freehand。网络层是原生 fetch 封装（`/v1` 归一化、错误归一化、单次流式请求），不引 axios，也不引官方 SDK。
+Vite 8 · React 19 · TypeScript 6 · Tailwind CSS v4 · HeroUI v3 · Zustand · Dexie · i18next · eventsource-parser · perfect-freehand. The network layer is a thin wrapper around native fetch (`/v1` normalization, error normalization, a single streaming request), with no axios and no official SDK.
 
-## 许可
+## License
 
 [MIT](./LICENSE) © Cris Wang
 
@@ -170,6 +170,6 @@ Vite 8 · React 19 · TypeScript 6 · Tailwind CSS v4 · HeroUI v3 · Zustand ·
 
 <div align="center">
 
-⭐ 如果 PicMake 帮到了你，欢迎 [点个 star](https://github.com/crisweb1994/PicMake)。
+⭐ If PicMake helps you, a [star](https://github.com/crisweb1994/PicMake) would mean a lot.
 
 </div>

@@ -30,6 +30,7 @@ export const zhCN = {
     toDark: "切换到深色模式",
     history: "历史",
     settings: "设置",
+    github: "在 GitHub 上查看源码",
   },
 
   settings: {

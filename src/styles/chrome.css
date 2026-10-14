@@ -40,11 +40,13 @@
 }
 /* HeroUI ghost 图标按钮对齐原型灰阶 */
 .pm-nav button,
+.pm-nav a,
 .pm-gen-pill button,
 .pm-drawer-h button {
   color: var(--pm-text-2);
 }
 .pm-nav button:hover,
+.pm-nav a:hover,
 .pm-gen-pill button:hover,
 .pm-drawer-h button:hover {
   color: var(--pm-text-1);
